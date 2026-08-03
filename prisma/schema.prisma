@@ -1,0 +1,122 @@
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  name      String
+  email     String   @unique
+  password  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tripMembers         TripMember[]
+  expensesPaid        Expense[]            @relation("PaidBy")
+  createdExpenses     Expense[]            @relation("CreatedBy")
+  expenseParticipants ExpenseParticipant[]
+  createdTrips        Trip[]               @relation("TripCreatedBy")
+  activities          Activity[]
+  sentSettlements     Settlement[]         @relation("FromUser")
+  receivedSettlements Settlement[]         @relation("ToUser")
+}
+
+model Trip {
+  id           String    @id @default(auto()) @map("_id") @db.ObjectId
+  name         String
+  description  String?
+  code         String    @unique
+  currency     String    @default("₹")
+  startDate    DateTime?
+  endDate      DateTime?
+  createdById  String?   @db.ObjectId
+  isLocked     Boolean   @default(false)
+  approvalMode Boolean   @default(false)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  createdBy User?        @relation("TripCreatedBy", fields: [createdById], references: [id])
+  members   TripMember[]
+  expenses  Expense[]
+  activities Activity[]
+  settlements Settlement[]
+}
+
+model TripMember {
+  id       String   @id @default(auto()) @map("_id") @db.ObjectId
+  tripId   String   @db.ObjectId
+  userId   String   @db.ObjectId
+  role     String   @default("MEMBER") // ADMIN or MEMBER
+  joinedAt DateTime @default(now())
+
+  trip Trip @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([tripId, userId])
+}
+
+model Expense {
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  tripId          String   @db.ObjectId
+  title           String
+  amount          Float
+  category        String   @default("Miscellaneous")
+  paidById        String   @db.ObjectId
+  createdById     String?  @db.ObjectId
+  lastUpdatedById String?  @db.ObjectId
+  status          String   @default("APPROVED") // APPROVED or PENDING_APPROVAL
+  date            DateTime @default(now())
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  trip         Trip                 @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  paidBy       User                 @relation("PaidBy", fields: [paidById], references: [id])
+  createdBy    User?                @relation("CreatedBy", fields: [createdById], references: [id])
+  participants ExpenseParticipant[]
+}
+
+model ExpenseParticipant {
+  id          String @id @default(auto()) @map("_id") @db.ObjectId
+  expenseId   String @db.ObjectId
+  userId      String @db.ObjectId
+  shareAmount Float
+
+  expense Expense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([expenseId, userId])
+}
+
+model Activity {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  tripId     String   @db.ObjectId
+  userId     String   @db.ObjectId
+  actionType String   // TRIP_CREATED, MEMBER_JOINED, EXPENSE_ADDED, EXPENSE_UPDATED, EXPENSE_DELETED, SETTLEMENT_MARKED, SETTLEMENT_CONFIRMED
+  details    String
+  amount     Float?
+  category   String?
+  createdAt  DateTime @default(now())
+
+  trip Trip @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Settlement {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  tripId     String   @db.ObjectId
+  fromUserId String   @db.ObjectId
+  toUserId   String   @db.ObjectId
+  amount     Float
+  status     String   @default("PENDING") // PENDING, CONFIRMED, REJECTED, COMPLETED
+  note       String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  trip     Trip @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  fromUser User @relation("FromUser", fields: [fromUserId], references: [id], onDelete: Cascade)
+  toUser   User @relation("ToUser", fields: [toUserId], references: [id], onDelete: Cascade)
+}
