@@ -24,6 +24,7 @@ model User {
   sentSettlements     Settlement[]         @relation("FromUser")
   receivedSettlements Settlement[]         @relation("ToUser")
   documents           UserDocument[]
+  editRequests        ExpenseEditRequest[]
 }
 
 model Trip {
@@ -32,6 +33,7 @@ model Trip {
   description  String?
   code         String    @unique
   currency     String    @default("₹")
+  budget       Float?
   startDate    DateTime?
   endDate      DateTime?
   createdById  String?   @db.ObjectId
@@ -69,7 +71,8 @@ model Expense {
   paidById        String   @db.ObjectId
   createdById     String?  @db.ObjectId
   lastUpdatedById String?  @db.ObjectId
-  status          String   @default("APPROVED") // APPROVED or PENDING_APPROVAL
+  status          String   @default("APPROVED") // APPROVED, PENDING_APPROVAL, or REJECTED
+  rejectionReason String?
   receiptUrl      String?
   date            DateTime @default(now())
   createdAt       DateTime @default(now())
@@ -79,6 +82,7 @@ model Expense {
   paidBy       User                 @relation("PaidBy", fields: [paidById], references: [id])
   createdBy    User?                @relation("CreatedBy", fields: [createdById], references: [id])
   participants ExpenseParticipant[]
+  editRequests ExpenseEditRequest[]
 }
 
 model ExpenseParticipant {
@@ -97,7 +101,7 @@ model Activity {
   id         String   @id @default(auto()) @map("_id") @db.ObjectId
   tripId     String   @db.ObjectId
   userId     String   @db.ObjectId
-  actionType String   // TRIP_CREATED, MEMBER_JOINED, EXPENSE_ADDED, EXPENSE_UPDATED, EXPENSE_DELETED, SETTLEMENT_MARKED, SETTLEMENT_CONFIRMED
+  actionType String   // TRIP_CREATED, MEMBER_JOINED, EXPENSE_ADDED, EXPENSE_UPDATED, EXPENSE_DELETED, EXPENSE_APPROVED, EXPENSE_REJECTED, EXPENSE_RESUBMITTED, EDIT_REQUEST_SUBMITTED, EDIT_REQUEST_APPROVED, EDIT_REQUEST_REJECTED, BUDGET_UPDATED, SETTLEMENT_MARKED, SETTLEMENT_CONFIRMED
   details    String
   amount     Float?
   category   String?
@@ -137,3 +141,19 @@ model UserDocument {
 
   @@unique([userId, documentType])
 }
+
+model ExpenseEditRequest {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  expenseId     String   @db.ObjectId
+  requestedById String   @db.ObjectId
+  requestType   String   // EDIT or DELETE
+  proposedData  String?  // JSON string
+  reason        String?
+  status        String   @default("PENDING") // PENDING, APPROVED, REJECTED
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  expense     Expense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  requestedBy User    @relation(fields: [requestedById], references: [id], onDelete: Cascade)
+}
+

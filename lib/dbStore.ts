@@ -214,7 +214,14 @@ export const dbStore = {
         trip: {
           include: {
             members: { include: { user: true } },
-            expenses: { include: { paidBy: true, createdBy: true, participants: { include: { user: true } } } },
+            expenses: {
+              include: {
+                paidBy: true,
+                createdBy: true,
+                participants: { include: { user: true } },
+                editRequests: { include: { requestedBy: true } },
+              },
+            },
             activities: { include: { user: true }, orderBy: { createdAt: 'desc' } },
             settlements: { include: { fromUser: true, toUser: true }, orderBy: { updatedAt: 'desc' } },
           },
@@ -224,16 +231,32 @@ export const dbStore = {
 
     return userMemberships.map((m) => {
       const trip = m.trip;
-      const totalExpense = trip.expenses.reduce((sum, e) => sum + e.amount, 0);
+      const approvedExpenses = trip.expenses.filter((e) => e.status === 'APPROVED');
+      const totalExpense = approvedExpenses.reduce((sum, e) => sum + e.amount, 0);
 
       let paid = 0;
       let share = 0;
-      trip.expenses.forEach((e) => {
+      approvedExpenses.forEach((e) => {
         if (e.paidById === userId) paid += e.amount;
         e.participants.forEach((p) => {
           if (p.userId === userId) share += p.shareAmount;
         });
       });
+
+      const allEditRequests = trip.expenses.flatMap((e) =>
+        (e.editRequests || []).map((req) => ({
+          id: req.id,
+          expenseId: req.expenseId,
+          requestedById: req.requestedById,
+          requestedBy: { id: req.requestedBy.id, name: req.requestedBy.name, email: req.requestedBy.email },
+          requestType: req.requestType as 'EDIT' | 'DELETE',
+          proposedData: req.proposedData,
+          reason: req.reason,
+          status: req.status as 'PENDING' | 'APPROVED' | 'REJECTED',
+          createdAt: req.createdAt.toISOString(),
+          updatedAt: req.updatedAt.toISOString(),
+        }))
+      );
 
       return {
         id: trip.id,
@@ -241,6 +264,7 @@ export const dbStore = {
         description: trip.description,
         code: trip.code,
         currency: trip.currency,
+        budget: trip.budget || null,
         startDate: trip.startDate ? trip.startDate.toISOString() : null,
         endDate: trip.endDate ? trip.endDate.toISOString() : null,
         createdById: trip.createdById || '',
@@ -266,7 +290,8 @@ export const dbStore = {
           createdById: e.createdById || e.paidById,
           createdBy: e.createdBy ? { id: e.createdBy.id, name: e.createdBy.name, email: e.createdBy.email } : undefined,
           lastUpdatedById: e.lastUpdatedById,
-          status: e.status as 'APPROVED' | 'PENDING_APPROVAL',
+          status: e.status as 'APPROVED' | 'PENDING_APPROVAL' | 'REJECTED',
+          rejectionReason: e.rejectionReason,
           date: e.date.toISOString(),
           createdAt: e.createdAt.toISOString(),
           updatedAt: e.updatedAt.toISOString(),
@@ -278,7 +303,20 @@ export const dbStore = {
             shareAmount: p.shareAmount,
             user: { id: p.user.id, name: p.user.name, email: p.user.email },
           })),
+          editRequests: e.editRequests?.map((req) => ({
+            id: req.id,
+            expenseId: req.expenseId,
+            requestedById: req.requestedById,
+            requestedBy: { id: req.requestedBy.id, name: req.requestedBy.name, email: req.requestedBy.email },
+            requestType: req.requestType as 'EDIT' | 'DELETE',
+            proposedData: req.proposedData,
+            reason: req.reason,
+            status: req.status as 'PENDING' | 'APPROVED' | 'REJECTED',
+            createdAt: req.createdAt.toISOString(),
+            updatedAt: req.updatedAt.toISOString(),
+          })),
         })),
+        editRequests: allEditRequests,
         activities: trip.activities?.map((a) => ({
           id: a.id,
           tripId: a.tripId,
@@ -318,7 +356,14 @@ export const dbStore = {
       where: { id: tripId },
       include: {
         members: { include: { user: true } },
-        expenses: { include: { paidBy: true, createdBy: true, participants: { include: { user: true } } } },
+        expenses: {
+          include: {
+            paidBy: true,
+            createdBy: true,
+            participants: { include: { user: true } },
+            editRequests: { include: { requestedBy: true } },
+          },
+        },
         activities: { include: { user: true }, orderBy: { createdAt: 'desc' } },
         settlements: { include: { fromUser: true, toUser: true }, orderBy: { updatedAt: 'desc' } },
       },
@@ -326,16 +371,32 @@ export const dbStore = {
 
     if (!directTrip) return null;
 
-    const totalExpense = directTrip.expenses.reduce((sum, e) => sum + e.amount, 0);
+    const approvedExpenses = directTrip.expenses.filter((e) => e.status === 'APPROVED');
+    const totalExpense = approvedExpenses.reduce((sum, e) => sum + e.amount, 0);
 
     let paid = 0;
     let share = 0;
-    directTrip.expenses.forEach((e) => {
+    approvedExpenses.forEach((e) => {
       if (e.paidById === userId) paid += e.amount;
       e.participants.forEach((p) => {
         if (p.userId === userId) share += p.shareAmount;
       });
     });
+
+    const allEditRequests = directTrip.expenses.flatMap((e) =>
+      (e.editRequests || []).map((req) => ({
+        id: req.id,
+        expenseId: req.expenseId,
+        requestedById: req.requestedById,
+        requestedBy: { id: req.requestedBy.id, name: req.requestedBy.name, email: req.requestedBy.email },
+        requestType: req.requestType as 'EDIT' | 'DELETE',
+        proposedData: req.proposedData,
+        reason: req.reason,
+        status: req.status as 'PENDING' | 'APPROVED' | 'REJECTED',
+        createdAt: req.createdAt.toISOString(),
+        updatedAt: req.updatedAt.toISOString(),
+      }))
+    );
 
     return {
       id: directTrip.id,
@@ -343,6 +404,7 @@ export const dbStore = {
       description: directTrip.description,
       code: directTrip.code,
       currency: directTrip.currency,
+      budget: directTrip.budget || null,
       startDate: directTrip.startDate ? directTrip.startDate.toISOString() : null,
       endDate: directTrip.endDate ? directTrip.endDate.toISOString() : null,
       createdById: directTrip.createdById || '',
@@ -368,7 +430,8 @@ export const dbStore = {
         createdById: e.createdById || e.paidById,
         createdBy: e.createdBy ? { id: e.createdBy.id, name: e.createdBy.name, email: e.createdBy.email } : undefined,
         lastUpdatedById: e.lastUpdatedById,
-        status: e.status as 'APPROVED' | 'PENDING_APPROVAL',
+        status: e.status as 'APPROVED' | 'PENDING_APPROVAL' | 'REJECTED',
+        rejectionReason: e.rejectionReason,
         date: e.date.toISOString(),
         createdAt: e.createdAt.toISOString(),
         updatedAt: e.updatedAt.toISOString(),
@@ -380,7 +443,20 @@ export const dbStore = {
           shareAmount: p.shareAmount,
           user: { id: p.user.id, name: p.user.name, email: p.user.email },
         })),
+        editRequests: e.editRequests?.map((req) => ({
+          id: req.id,
+          expenseId: req.expenseId,
+          requestedById: req.requestedById,
+          requestedBy: { id: req.requestedBy.id, name: req.requestedBy.name, email: req.requestedBy.email },
+          requestType: req.requestType as 'EDIT' | 'DELETE',
+          proposedData: req.proposedData,
+          reason: req.reason,
+          status: req.status as 'PENDING' | 'APPROVED' | 'REJECTED',
+          createdAt: req.createdAt.toISOString(),
+          updatedAt: req.updatedAt.toISOString(),
+        })),
       })),
+      editRequests: allEditRequests,
       activities: directTrip.activities?.map((a) => ({
         id: a.id,
         tripId: a.tripId,
@@ -951,6 +1027,341 @@ export const dbStore = {
       }
     }
     return this.getUserDocuments(targetUserId);
+  },
+
+  async approveExpense(expenseId: string, adminUserId: string): Promise<boolean> {
+    await ensureDatabaseSeeded();
+    const expense = await prisma.expense.findUnique({
+      where: { id: expenseId },
+      include: { trip: { include: { members: true } } },
+    });
+    if (!expense) throw new Error('Expense not found');
+
+    const adminMember = expense.trip.members.find((m) => m.userId === adminUserId);
+    const isAdmin = adminMember?.role === 'ADMIN' || expense.trip.createdById === adminUserId;
+    if (!isAdmin) {
+      throw new Error('Forbidden: Only Super Host / Trip Admin can approve expenses.');
+    }
+
+    const adminUser = await prisma.user.findUnique({ where: { id: adminUserId } });
+
+    await prisma.expense.update({
+      where: { id: expenseId },
+      data: { status: 'APPROVED', rejectionReason: null },
+    });
+
+    await logActivity(
+      expense.tripId,
+      adminUserId,
+      'EXPENSE_APPROVED',
+      `${adminUser?.name || 'Admin'} approved expense "${expense.title}" (${expense.trip.currency}${expense.amount})`,
+      expense.amount,
+      expense.category
+    );
+
+    return true;
+  },
+
+  async rejectExpense(expenseId: string, adminUserId: string, reason?: string): Promise<boolean> {
+    await ensureDatabaseSeeded();
+    const expense = await prisma.expense.findUnique({
+      where: { id: expenseId },
+      include: { trip: { include: { members: true } } },
+    });
+    if (!expense) throw new Error('Expense not found');
+
+    const adminMember = expense.trip.members.find((m) => m.userId === adminUserId);
+    const isAdmin = adminMember?.role === 'ADMIN' || expense.trip.createdById === adminUserId;
+    if (!isAdmin) {
+      throw new Error('Forbidden: Only Super Host / Trip Admin can reject expenses.');
+    }
+
+    const adminUser = await prisma.user.findUnique({ where: { id: adminUserId } });
+
+    await prisma.expense.update({
+      where: { id: expenseId },
+      data: { status: 'REJECTED', rejectionReason: reason || null },
+    });
+
+    await logActivity(
+      expense.tripId,
+      adminUserId,
+      'EXPENSE_REJECTED',
+      `${adminUser?.name || 'Admin'} rejected expense "${expense.title}"${reason ? ` (Reason: ${reason})` : ''}`,
+      expense.amount,
+      expense.category
+    );
+
+    return true;
+  },
+
+  async resubmitExpense(
+    expenseId: string,
+    currentUserId: string,
+    title: string,
+    amount: number,
+    category: CategoryType,
+    paidById: string,
+    participantUserIds: string[],
+    receiptUrl?: string | null
+  ): Promise<ExpenseDetail> {
+    await ensureDatabaseSeeded();
+
+    const existingExpense = await prisma.expense.findUnique({
+      where: { id: expenseId },
+      include: { trip: { include: { members: true } } },
+    });
+    if (!existingExpense) throw new Error('Expense not found');
+
+    const currentUser = await prisma.user.findUnique({ where: { id: currentUserId } });
+    if (!currentUser) throw new Error('User not found');
+
+    const memberRole = existingExpense.trip.members.find((m) => m.userId === currentUserId)?.role;
+    const isCreator = existingExpense.createdById === currentUserId;
+    const isAdmin = memberRole === 'ADMIN' || existingExpense.trip.createdById === currentUserId;
+
+    if (!isCreator && !isAdmin) {
+      throw new Error('Forbidden: Only the expense creator can resubmit this expense.');
+    }
+
+    const shareAmount = participantUserIds.length > 0 ? amount / participantUserIds.length : 0;
+    await prisma.expenseParticipant.deleteMany({ where: { expenseId } });
+
+    const status = isAdmin ? 'APPROVED' : 'PENDING_APPROVAL';
+
+    const updated = await prisma.expense.update({
+      where: { id: expenseId },
+      data: {
+        title,
+        amount,
+        category,
+        paidById,
+        status,
+        rejectionReason: null,
+        lastUpdatedById: currentUserId,
+        receiptUrl: receiptUrl !== undefined ? receiptUrl : existingExpense.receiptUrl,
+        participants: {
+          create: participantUserIds.map((uid) => ({
+            id: generateObjectId(),
+            userId: uid,
+            shareAmount,
+          })),
+        },
+      },
+      include: {
+        paidBy: true,
+        createdBy: true,
+        participants: { include: { user: true } },
+      },
+    });
+
+    await logActivity(
+      existingExpense.tripId,
+      currentUserId,
+      'EXPENSE_RESUBMITTED',
+      `${currentUser.name} resubmitted expense "${title}" (${existingExpense.trip.currency}${amount}) for approval`,
+      amount,
+      category
+    );
+
+    return {
+      id: updated.id,
+      tripId: updated.tripId,
+      title: updated.title,
+      amount: updated.amount,
+      category: updated.category as CategoryType,
+      paidById: updated.paidById,
+      paidBy: { id: updated.paidBy.id, name: updated.paidBy.name, email: updated.paidBy.email },
+      createdById: updated.createdById,
+      createdBy: updated.createdBy ? { id: updated.createdBy.id, name: updated.createdBy.name, email: updated.createdBy.email } : undefined,
+      lastUpdatedById: updated.lastUpdatedById,
+      status: updated.status as 'APPROVED' | 'PENDING_APPROVAL' | 'REJECTED',
+      rejectionReason: updated.rejectionReason,
+      date: updated.date.toISOString(),
+      createdAt: updated.createdAt.toISOString(),
+      updatedAt: updated.updatedAt.toISOString(),
+      receiptUrl: updated.receiptUrl,
+      participants: updated.participants.map((p) => ({
+        id: p.id,
+        expenseId: p.expenseId,
+        userId: p.userId,
+        shareAmount: p.shareAmount,
+        user: { id: p.user.id, name: p.user.name, email: p.user.email },
+      })),
+    };
+  },
+
+  async submitEditRequest(
+    expenseId: string,
+    requestedById: string,
+    requestType: 'EDIT' | 'DELETE',
+    proposedData?: any,
+    reason?: string
+  ) {
+    await ensureDatabaseSeeded();
+    const expense = await prisma.expense.findUnique({
+      where: { id: expenseId },
+      include: { trip: true },
+    });
+    if (!expense) throw new Error('Expense not found');
+
+    const user = await prisma.user.findUnique({ where: { id: requestedById } });
+    if (!user) throw new Error('User not found');
+
+    const requestId = generateObjectId();
+    const editReq = await prisma.expenseEditRequest.create({
+      data: {
+        id: requestId,
+        expenseId,
+        requestedById,
+        requestType,
+        proposedData: proposedData ? JSON.stringify(proposedData) : null,
+        reason: reason || null,
+        status: 'PENDING',
+      },
+    });
+
+    await logActivity(
+      expense.tripId,
+      requestedById,
+      'EDIT_REQUEST_SUBMITTED',
+      `${user.name} submitted a ${requestType.toLowerCase()} request for approved expense "${expense.title}"`
+    );
+
+    return editReq;
+  },
+
+  async approveEditRequest(requestId: string, adminUserId: string) {
+    await ensureDatabaseSeeded();
+    const editReq = await prisma.expenseEditRequest.findUnique({
+      where: { id: requestId },
+      include: { expense: { include: { trip: { include: { members: true } } } } },
+    });
+    if (!editReq) throw new Error('Edit request not found');
+
+    const adminMember = editReq.expense.trip.members.find((m) => m.userId === adminUserId);
+    const isAdmin = adminMember?.role === 'ADMIN' || editReq.expense.trip.createdById === adminUserId;
+    if (!isAdmin) {
+      throw new Error('Forbidden: Only Super Host / Trip Admin can approve edit requests.');
+    }
+
+    const adminUser = await prisma.user.findUnique({ where: { id: adminUserId } });
+
+    if (editReq.requestType === 'DELETE') {
+      await prisma.expense.delete({ where: { id: editReq.expenseId } });
+      await prisma.expenseEditRequest.update({
+        where: { id: requestId },
+        data: { status: 'APPROVED' },
+      });
+
+      await logActivity(
+        editReq.expense.tripId,
+        adminUserId,
+        'EDIT_REQUEST_APPROVED',
+        `${adminUser?.name || 'Admin'} approved deletion request for expense "${editReq.expense.title}"`
+      );
+    } else if (editReq.requestType === 'EDIT' && editReq.proposedData) {
+      const data = JSON.parse(editReq.proposedData);
+      const { title, amount, category, paidById, splitBetween, receiptUrl } = data;
+      const shareAmount = splitBetween && splitBetween.length > 0 ? amount / splitBetween.length : 0;
+
+      await prisma.expenseParticipant.deleteMany({ where: { expenseId: editReq.expenseId } });
+
+      await prisma.expense.update({
+        where: { id: editReq.expenseId },
+        data: {
+          title,
+          amount,
+          category,
+          paidById,
+          receiptUrl: receiptUrl !== undefined ? receiptUrl : editReq.expense.receiptUrl,
+          lastUpdatedById: adminUserId,
+          participants: {
+            create: splitBetween.map((uid: string) => ({
+              id: generateObjectId(),
+              userId: uid,
+              shareAmount,
+            })),
+          },
+        },
+      });
+
+      await prisma.expenseEditRequest.update({
+        where: { id: requestId },
+        data: { status: 'APPROVED' },
+      });
+
+      await logActivity(
+        editReq.expense.tripId,
+        adminUserId,
+        'EDIT_REQUEST_APPROVED',
+        `${adminUser?.name || 'Admin'} approved edit request for expense "${title}" (${editReq.expense.trip.currency}${editReq.expense.amount} → ${editReq.expense.trip.currency}${amount})`
+      );
+    }
+
+    return true;
+  },
+
+  async rejectEditRequest(requestId: string, adminUserId: string, reason?: string) {
+    await ensureDatabaseSeeded();
+    const editReq = await prisma.expenseEditRequest.findUnique({
+      where: { id: requestId },
+      include: { expense: { include: { trip: { include: { members: true } } } } },
+    });
+    if (!editReq) throw new Error('Edit request not found');
+
+    const adminMember = editReq.expense.trip.members.find((m) => m.userId === adminUserId);
+    const isAdmin = adminMember?.role === 'ADMIN' || editReq.expense.trip.createdById === adminUserId;
+    if (!isAdmin) {
+      throw new Error('Forbidden: Only Super Host / Trip Admin can reject edit requests.');
+    }
+
+    const adminUser = await prisma.user.findUnique({ where: { id: adminUserId } });
+
+    await prisma.expenseEditRequest.update({
+      where: { id: requestId },
+      data: { status: 'REJECTED' },
+    });
+
+    await logActivity(
+      editReq.expense.tripId,
+      adminUserId,
+      'EDIT_REQUEST_REJECTED',
+      `${adminUser?.name || 'Admin'} rejected ${editReq.requestType.toLowerCase()} request for expense "${editReq.expense.title}"`
+    );
+
+    return true;
+  },
+
+  async updateTripBudget(tripId: string, adminUserId: string, budget: number | null) {
+    await ensureDatabaseSeeded();
+    const trip = await prisma.trip.findUnique({
+      where: { id: tripId },
+      include: { members: true },
+    });
+    if (!trip) throw new Error('Trip not found');
+
+    const adminMember = trip.members.find((m) => m.userId === adminUserId);
+    const isAdmin = adminMember?.role === 'ADMIN' || trip.createdById === adminUserId;
+    if (!isAdmin) {
+      throw new Error('Forbidden: Only Super Host / Trip Admin can set trip budget.');
+    }
+
+    const adminUser = await prisma.user.findUnique({ where: { id: adminUserId } });
+
+    await prisma.trip.update({
+      where: { id: tripId },
+      data: { budget: budget && budget > 0 ? budget : null },
+    });
+
+    await logActivity(
+      tripId,
+      adminUserId,
+      'BUDGET_UPDATED',
+      `${adminUser?.name || 'Admin'} updated total trip budget to ${budget && budget > 0 ? `${trip.currency}${budget}` : 'Unlimited'}`
+    );
+
+    return true;
   },
 };
 

@@ -47,12 +47,28 @@ export interface ExpenseDetail {
   createdById?: string | null;
   createdBy?: UserSummary | null;
   lastUpdatedById?: string | null;
-  status: 'APPROVED' | 'PENDING_APPROVAL';
+  status: 'APPROVED' | 'PENDING_APPROVAL' | 'REJECTED';
+  rejectionReason?: string | null;
   date: string;
   createdAt: string;
   updatedAt?: string;
   receiptUrl?: string | null;
   participants: ExpenseParticipantDetail[];
+  editRequests?: ExpenseEditRequestDetail[];
+}
+
+export interface ExpenseEditRequestDetail {
+  id: string;
+  expenseId: string;
+  requestedById: string;
+  requestedBy: UserSummary;
+  requestType: 'EDIT' | 'DELETE';
+  proposedData?: string | null;
+  reason?: string | null;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  createdAt: string;
+  updatedAt: string;
+  expense?: ExpenseDetail;
 }
 
 export type DocumentType =
@@ -85,6 +101,13 @@ export interface ActivityDetail {
     | 'EXPENSE_ADDED' 
     | 'EXPENSE_UPDATED' 
     | 'EXPENSE_DELETED' 
+    | 'EXPENSE_APPROVED'
+    | 'EXPENSE_REJECTED'
+    | 'EXPENSE_RESUBMITTED'
+    | 'EDIT_REQUEST_SUBMITTED'
+    | 'EDIT_REQUEST_APPROVED'
+    | 'EDIT_REQUEST_REJECTED'
+    | 'BUDGET_UPDATED'
     | 'SETTLEMENT_MARKED' 
     | 'SETTLEMENT_CONFIRMED'
     | 'TRIP_LOCKED';
@@ -114,6 +137,7 @@ export interface TripSummary {
   description?: string | null;
   code: string;
   currency: string;
+  budget?: number | null;
   startDate?: string | null;
   endDate?: string | null;
   createdById?: string | null;
@@ -122,6 +146,7 @@ export interface TripSummary {
   createdAt: string;
   members: TripMemberDetail[];
   expenses: ExpenseDetail[];
+  editRequests?: ExpenseEditRequestDetail[];
   activities?: ActivityDetail[];
   settlementRecords?: SettlementRecordDetail[];
   totalExpense: number;

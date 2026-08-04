@@ -15,8 +15,10 @@ export function calculateMemberBalances(
     });
   });
 
-  // Calculate paid amounts & share amounts
-  expenses.forEach((expense) => {
+  // Calculate paid amounts & share amounts (Only APPROVED expenses count towards financial balances)
+  const approvedExpenses = expenses.filter((e) => e.status === 'APPROVED');
+
+  approvedExpenses.forEach((expense) => {
     // Add to paid amount of the payer
     if (balanceMap.has(expense.paidById)) {
       const payerRecord = balanceMap.get(expense.paidById)!;

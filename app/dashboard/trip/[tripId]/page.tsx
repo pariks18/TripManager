@@ -16,6 +16,8 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { BottomNav } from '@/components/ui/BottomNav';
+import { TripBudgetCard } from '@/components/trip/TripBudgetCard';
+import { PendingApprovalsView } from '@/components/expense/PendingApprovalsView';
 import {
   ArrowLeft,
   Plus,
@@ -33,6 +35,8 @@ import {
   PieChart,
   LayoutDashboard,
   User,
+  ShieldCheck,
+  Clock,
 } from 'lucide-react';
 
 export default function TripDashboardPage() {
@@ -43,7 +47,7 @@ export default function TripDashboardPage() {
   const [user, setUser] = useState<UserSession | null>(null);
   const [trip, setTrip] = useState<TripSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'overview' | 'expenses' | 'timeline' | 'settlement' | 'analytics'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'expenses' | 'approvals' | 'settlement' | 'timeline' | 'analytics'>('overview');
   const [copiedCode, setCopiedCode] = useState(false);
 
   // Expense modal state
@@ -108,6 +112,51 @@ export default function TripDashboardPage() {
     }
   };
 
+  const handleApproveExpense = async (expenseId: string) => {
+    try {
+      const res = await fetch(`/api/expenses/${expenseId}/approval`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'APPROVE' }),
+      });
+      if (!res.ok) throw new Error('Failed to approve expense');
+      fetchTripDetails();
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
+  const handleRejectExpense = async (expenseId: string) => {
+    const reason = prompt('Rejection note / reason (optional):');
+    try {
+      const res = await fetch(`/api/expenses/${expenseId}/approval`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'REJECT', reason: reason ? reason.trim() : undefined }),
+      });
+      if (!res.ok) throw new Error('Failed to reject expense');
+      fetchTripDetails();
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
+  const handleRequestDeleteExpense = async (expenseId: string) => {
+    if (!confirm('Submit a delete request for this approved expense to the Super Host?')) return;
+    try {
+      const res = await fetch(`/api/expenses/${expenseId}/edit-request`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requestType: 'DELETE' }),
+      });
+      if (!res.ok) throw new Error('Failed to submit delete request');
+      alert('Delete request submitted! Super Host / Admin will verify.');
+      fetchTripDetails();
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
   const handleMarkSettled = async (tx: SettlementTransaction) => {
     try {
       const res = await fetch(`/api/trips/${tripId}/settlement`, {
@@ -118,55 +167,60 @@ export default function TripDashboardPage() {
           toUserId: tx.toUser.id,
           amount: tx.amount,
           status: 'CONFIRMED',
-          note: `Settled via TripSplit`,
         }),
       });
-
-      if (res.ok) {
-        fetchTripDetails();
-      }
-    } catch {}
+      if (!res.ok) throw new Error('Failed to record settlement');
+      fetchTripDetails();
+    } catch (err: any) {
+      alert(err.message);
+    }
   };
 
-  if (isLoading) {
+  if (isLoading || !trip || !user) {
     return (
-      <div className="min-h-screen bg-slate-50 p-4 sm:p-8 max-w-xl mx-auto space-y-4">
-        <Skeleton className="h-10 w-32" />
-        <Skeleton className="h-44 w-full" />
-        <Skeleton className="h-12 w-full" />
-        <Skeleton className="h-32 w-full" />
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+        <div className="w-full max-w-xl space-y-4">
+          <Skeleton className="h-16 w-full rounded-2xl" />
+          <Skeleton className="h-40 w-full rounded-3xl" />
+          <Skeleton className="h-64 w-full rounded-3xl" />
+        </div>
       </div>
     );
   }
 
-  if (!trip || !user) return null;
+  const currentMember = trip.members.find((m) => m.userId === user.id);
+  const isAdmin = currentMember?.role === 'ADMIN' || trip.createdById === user.id;
 
-  // Calculate member balances & optimized debt transfers
-  const balances: MemberBalance[] = calculateMemberBalances(trip.members, trip.expenses);
-  const settlements: SettlementTransaction[] = computeSettlements(trip.members, trip.expenses);
+  const pendingExpenses = trip.expenses.filter((e) => e.status === 'PENDING_APPROVAL');
+  const pendingRequests = trip.editRequests?.filter((r) => r.status === 'PENDING') || [];
+  const totalPendingCount = pendingExpenses.length + pendingRequests.length;
 
-  const currentUserBalance = balances.find((b) => b.user.id === user.id);
-  const userTotalPaid = currentUserBalance?.paid || 0;
-  const userTotalShare = currentUserBalance?.share || 0;
-  const userNetBalance = currentUserBalance?.netBalance || 0;
+  const approvedExpenses = trip.expenses.filter((e) => e.status === 'APPROVED');
+  const balances = calculateMemberBalances(trip.members, approvedExpenses);
+  const settlements = computeSettlements(trip.members, approvedExpenses);
 
-  const isAdmin = trip.createdById === user.id;
+  const currentUserBalanceRecord = balances.find((b) => b.user.id === user.id);
+  const userTotalPaid = currentUserBalanceRecord?.paid || 0;
+  const userTotalShare = currentUserBalanceRecord?.share || 0;
+  const userNetBalance = currentUserBalanceRecord?.netBalance || 0;
 
-  // Filter expenses
-  const filteredExpenses = trip.expenses.filter((e) => {
+  const categories: string[] = ['ALL', 'Food', 'Travel', 'Fuel', 'Stay', 'Entertainment', 'Shopping', 'Miscellaneous'];
+
+  const filteredExpenses = trip.expenses.filter((exp) => {
+    const matchesCategory = selectedCategory === 'ALL' || exp.category === selectedCategory;
+    const q = searchQuery.toLowerCase().trim();
     const matchesSearch =
-      e.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      e.paidBy?.name.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCategory = selectedCategory === 'ALL' || e.category === selectedCategory;
-    return matchesSearch && matchesCategory;
+      !q ||
+      exp.title.toLowerCase().includes(q) ||
+      exp.paidBy?.name.toLowerCase().includes(q) ||
+      exp.amount.toString().includes(q);
+    return matchesCategory && matchesSearch;
   });
 
-  const categories = ['ALL', 'Food', 'Travel', 'Fuel', 'Stay', 'Entertainment', 'Shopping', 'Miscellaneous'];
-
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 pb-28 md:pb-12">
-      {/* Top Header */}
-      <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-slate-100 px-4 py-3.5 sm:px-8">
+    <div className="min-h-screen bg-slate-50 text-slate-900 pb-24">
+      {/* Fixed Sticky Header */}
+      <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200/80 px-4 py-3 sm:px-8">
         <div className="max-w-xl mx-auto flex items-center justify-between">
           <button
             onClick={() => router.push('/dashboard')}
@@ -225,6 +279,24 @@ export default function TripDashboardPage() {
             <Receipt className="w-3.5 h-3.5 text-blue-600" /> Expenses ({trip.expenses.length})
           </button>
 
+          {isAdmin && (
+            <button
+              onClick={() => setActiveTab('approvals')}
+              className={`flex-1 py-2.5 px-3 rounded-xl transition-all flex items-center justify-center gap-1.5 whitespace-nowrap ${
+                activeTab === 'approvals'
+                  ? 'bg-white text-slate-900 shadow-sm'
+                  : 'hover:text-slate-900'
+              }`}
+            >
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" /> Approvals
+              {totalPendingCount > 0 && (
+                <span className="bg-amber-500 text-white text-[10px] font-extrabold px-1.5 py-0.2 rounded-full animate-pulse">
+                  {totalPendingCount}
+                </span>
+              )}
+            </button>
+          )}
+
           <button
             onClick={() => setActiveTab('settlement')}
             className={`flex-1 py-2.5 px-3 rounded-xl transition-all flex items-center justify-center gap-1 whitespace-nowrap ${
@@ -261,23 +333,43 @@ export default function TripDashboardPage() {
 
         {/* TAB 1: OVERVIEW & PERSONAL DASHBOARD */}
         {activeTab === 'overview' && (
-          <PersonalDashboard
-            currentUserId={user.id}
-            currency={trip.currency}
-            totalPaid={userTotalPaid}
-            totalShare={userTotalShare}
-            netBalance={userNetBalance}
-            settlements={settlements}
-            onMarkSettled={handleMarkSettled}
-            memberBalances={balances}
-            tripId={trip.id}
-            isAdmin={isAdmin}
-          />
+          <div className="space-y-5">
+            <TripBudgetCard
+              tripId={trip.id}
+              currency={trip.currency}
+              budget={trip.budget}
+              totalSpent={trip.totalExpense}
+              isAdmin={isAdmin}
+              onBudgetUpdated={fetchTripDetails}
+            />
+
+            <PersonalDashboard
+              currentUserId={user.id}
+              currency={trip.currency}
+              totalPaid={userTotalPaid}
+              totalShare={userTotalShare}
+              netBalance={userNetBalance}
+              settlements={settlements}
+              onMarkSettled={handleMarkSettled}
+              memberBalances={balances}
+              tripId={trip.id}
+              isAdmin={isAdmin}
+            />
+          </div>
         )}
 
         {/* TAB 2: EXPENSES TIMELINE */}
         {activeTab === 'expenses' && (
           <div className="space-y-4">
+            <TripBudgetCard
+              tripId={trip.id}
+              currency={trip.currency}
+              budget={trip.budget}
+              totalSpent={trip.totalExpense}
+              isAdmin={isAdmin}
+              onBudgetUpdated={fetchTripDetails}
+            />
+
             {/* Search & Category Pills */}
             <div className="space-y-2">
               <div className="relative flex items-center">
@@ -326,6 +418,9 @@ export default function TripDashboardPage() {
                       setIsAddExpenseOpen(true);
                     }}
                     onDelete={handleDeleteExpense}
+                    onApprove={handleApproveExpense}
+                    onReject={handleRejectExpense}
+                    onRequestDelete={handleRequestDeleteExpense}
                   />
                 ))}
               </div>
@@ -353,7 +448,18 @@ export default function TripDashboardPage() {
           </div>
         )}
 
-        {/* TAB 3: SETTLEMENT ENGINE */}
+        {/* TAB 3: PENDING APPROVALS DASHBOARD (ADMIN) */}
+        {activeTab === 'approvals' && isAdmin && (
+          <PendingApprovalsView
+            tripId={trip.id}
+            currency={trip.currency}
+            pendingExpenses={pendingExpenses}
+            pendingRequests={pendingRequests}
+            onActionComplete={fetchTripDetails}
+          />
+        )}
+
+        {/* TAB 4: SETTLEMENT ENGINE */}
         {activeTab === 'settlement' && (
           <SettlementList
             settlements={settlements}
@@ -362,12 +468,12 @@ export default function TripDashboardPage() {
           />
         )}
 
-        {/* TAB 4: AUDIT TIMELINE */}
+        {/* TAB 5: AUDIT TIMELINE */}
         {activeTab === 'timeline' && (
           <TripTimeline activities={trip.activities || []} currency={trip.currency} />
         )}
 
-        {/* TAB 5: MEMBER ANALYTICS */}
+        {/* TAB 6: MEMBER ANALYTICS */}
         {activeTab === 'analytics' && (
           <AnalyticsView tripId={trip.id} currency={trip.currency} />
         )}
@@ -393,6 +499,7 @@ export default function TripDashboardPage() {
         currency={trip.currency}
         members={trip.members}
         currentUserId={user.id}
+        isAdmin={isAdmin}
         existingExpense={editingExpense}
         onSuccess={handleExpenseSuccess}
       />

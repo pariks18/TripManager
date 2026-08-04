@@ -15,6 +15,7 @@ interface AddExpenseModalProps {
   currency: string;
   members: TripMemberDetail[];
   currentUserId: string;
+  isAdmin?: boolean;
   existingExpense?: ExpenseDetail | null;
   onSuccess: (expense: ExpenseDetail) => void;
 }
@@ -36,6 +37,7 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
   currency,
   members,
   currentUserId,
+  isAdmin = false,
   existingExpense,
   onSuccess,
 }) => {
@@ -50,6 +52,10 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
 
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
+
+  const isRejected = existingExpense?.status === 'REJECTED';
+  const isApproved = existingExpense?.status === 'APPROVED';
+  const isEditRequestRequired = isApproved && !isAdmin;
 
   useEffect(() => {
     if (existingExpense) {
@@ -123,6 +129,34 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
     setError('');
 
     try {
+      if (isEditRequestRequired && existingExpense) {
+        // Non-admin member editing an approved expense -> Submit Edit Request
+        const res = await fetch(`/api/expenses/${existingExpense.id}/edit-request`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            requestType: 'EDIT',
+            proposedData: {
+              title: title.trim(),
+              amount: numAmount,
+              category,
+              paidById,
+              splitBetween,
+              receiptUrl,
+            },
+          }),
+        });
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to submit edit request');
+
+        alert('Edit request submitted successfully! Super Host/Admin will verify your changes.');
+        onSuccess(existingExpense);
+        onClose();
+        return;
+      }
+
+      // Normal creation, direct admin edit, or member resubmission
       const url = existingExpense ? `/api/expenses/${existingExpense.id}` : '/api/expenses';
       const method = existingExpense ? 'PUT' : 'POST';
 
@@ -161,12 +195,34 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={existingExpense ? 'Edit Expense' : 'Add New Expense'}
+      title={
+        isRejected
+          ? 'Resubmit Rejected Expense'
+          : isEditRequestRequired
+          ? 'Request Edit on Approved Expense'
+          : existingExpense
+          ? 'Edit Expense'
+          : 'Add New Expense'
+      }
     >
       <form onSubmit={handleSubmit} className="space-y-4">
         {error && (
           <div className="p-3 bg-rose-50 border border-rose-200 rounded-2xl text-xs font-medium text-rose-600">
             {error}
+          </div>
+        )}
+
+        {isRejected && (
+          <div className="p-3 bg-rose-50 border border-rose-200 rounded-2xl text-xs text-rose-800 space-y-1">
+            <p className="font-bold">⚠️ Expense Was Previously Rejected</p>
+            <p>{existingExpense?.rejectionReason ? `Reason: "${existingExpense.rejectionReason}"` : 'Please verify details and resubmit for approval.'}</p>
+          </div>
+        )}
+
+        {isEditRequestRequired && (
+          <div className="p-3 bg-blue-50 border border-blue-200 rounded-2xl text-xs text-blue-800 space-y-1">
+            <p className="font-bold">ℹ️ Approved Expense Edit Workflow</p>
+            <p>Submitting this form will send an Edit Request to the Super Host / Admin for verification.</p>
           </div>
         )}
 
@@ -362,11 +418,18 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
 
         <div className="pt-4">
           <Button type="submit" fullWidth isLoading={isLoading} size="lg">
-            {existingExpense ? 'Save Changes' : 'Save Expense'}
+            {isRejected
+              ? 'Resubmit Expense for Approval'
+              : isEditRequestRequired
+              ? 'Submit Edit Request'
+              : existingExpense
+              ? 'Save Changes'
+              : 'Save Expense'}
           </Button>
         </div>
       </form>
     </Modal>
   );
 };
+
 

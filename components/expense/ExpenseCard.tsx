@@ -14,6 +14,9 @@ interface ExpenseCardProps {
   isAdmin?: boolean;
   onEdit: (expense: ExpenseDetail) => void;
   onDelete: (expenseId: string) => void;
+  onApprove?: (expenseId: string) => void;
+  onReject?: (expenseId: string) => void;
+  onRequestDelete?: (expenseId: string) => void;
 }
 
 const ICON_MAP: Record<string, React.ElementType> = {
@@ -33,6 +36,9 @@ export const ExpenseCard: React.FC<ExpenseCardProps> = ({
   isAdmin = false,
   onEdit,
   onDelete,
+  onApprove,
+  onReject,
+  onRequestDelete,
 }) => {
   const [showMenu, setShowMenu] = useState(false);
   const [showCalculationDetails, setShowCalculationDetails] = useState(false);
@@ -43,7 +49,11 @@ export const ExpenseCard: React.FC<ExpenseCardProps> = ({
 
   const isPayer = expense.paidById === currentUserId;
   const isCreator = expense.createdById === currentUserId;
-  const canModify = isCreator || isAdmin; // Security Rule: Only creator or Admin can edit/delete
+  const isApproved = expense.status === 'APPROVED';
+  const isPending = expense.status === 'PENDING_APPROVAL';
+  const isRejected = expense.status === 'REJECTED';
+
+  const canDirectModify = isAdmin || (!isApproved && isCreator);
 
   const userParticipant = expense.participants?.find((p) => p.userId === currentUserId);
   const totalParticipantsCount = expense.participants?.length || 1;
@@ -78,11 +88,24 @@ export const ExpenseCard: React.FC<ExpenseCardProps> = ({
             </div>
 
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-1.5">
                 <h4 className="text-base font-bold text-slate-900 line-clamp-1">{expense.title}</h4>
-                {expense.status === 'PENDING_APPROVAL' && (
+                {isPending && (
                   <span className="bg-amber-100 text-amber-800 text-[10px] font-bold px-2 py-0.5 rounded-full">
-                    Pending Approval
+                    ⏳ Pending Review
+                  </span>
+                )}
+                {isApproved && (
+                  <span className="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                    ✓ Approved
+                  </span>
+                )}
+                {isRejected && (
+                  <span
+                    className="bg-rose-100 text-rose-800 text-[10px] font-bold px-2 py-0.5 rounded-full"
+                    title={expense.rejectionReason ? `Reason: ${expense.rejectionReason}` : 'Rejected'}
+                  >
+                    ❌ Rejected
                   </span>
                 )}
                 {expense.receiptUrl && (
@@ -107,6 +130,39 @@ export const ExpenseCard: React.FC<ExpenseCardProps> = ({
             <span className={`text-xs block mt-0.5 ${netColor}`}>{netText}</span>
           </div>
         </div>
+
+        {/* Rejection Note Alert if Rejected */}
+        {isRejected && expense.rejectionReason && (
+          <div className="bg-rose-50 border border-rose-200/80 rounded-2xl p-2.5 text-xs text-rose-800 flex items-start gap-2">
+            <span className="font-bold shrink-0">Reason:</span>
+            <span>"{expense.rejectionReason}"</span>
+          </div>
+        )}
+
+        {/* Super Host Quick Approve/Reject Bar */}
+        {isAdmin && isPending && (onApprove || onReject) && (
+          <div className="bg-amber-50/80 border border-amber-200/80 rounded-2xl p-2.5 flex items-center justify-between gap-2">
+            <span className="text-xs font-bold text-amber-900">Awaiting Super Host verification</span>
+            <div className="flex items-center gap-2">
+              {onApprove && (
+                <button
+                  onClick={() => onApprove(expense.id)}
+                  className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-sm transition-colors"
+                >
+                  Approve
+                </button>
+              )}
+              {onReject && (
+                <button
+                  onClick={() => onReject(expense.id)}
+                  className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-bold rounded-xl transition-colors"
+                >
+                  Reject
+                </button>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Expense Calculation Transparency Accordion */}
         <div className="bg-slate-50 rounded-2xl p-3 border border-slate-100 space-y-2">
@@ -149,7 +205,7 @@ export const ExpenseCard: React.FC<ExpenseCardProps> = ({
           )}
         </div>
 
-        {/* Footer: Split Avatars & Security Authorization Menu */}
+        {/* Footer: Split Avatars & Menu Actions */}
         <div className="flex items-center justify-between pt-1">
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-1.5">
@@ -171,50 +227,68 @@ export const ExpenseCard: React.FC<ExpenseCardProps> = ({
             )}
           </div>
 
-          {/* Security Menu: Show edit/delete ONLY to creator or Admin */}
-          {canModify ? (
-            <div className="relative">
-              <button
-                onClick={() => setShowMenu(!showMenu)}
-                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-xl hover:bg-slate-100 transition-colors"
-              >
-                <MoreVertical className="w-4 h-4" />
-              </button>
-
-              {showMenu && (
-                <>
-                  <div className="fixed inset-0 z-10" onClick={() => setShowMenu(false)} />
-                  <div className="absolute right-0 bottom-full mb-1 w-32 bg-white rounded-2xl shadow-xl border border-slate-100 p-1.5 z-20 space-y-1">
-                    <button
-                      onClick={() => {
-                        setShowMenu(false);
-                        onEdit(expense);
-                      }}
-                      className="w-full flex items-center gap-2 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100 rounded-xl transition-colors"
-                    >
-                      <Edit2 className="w-3.5 h-3.5" /> Edit
-                    </button>
-                    <button
-                      onClick={() => {
-                        setShowMenu(false);
-                        onDelete(expense.id);
-                      }}
-                      className="w-full flex items-center gap-2 px-3 py-1.5 text-xs font-semibold text-rose-600 hover:bg-rose-50 rounded-xl transition-colors"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" /> Delete
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
-          ) : (
-            <span
-              className="flex items-center gap-1 text-[10px] text-slate-400 font-medium bg-slate-100 px-2 py-0.5 rounded-full"
-              title="Only the creator of this expense can edit or delete it."
+          {/* Action Menu */}
+          <div className="relative">
+            <button
+              onClick={() => setShowMenu(!showMenu)}
+              className="p-1.5 text-slate-400 hover:text-slate-600 rounded-xl hover:bg-slate-100 transition-colors"
             >
-              <Lock className="w-3 h-3 text-slate-400" /> Read Only
-            </span>
-          )}
+              <MoreVertical className="w-4 h-4" />
+            </button>
+
+            {showMenu && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setShowMenu(false)} />
+                <div className="absolute right-0 bottom-full mb-1 w-40 bg-white rounded-2xl shadow-xl border border-slate-100 p-1.5 z-20 space-y-1">
+                  {canDirectModify ? (
+                    <>
+                      <button
+                        onClick={() => {
+                          setShowMenu(false);
+                          onEdit(expense);
+                        }}
+                        className="w-full flex items-center gap-2 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100 rounded-xl transition-colors"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" /> {isRejected ? 'Resubmit' : 'Edit'}
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowMenu(false);
+                          onDelete(expense.id);
+                        }}
+                        className="w-full flex items-center gap-2 px-3 py-1.5 text-xs font-semibold text-rose-600 hover:bg-rose-50 rounded-xl transition-colors"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" /> Delete
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => {
+                          setShowMenu(false);
+                          onEdit(expense);
+                        }}
+                        className="w-full flex items-center gap-2 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100 rounded-xl transition-colors"
+                      >
+                        <Edit2 className="w-3.5 h-3.5 text-blue-600" /> Request Edit
+                      </button>
+                      {onRequestDelete && (
+                        <button
+                          onClick={() => {
+                            setShowMenu(false);
+                            onRequestDelete(expense.id);
+                          }}
+                          className="w-full flex items-center gap-2 px-3 py-1.5 text-xs font-semibold text-rose-600 hover:bg-rose-50 rounded-xl transition-colors"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" /> Request Delete
+                        </button>
+                      )}
+                    </>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
