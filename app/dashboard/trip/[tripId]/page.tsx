@@ -258,6 +258,9 @@ export default function TripDashboardPage() {
             netBalance={userNetBalance}
             settlements={settlements}
             onMarkSettled={handleMarkSettled}
+            memberBalances={balances}
+            tripId={trip.id}
+            isAdmin={isAdmin}
           />
         )}
 

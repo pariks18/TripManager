@@ -10,7 +10,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const { tripId, title, amount, category, paidById, splitBetween } = await request.json();
+    const { tripId, title, amount, category, paidById, splitBetween, receiptUrl } = await request.json();
 
     if (!tripId || !title || !amount || amount <= 0 || !paidById || !splitBetween || splitBetween.length === 0) {
       return NextResponse.json({ error: 'Please fill in all required fields' }, { status: 400 });
@@ -23,7 +23,8 @@ export async function POST(request: Request) {
       (category as CategoryType) || 'Miscellaneous',
       paidById,
       user.id, // createdById for security ownership
-      splitBetween
+      splitBetween,
+      receiptUrl
     );
 
     return NextResponse.json({ expense }, { status: 201 });

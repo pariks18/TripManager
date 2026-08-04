@@ -13,7 +13,7 @@ export async function PUT(
   }
 
   try {
-    const { title, amount, category, paidById, splitBetween } = await request.json();
+    const { title, amount, category, paidById, splitBetween, receiptUrl } = await request.json();
 
     if (!title || !amount || amount <= 0 || !paidById || !splitBetween || splitBetween.length === 0) {
       return NextResponse.json({ error: 'Invalid expense payload' }, { status: 400 });
@@ -26,7 +26,8 @@ export async function PUT(
       parseFloat(amount),
       (category as CategoryType) || 'Miscellaneous',
       paidById,
-      splitBetween
+      splitBetween,
+      receiptUrl
     );
 
     return NextResponse.json({ expense: updatedExpense });

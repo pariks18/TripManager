@@ -1,11 +1,12 @@
 'use client';
 
 import React, { useState } from 'react';
-import { SettlementTransaction, TripMemberDetail, UserSummary } from '@/types';
+import { MemberBalance, SettlementTransaction, TripMemberDetail, UserSummary } from '@/types';
 import { formatCurrency } from '@/lib/utils';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
-import { Wallet, ArrowUpRight, ArrowDownLeft, CheckCircle2, ArrowRight, Sparkles } from 'lucide-react';
+import { MemberCard } from '@/components/member/MemberCard';
+import { Wallet, ArrowUpRight, ArrowDownLeft, CheckCircle2, ArrowRight, Sparkles, Users } from 'lucide-react';
 
 interface PersonalDashboardProps {
   currentUserId: string;
@@ -15,6 +16,9 @@ interface PersonalDashboardProps {
   netBalance: number;
   settlements: SettlementTransaction[];
   onMarkSettled: (tx: SettlementTransaction) => void;
+  memberBalances?: MemberBalance[];
+  tripId?: string;
+  isAdmin?: boolean;
 }
 
 export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
@@ -25,6 +29,9 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
   netBalance,
   settlements,
   onMarkSettled,
+  memberBalances = [],
+  tripId,
+  isAdmin = false,
 }) => {
   const isNetPositive = netBalance > 0;
   const isNetNegative = netBalance < 0;
@@ -210,6 +217,36 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
           <p className="text-xs text-slate-400 italic py-2 text-center">You don't owe money to anyone in this trip!</p>
         )}
       </div>
+
+      {/* 4. Trip Members & ID Proof Verification */}
+      {memberBalances.length > 0 && (
+        <div className="space-y-3 pt-2">
+          <div className="flex items-center justify-between px-1">
+            <div className="flex items-center gap-2">
+              <Users className="w-4 h-4 text-emerald-600" />
+              <h4 className="text-sm font-bold text-slate-900">Trip Members & Verification</h4>
+            </div>
+            <span className="text-xs text-slate-400 font-medium">
+              {memberBalances.length} Members
+            </span>
+          </div>
+
+          <div className="space-y-2.5">
+            {memberBalances.map((mb) => (
+              <MemberCard
+                key={mb.user.id}
+                memberBalance={mb}
+                currency={currency}
+                isCurrentUser={mb.user.id === currentUserId}
+                isAdmin={mb.user.id === (memberBalances[0]?.user.id || '')} // Organizer mark
+                isCurrentAdmin={isAdmin}
+                tripId={tripId}
+              />
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
+

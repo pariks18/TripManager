@@ -1,6 +1,6 @@
 import { prisma } from './prisma';
 import { generateTripCode, generateObjectId } from './utils';
-import { CategoryType, ExpenseDetail, TripSummary, UserSummary, ActivityDetail, SettlementRecordDetail, MemberAnalytics } from '@/types';
+import { CategoryType, ExpenseDetail, TripSummary, UserSummary, ActivityDetail, SettlementRecordDetail, MemberAnalytics, DocumentType, UserDocumentDetail } from '@/types';
 
 const SEED_USERS = [
   {
@@ -270,6 +270,7 @@ export const dbStore = {
           date: e.date.toISOString(),
           createdAt: e.createdAt.toISOString(),
           updatedAt: e.updatedAt.toISOString(),
+          receiptUrl: e.receiptUrl,
           participants: e.participants.map((p) => ({
             id: p.id,
             expenseId: p.expenseId,
@@ -371,6 +372,7 @@ export const dbStore = {
         date: e.date.toISOString(),
         createdAt: e.createdAt.toISOString(),
         updatedAt: e.updatedAt.toISOString(),
+        receiptUrl: e.receiptUrl,
         participants: e.participants.map((p) => ({
           id: p.id,
           expenseId: p.expenseId,
@@ -506,7 +508,8 @@ export const dbStore = {
     category: CategoryType,
     paidById: string,
     createdById: string,
-    participantUserIds: string[]
+    participantUserIds: string[],
+    receiptUrl?: string | null
   ): Promise<ExpenseDetail> {
     await ensureDatabaseSeeded();
 
@@ -536,6 +539,7 @@ export const dbStore = {
         paidById,
         createdById,
         status,
+        receiptUrl: receiptUrl || null,
         date: new Date(),
         participants: {
           create: participantUserIds.map((uid) => ({
@@ -577,6 +581,7 @@ export const dbStore = {
       date: expense.date.toISOString(),
       createdAt: expense.createdAt.toISOString(),
       updatedAt: expense.updatedAt.toISOString(),
+      receiptUrl: expense.receiptUrl,
       participants: expense.participants.map((p) => ({
         id: p.id,
         expenseId: p.expenseId,
@@ -594,7 +599,8 @@ export const dbStore = {
     amount: number,
     category: CategoryType,
     paidById: string,
-    participantUserIds: string[]
+    participantUserIds: string[],
+    receiptUrl?: string | null
   ): Promise<ExpenseDetail> {
     await ensureDatabaseSeeded();
 
@@ -633,6 +639,7 @@ export const dbStore = {
         category,
         paidById,
         lastUpdatedById: currentUserId,
+        receiptUrl: receiptUrl !== undefined ? receiptUrl : existingExpense.receiptUrl,
         participants: {
           create: participantUserIds.map((uid) => ({
             id: generateObjectId(),
@@ -672,6 +679,7 @@ export const dbStore = {
       date: updated.date.toISOString(),
       createdAt: updated.createdAt.toISOString(),
       updatedAt: updated.updatedAt.toISOString(),
+      receiptUrl: updated.receiptUrl,
       participants: updated.participants.map((p) => ({
         id: p.id,
         expenseId: p.expenseId,
@@ -847,4 +855,102 @@ export const dbStore = {
       };
     });
   },
+
+  async getUserDocuments(userId: string): Promise<UserDocumentDetail[]> {
+    await ensureDatabaseSeeded();
+    const docs = await prisma.userDocument.findMany({
+      where: { userId },
+      orderBy: { updatedAt: 'desc' },
+    });
+    return docs.map((d) => ({
+      id: d.id,
+      userId: d.userId,
+      documentType: d.documentType as DocumentType,
+      documentNo: d.documentNo,
+      fileUrl: d.fileUrl,
+      fileName: d.fileName,
+      uploadedAt: d.uploadedAt.toISOString(),
+      updatedAt: d.updatedAt.toISOString(),
+    }));
+  },
+
+  async upsertUserDocument(
+    userId: string,
+    documentType: DocumentType,
+    documentNo: string,
+    fileUrl: string,
+    fileName?: string
+  ): Promise<UserDocumentDetail> {
+    await ensureDatabaseSeeded();
+    const existing = await prisma.userDocument.findFirst({
+      where: { userId, documentType },
+    });
+
+    let doc;
+    if (existing) {
+      doc = await prisma.userDocument.update({
+        where: { id: existing.id },
+        data: {
+          documentNo,
+          fileUrl,
+          fileName: fileName || null,
+        },
+      });
+    } else {
+      doc = await prisma.userDocument.create({
+        data: {
+          id: generateObjectId(),
+          userId,
+          documentType,
+          documentNo,
+          fileUrl,
+          fileName: fileName || null,
+        },
+      });
+    }
+
+    return {
+      id: doc.id,
+      userId: doc.userId,
+      documentType: doc.documentType as DocumentType,
+      documentNo: doc.documentNo,
+      fileUrl: doc.fileUrl,
+      fileName: doc.fileName,
+      uploadedAt: doc.uploadedAt.toISOString(),
+      updatedAt: doc.updatedAt.toISOString(),
+    };
+  },
+
+  async deleteUserDocument(documentId: string, userId: string): Promise<boolean> {
+    await ensureDatabaseSeeded();
+    const doc = await prisma.userDocument.findUnique({ where: { id: documentId } });
+    if (!doc || doc.userId !== userId) return false;
+    await prisma.userDocument.delete({ where: { id: documentId } });
+    return true;
+  },
+
+  async getMemberDocumentsForAdmin(
+    requesterUserId: string,
+    targetUserId: string,
+    tripId: string
+  ): Promise<UserDocumentDetail[]> {
+    await ensureDatabaseSeeded();
+    // Security Authorization Rule: Requester must be target user OR requester must be ADMIN/Super Host in the specified trip
+    if (requesterUserId !== targetUserId) {
+      const requesterMembership = await prisma.tripMember.findFirst({
+        where: { tripId, userId: requesterUserId },
+      });
+      if (!requesterMembership || requesterMembership.role !== 'ADMIN') {
+        throw new Error('Forbidden: Only Super Host / Trip Admin can access member documents.');
+      }
+      const targetMembership = await prisma.tripMember.findFirst({
+        where: { tripId, userId: targetUserId },
+      });
+      if (!targetMembership) {
+        throw new Error('Member not found in this trip.');
+      }
+    }
+    return this.getUserDocuments(targetUserId);
+  },
 };
+

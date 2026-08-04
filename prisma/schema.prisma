@@ -23,6 +23,7 @@ model User {
   activities          Activity[]
   sentSettlements     Settlement[]         @relation("FromUser")
   receivedSettlements Settlement[]         @relation("ToUser")
+  documents           UserDocument[]
 }
 
 model Trip {
@@ -69,6 +70,7 @@ model Expense {
   createdById     String?  @db.ObjectId
   lastUpdatedById String?  @db.ObjectId
   status          String   @default("APPROVED") // APPROVED or PENDING_APPROVAL
+  receiptUrl      String?
   date            DateTime @default(now())
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -119,4 +121,19 @@ model Settlement {
   trip     Trip @relation(fields: [tripId], references: [id], onDelete: Cascade)
   fromUser User @relation("FromUser", fields: [fromUserId], references: [id], onDelete: Cascade)
   toUser   User @relation("ToUser", fields: [toUserId], references: [id], onDelete: Cascade)
+}
+
+model UserDocument {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId       String   @db.ObjectId
+  documentType String   // AADHAAR, PAN, VOTER_ID, DRIVING_LICENSE, PASSPORT, OTHER
+  documentNo   String?
+  fileUrl      String
+  fileName     String?
+  uploadedAt   DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, documentType])
 }

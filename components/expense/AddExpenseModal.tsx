@@ -1,12 +1,12 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Modal } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { CategoryType, ExpenseDetail, TripMemberDetail, UserSummary } from '@/types';
 import { CATEGORY_CONFIG, formatCurrency } from '@/lib/utils';
-import { Utensils, Plane, Fuel, Home, Ticket, ShoppingBag, Sparkles, Check, CheckSquare, Square } from 'lucide-react';
+import { Utensils, Plane, Fuel, Home, Ticket, ShoppingBag, Sparkles, Check, CheckSquare, Square, Camera, Image as ImageIcon, Trash2, Receipt, X } from 'lucide-react';
 
 interface AddExpenseModalProps {
   isOpen: boolean;
@@ -44,8 +44,12 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
   const [category, setCategory] = useState<CategoryType>('Food');
   const [paidById, setPaidById] = useState(currentUserId);
   const [splitBetween, setSplitBetween] = useState<string[]>([]);
+  const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (existingExpense) {
@@ -54,14 +58,32 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
       setCategory(existingExpense.category);
       setPaidById(existingExpense.paidById);
       setSplitBetween(existingExpense.participants.map((p) => p.userId));
+      setReceiptUrl(existingExpense.receiptUrl || null);
     } else {
       setTitle('');
       setAmount('');
       setCategory('Food');
       setPaidById(currentUserId);
       setSplitBetween(members.map((m) => m.userId));
+      setReceiptUrl(null);
     }
   }, [existingExpense, isOpen, members, currentUserId]);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 8 * 1024 * 1024) {
+      setError('Receipt photo must be smaller than 8MB');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setReceiptUrl(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
 
   const toggleParticipant = (userId: string) => {
     if (splitBetween.includes(userId)) {
@@ -114,6 +136,7 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
           category,
           paidById,
           splitBetween,
+          receiptUrl,
         }),
       });
 
@@ -215,6 +238,79 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
           </div>
         </div>
 
+        {/* Expense Receipt Upload Section */}
+        <div className="pt-2">
+          <label className="block text-xs font-semibold text-slate-700 tracking-wide uppercase mb-2 flex items-center justify-between">
+            <span className="flex items-center gap-1.5">
+              <Receipt className="w-4 h-4 text-emerald-600" /> Receipt Photo (Optional)
+            </span>
+            {receiptUrl && (
+              <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                Attached
+              </span>
+            )}
+          </label>
+
+          {/* Hidden File Inputs */}
+          <input
+            ref={cameraInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={handleFileChange}
+          />
+          <input
+            ref={galleryInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handleFileChange}
+          />
+
+          {receiptUrl ? (
+            <div className="relative rounded-2xl border border-slate-200 bg-slate-50 p-2 overflow-hidden flex items-center gap-3">
+              <img
+                src={receiptUrl}
+                alt="Receipt preview"
+                className="w-16 h-16 object-cover rounded-xl border border-slate-200"
+              />
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-bold text-slate-800 truncate">Receipt Photo Attached</p>
+                <p className="text-[11px] text-slate-500">Tap remove to upload a different photo</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setReceiptUrl(null)}
+                className="p-2 text-rose-600 hover:bg-rose-50 rounded-xl transition-colors shrink-0"
+                title="Remove photo"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => cameraInputRef.current?.click()}
+                className="flex items-center justify-center gap-2 p-3 bg-slate-50 border border-slate-200 border-dashed rounded-2xl hover:bg-slate-100 hover:border-emerald-500 text-slate-700 text-xs font-bold transition-all"
+              >
+                <Camera className="w-4 h-4 text-emerald-600" />
+                <span>Take Photo</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => galleryInputRef.current?.click()}
+                className="flex items-center justify-center gap-2 p-3 bg-slate-50 border border-slate-200 border-dashed rounded-2xl hover:bg-slate-100 hover:border-emerald-500 text-slate-700 text-xs font-bold transition-all"
+              >
+                <ImageIcon className="w-4 h-4 text-blue-600" />
+                <span>Choose Gallery</span>
+              </button>
+            </div>
+          )}
+        </div>
+
         {/* Split Between Checkboxes */}
         <div className="pt-2">
           <div className="flex items-center justify-between mb-2">
@@ -230,7 +326,7 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
             </button>
           </div>
 
-          <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+          <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
             {members.map((m) => {
               const isChecked = splitBetween.includes(m.userId);
               return (
@@ -273,3 +369,4 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
     </Modal>
   );
 };
+

@@ -51,7 +51,27 @@ export interface ExpenseDetail {
   date: string;
   createdAt: string;
   updatedAt?: string;
+  receiptUrl?: string | null;
   participants: ExpenseParticipantDetail[];
+}
+
+export type DocumentType =
+  | 'AADHAAR'
+  | 'PAN'
+  | 'VOTER_ID'
+  | 'DRIVING_LICENSE'
+  | 'PASSPORT'
+  | 'OTHER';
+
+export interface UserDocumentDetail {
+  id: string;
+  userId: string;
+  documentType: DocumentType;
+  documentNo?: string | null;
+  fileUrl: string;
+  fileName?: string | null;
+  uploadedAt: string;
+  updatedAt?: string;
 }
 
 export interface ActivityDetail {
