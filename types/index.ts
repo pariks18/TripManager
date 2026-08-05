@@ -133,6 +133,39 @@ export interface SettlementRecordDetail {
   updatedAt: string;
 }
 
+export interface ItineraryItemDetail {
+  id: string;
+  tripId: string;
+  dayNumber: number;
+  date?: string | null;
+  title: string;
+  description?: string | null;
+  location?: string | null;
+  startTime?: string | null;
+  endTime?: string | null;
+  category?: string | null;
+  order: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface StayDetail {
+  id: string;
+  tripId: string;
+  name: string;
+  address?: string | null;
+  checkIn?: string | null;
+  checkOut?: string | null;
+  checkInTime?: string | null;
+  checkOutTime?: string | null;
+  bookingRef?: string | null;
+  bookingUrl?: string | null;
+  contactPhone?: string | null;
+  notes?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface TripSummary {
   id: string;
   name: string;
@@ -151,6 +184,8 @@ export interface TripSummary {
   editRequests?: ExpenseEditRequestDetail[];
   activities?: ActivityDetail[];
   settlementRecords?: SettlementRecordDetail[];
+  itinerary?: ItineraryItemDetail[];
+  stays?: StayDetail[];
   totalExpense: number;
   userBalance: number;
   userTotalPaid: number;

@@ -19,6 +19,8 @@ import { BottomNav } from '@/components/ui/BottomNav';
 import { TripBudgetCard } from '@/components/trip/TripBudgetCard';
 import { TripSettingsModal } from '@/components/trip/TripSettingsModal';
 import { PendingApprovalsView } from '@/components/expense/PendingApprovalsView';
+import { ItineraryView } from '@/components/trip/ItineraryView';
+import { StayView } from '@/components/trip/StayView';
 import {
   ArrowLeft,
   Plus,
@@ -39,6 +41,8 @@ import {
   ShieldCheck,
   Clock,
   Settings,
+  Calendar,
+  Hotel,
 } from 'lucide-react';
 
 export default function TripDashboardPage() {
@@ -49,7 +53,7 @@ export default function TripDashboardPage() {
   const [user, setUser] = useState<UserSession | null>(null);
   const [trip, setTrip] = useState<TripSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'overview' | 'expenses' | 'approvals' | 'settlement' | 'timeline' | 'analytics'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'expenses' | 'itinerary' | 'stay' | 'approvals' | 'settlement' | 'timeline' | 'analytics'>('overview');
   const [copiedCode, setCopiedCode] = useState(false);
 
   // Expense modal state
@@ -292,6 +296,28 @@ export default function TripDashboardPage() {
             <Receipt className="w-3.5 h-3.5 text-blue-600" /> Expenses ({trip.expenses.length})
           </button>
 
+          <button
+            onClick={() => setActiveTab('itinerary')}
+            className={`flex-1 py-2.5 px-3 rounded-xl transition-all flex items-center justify-center gap-1 whitespace-nowrap ${
+              activeTab === 'itinerary'
+                ? 'bg-white text-slate-900 shadow-sm'
+                : 'hover:text-slate-900'
+            }`}
+          >
+            <Calendar className="w-3.5 h-3.5 text-indigo-600" /> Itinerary
+          </button>
+
+          <button
+            onClick={() => setActiveTab('stay')}
+            className={`flex-1 py-2.5 px-3 rounded-xl transition-all flex items-center justify-center gap-1 whitespace-nowrap ${
+              activeTab === 'stay'
+                ? 'bg-white text-slate-900 shadow-sm'
+                : 'hover:text-slate-900'
+            }`}
+          >
+            <Hotel className="w-3.5 h-3.5 text-pink-600" /> Stay
+          </button>
+
           {isAdmin && (
             <button
               onClick={() => setActiveTab('approvals')}
@@ -465,7 +491,27 @@ export default function TripDashboardPage() {
           </div>
         )}
 
-        {/* TAB 3: PENDING APPROVALS DASHBOARD (ADMIN) */}
+        {/* TAB 3: ITINERARY SCHEDULE */}
+        {activeTab === 'itinerary' && (
+          <ItineraryView
+            tripId={trip.id}
+            itinerary={trip.itinerary || []}
+            isAdmin={isAdmin}
+            onRefresh={fetchTripDetails}
+          />
+        )}
+
+        {/* TAB 4: STAY & ACCOMMODATION */}
+        {activeTab === 'stay' && (
+          <StayView
+            tripId={trip.id}
+            stays={trip.stays || []}
+            isAdmin={isAdmin}
+            onRefresh={fetchTripDetails}
+          />
+        )}
+
+        {/* TAB 5: PENDING APPROVALS DASHBOARD (ADMIN) */}
         {activeTab === 'approvals' && isAdmin && (
           <PendingApprovalsView
             tripId={trip.id}

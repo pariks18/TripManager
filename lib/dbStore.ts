@@ -1,6 +1,6 @@
 import { prisma } from './prisma';
 import { generateTripCode, generateObjectId } from './utils';
-import { CategoryType, ExpenseDetail, TripSummary, UserSummary, ActivityDetail, SettlementRecordDetail, MemberAnalytics, DocumentType, UserDocumentDetail } from '@/types';
+import { CategoryType, ExpenseDetail, TripSummary, UserSummary, ActivityDetail, SettlementRecordDetail, MemberAnalytics, DocumentType, UserDocumentDetail, ItineraryItemDetail, StayDetail } from '@/types';
 
 const SEED_USERS = [
   {
@@ -366,6 +366,8 @@ export const dbStore = {
         },
         activities: { include: { user: true }, orderBy: { createdAt: 'desc' } },
         settlements: { include: { fromUser: true, toUser: true }, orderBy: { updatedAt: 'desc' } },
+        itinerary: { orderBy: [{ dayNumber: 'asc' }, { order: 'asc' }, { createdAt: 'asc' }] },
+        stays: { orderBy: { createdAt: 'desc' } },
       },
     });
 
@@ -480,6 +482,37 @@ export const dbStore = {
         note: s.note,
         createdAt: s.createdAt.toISOString(),
         updatedAt: s.updatedAt.toISOString(),
+      })),
+      itinerary: directTrip.itinerary?.map((item) => ({
+        id: item.id,
+        tripId: item.tripId,
+        dayNumber: item.dayNumber,
+        date: item.date ? item.date.toISOString() : null,
+        title: item.title,
+        description: item.description,
+        location: item.location,
+        startTime: item.startTime,
+        endTime: item.endTime,
+        category: item.category,
+        order: item.order,
+        createdAt: item.createdAt.toISOString(),
+        updatedAt: item.updatedAt.toISOString(),
+      })),
+      stays: directTrip.stays?.map((stay) => ({
+        id: stay.id,
+        tripId: stay.tripId,
+        name: stay.name,
+        address: stay.address,
+        checkIn: stay.checkIn ? stay.checkIn.toISOString() : null,
+        checkOut: stay.checkOut ? stay.checkOut.toISOString() : null,
+        checkInTime: stay.checkInTime,
+        checkOutTime: stay.checkOutTime,
+        bookingRef: stay.bookingRef,
+        bookingUrl: stay.bookingUrl,
+        contactPhone: stay.contactPhone,
+        notes: stay.notes,
+        createdAt: stay.createdAt.toISOString(),
+        updatedAt: stay.updatedAt.toISOString(),
       })),
       totalExpense,
       userBalance: paid - share,
@@ -1398,6 +1431,298 @@ export const dbStore = {
       );
     }
 
+    return true;
+  },
+
+  // --- ITINERARY METHODS ---
+  async addItineraryItem(
+    tripId: string,
+    adminUserId: string,
+    data: {
+      dayNumber?: number;
+      date?: string;
+      title: string;
+      description?: string;
+      location?: string;
+      startTime?: string;
+      endTime?: string;
+      category?: string;
+      order?: number;
+    }
+  ): Promise<ItineraryItemDetail> {
+    await ensureDatabaseSeeded();
+    const trip = await prisma.trip.findUnique({
+      where: { id: tripId },
+      include: { members: true },
+    });
+    if (!trip) throw new Error('Trip not found');
+
+    const adminMember = trip.members.find((m) => m.userId === adminUserId);
+    const isAdmin = adminMember?.role === 'ADMIN' || trip.createdById === adminUserId;
+    if (!isAdmin) throw new Error('Forbidden: Only Super Host / Trip Admin can manage itinerary.');
+
+    const adminUser = await prisma.user.findUnique({ where: { id: adminUserId } });
+
+    const item = await prisma.itineraryItem.create({
+      data: {
+        id: generateObjectId(),
+        tripId,
+        dayNumber: data.dayNumber || 1,
+        date: data.date ? new Date(data.date) : null,
+        title: data.title,
+        description: data.description || null,
+        location: data.location || null,
+        startTime: data.startTime || null,
+        endTime: data.endTime || null,
+        category: data.category || 'Sightseeing',
+        order: data.order || 0,
+      },
+    });
+
+    await logActivity(
+      tripId,
+      adminUserId,
+      'TRIP_UPDATED',
+      `${adminUser?.name || 'Admin'} added Day ${item.dayNumber} itinerary item "${item.title}"`
+    );
+
+    return {
+      id: item.id,
+      tripId: item.tripId,
+      dayNumber: item.dayNumber,
+      date: item.date ? item.date.toISOString() : null,
+      title: item.title,
+      description: item.description,
+      location: item.location,
+      startTime: item.startTime,
+      endTime: item.endTime,
+      category: item.category,
+      order: item.order,
+      createdAt: item.createdAt.toISOString(),
+      updatedAt: item.updatedAt.toISOString(),
+    };
+  },
+
+  async updateItineraryItem(
+    itemId: string,
+    adminUserId: string,
+    data: {
+      dayNumber?: number;
+      date?: string;
+      title?: string;
+      description?: string;
+      location?: string;
+      startTime?: string;
+      endTime?: string;
+      category?: string;
+      order?: number;
+    }
+  ): Promise<ItineraryItemDetail> {
+    await ensureDatabaseSeeded();
+    const item = await prisma.itineraryItem.findUnique({
+      where: { id: itemId },
+      include: { trip: { include: { members: true } } },
+    });
+    if (!item) throw new Error('Itinerary item not found');
+
+    const adminMember = item.trip.members.find((m) => m.userId === adminUserId);
+    const isAdmin = adminMember?.role === 'ADMIN' || item.trip.createdById === adminUserId;
+    if (!isAdmin) throw new Error('Forbidden: Only Super Host / Trip Admin can edit itinerary.');
+
+    const updated = await prisma.itineraryItem.update({
+      where: { id: itemId },
+      data: {
+        dayNumber: data.dayNumber !== undefined ? data.dayNumber : item.dayNumber,
+        date: data.date !== undefined ? (data.date ? new Date(data.date) : null) : item.date,
+        title: data.title !== undefined ? data.title : item.title,
+        description: data.description !== undefined ? data.description : item.description,
+        location: data.location !== undefined ? data.location : item.location,
+        startTime: data.startTime !== undefined ? data.startTime : item.startTime,
+        endTime: data.endTime !== undefined ? data.endTime : item.endTime,
+        category: data.category !== undefined ? data.category : item.category,
+        order: data.order !== undefined ? data.order : item.order,
+      },
+    });
+
+    return {
+      id: updated.id,
+      tripId: updated.tripId,
+      dayNumber: updated.dayNumber,
+      date: updated.date ? updated.date.toISOString() : null,
+      title: updated.title,
+      description: updated.description,
+      location: updated.location,
+      startTime: updated.startTime,
+      endTime: updated.endTime,
+      category: updated.category,
+      order: updated.order,
+      createdAt: updated.createdAt.toISOString(),
+      updatedAt: updated.updatedAt.toISOString(),
+    };
+  },
+
+  async deleteItineraryItem(itemId: string, adminUserId: string): Promise<boolean> {
+    await ensureDatabaseSeeded();
+    const item = await prisma.itineraryItem.findUnique({
+      where: { id: itemId },
+      include: { trip: { include: { members: true } } },
+    });
+    if (!item) return false;
+
+    const adminMember = item.trip.members.find((m) => m.userId === adminUserId);
+    const isAdmin = adminMember?.role === 'ADMIN' || item.trip.createdById === adminUserId;
+    if (!isAdmin) throw new Error('Forbidden: Only Super Host / Trip Admin can delete itinerary item.');
+
+    await prisma.itineraryItem.delete({ where: { id: itemId } });
+    return true;
+  },
+
+  // --- STAY METHODS ---
+  async addStayDetail(
+    tripId: string,
+    adminUserId: string,
+    data: {
+      name: string;
+      address?: string;
+      checkIn?: string;
+      checkOut?: string;
+      checkInTime?: string;
+      checkOutTime?: string;
+      bookingRef?: string;
+      bookingUrl?: string;
+      contactPhone?: string;
+      notes?: string;
+    }
+  ): Promise<StayDetail> {
+    await ensureDatabaseSeeded();
+    const trip = await prisma.trip.findUnique({
+      where: { id: tripId },
+      include: { members: true },
+    });
+    if (!trip) throw new Error('Trip not found');
+
+    const adminMember = trip.members.find((m) => m.userId === adminUserId);
+    const isAdmin = adminMember?.role === 'ADMIN' || trip.createdById === adminUserId;
+    if (!isAdmin) throw new Error('Forbidden: Only Super Host / Trip Admin can manage stay details.');
+
+    const adminUser = await prisma.user.findUnique({ where: { id: adminUserId } });
+
+    const stay = await prisma.stayDetail.create({
+      data: {
+        id: generateObjectId(),
+        tripId,
+        name: data.name,
+        address: data.address || null,
+        checkIn: data.checkIn ? new Date(data.checkIn) : null,
+        checkOut: data.checkOut ? new Date(data.checkOut) : null,
+        checkInTime: data.checkInTime || null,
+        checkOutTime: data.checkOutTime || null,
+        bookingRef: data.bookingRef || null,
+        bookingUrl: data.bookingUrl || null,
+        contactPhone: data.contactPhone || null,
+        notes: data.notes || null,
+      },
+    });
+
+    await logActivity(
+      tripId,
+      adminUserId,
+      'TRIP_UPDATED',
+      `${adminUser?.name || 'Admin'} added stay accommodation details for "${stay.name}"`
+    );
+
+    return {
+      id: stay.id,
+      tripId: stay.tripId,
+      name: stay.name,
+      address: stay.address,
+      checkIn: stay.checkIn ? stay.checkIn.toISOString() : null,
+      checkOut: stay.checkOut ? stay.checkOut.toISOString() : null,
+      checkInTime: stay.checkInTime,
+      checkOutTime: stay.checkOutTime,
+      bookingRef: stay.bookingRef,
+      bookingUrl: stay.bookingUrl,
+      contactPhone: stay.contactPhone,
+      notes: stay.notes,
+      createdAt: stay.createdAt.toISOString(),
+      updatedAt: stay.updatedAt.toISOString(),
+    };
+  },
+
+  async updateStayDetail(
+    stayId: string,
+    adminUserId: string,
+    data: {
+      name?: string;
+      address?: string;
+      checkIn?: string;
+      checkOut?: string;
+      checkInTime?: string;
+      checkOutTime?: string;
+      bookingRef?: string;
+      bookingUrl?: string;
+      contactPhone?: string;
+      notes?: string;
+    }
+  ): Promise<StayDetail> {
+    await ensureDatabaseSeeded();
+    const stay = await prisma.stayDetail.findUnique({
+      where: { id: stayId },
+      include: { trip: { include: { members: true } } },
+    });
+    if (!stay) throw new Error('Stay detail record not found');
+
+    const adminMember = stay.trip.members.find((m) => m.userId === adminUserId);
+    const isAdmin = adminMember?.role === 'ADMIN' || stay.trip.createdById === adminUserId;
+    if (!isAdmin) throw new Error('Forbidden: Only Super Host / Trip Admin can edit stay details.');
+
+    const updated = await prisma.stayDetail.update({
+      where: { id: stayId },
+      data: {
+        name: data.name !== undefined ? data.name : stay.name,
+        address: data.address !== undefined ? data.address : stay.address,
+        checkIn: data.checkIn !== undefined ? (data.checkIn ? new Date(data.checkIn) : null) : stay.checkIn,
+        checkOut: data.checkOut !== undefined ? (data.checkOut ? new Date(data.checkOut) : null) : stay.checkOut,
+        checkInTime: data.checkInTime !== undefined ? data.checkInTime : stay.checkInTime,
+        checkOutTime: data.checkOutTime !== undefined ? data.checkOutTime : stay.checkOutTime,
+        bookingRef: data.bookingRef !== undefined ? data.bookingRef : stay.bookingRef,
+        bookingUrl: data.bookingUrl !== undefined ? data.bookingUrl : stay.bookingUrl,
+        contactPhone: data.contactPhone !== undefined ? data.contactPhone : stay.contactPhone,
+        notes: data.notes !== undefined ? data.notes : stay.notes,
+      },
+    });
+
+    return {
+      id: updated.id,
+      tripId: updated.tripId,
+      name: updated.name,
+      address: updated.address,
+      checkIn: updated.checkIn ? updated.checkIn.toISOString() : null,
+      checkOut: updated.checkOut ? updated.checkOut.toISOString() : null,
+      checkInTime: updated.checkInTime,
+      checkOutTime: updated.checkOutTime,
+      bookingRef: updated.bookingRef,
+      bookingUrl: updated.bookingUrl,
+      contactPhone: updated.contactPhone,
+      notes: updated.notes,
+      createdAt: updated.createdAt.toISOString(),
+      updatedAt: updated.updatedAt.toISOString(),
+    };
+  },
+
+  async deleteStayDetail(stayId: string, adminUserId: string): Promise<boolean> {
+    await ensureDatabaseSeeded();
+    const stay = await prisma.stayDetail.findUnique({
+      where: { id: stayId },
+      include: { trip: { include: { members: true } } },
+    });
+    if (!stay) return false;
+
+    const adminMember = stay.trip.members.find((m) => m.userId === adminUserId);
+    const isAdmin = adminMember?.role === 'ADMIN' || stay.trip.createdById === adminUserId;
+    if (!isAdmin) throw new Error('Forbidden: Only Super Host / Trip Admin can delete stay details.');
+
+    await prisma.stayDetail.delete({ where: { id: stayId } });
     return true;
   },
 };
