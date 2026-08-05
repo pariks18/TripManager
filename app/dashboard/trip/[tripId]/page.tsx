@@ -17,6 +17,7 @@ import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { BottomNav } from '@/components/ui/BottomNav';
 import { TripBudgetCard } from '@/components/trip/TripBudgetCard';
+import { TripSettingsModal } from '@/components/trip/TripSettingsModal';
 import { PendingApprovalsView } from '@/components/expense/PendingApprovalsView';
 import {
   ArrowLeft,
@@ -37,6 +38,7 @@ import {
   User,
   ShieldCheck,
   Clock,
+  Settings,
 } from 'lucide-react';
 
 export default function TripDashboardPage() {
@@ -53,6 +55,7 @@ export default function TripDashboardPage() {
   // Expense modal state
   const [isAddExpenseOpen, setIsAddExpenseOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState<ExpenseDetail | null>(null);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   // Search & Filters
   const [searchQuery, setSearchQuery] = useState('');
@@ -234,6 +237,16 @@ export default function TripDashboardPage() {
           </div>
 
           <div className="flex items-center gap-2">
+            {isAdmin && (
+              <button
+                onClick={() => setIsSettingsOpen(true)}
+                className="flex items-center gap-1 text-[11px] font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 px-2.5 py-1 rounded-xl transition-colors"
+                title="Trip Settings & Verification Toggle"
+              >
+                <Settings className="w-3.5 h-3.5 text-emerald-600" />
+                <span className="hidden sm:inline">Settings</span>
+              </button>
+            )}
             <button
               onClick={() => router.push('/dashboard/profile')}
               className="flex items-center gap-1 text-[11px] font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 px-2.5 py-1 rounded-xl transition-colors"
@@ -338,9 +351,11 @@ export default function TripDashboardPage() {
               tripId={trip.id}
               currency={trip.currency}
               budget={trip.budget}
+              approvalMode={trip.approvalMode}
               totalSpent={trip.totalExpense}
               isAdmin={isAdmin}
               onBudgetUpdated={fetchTripDetails}
+              onOpenSettings={() => setIsSettingsOpen(true)}
             />
 
             <PersonalDashboard
@@ -365,9 +380,11 @@ export default function TripDashboardPage() {
               tripId={trip.id}
               currency={trip.currency}
               budget={trip.budget}
+              approvalMode={trip.approvalMode}
               totalSpent={trip.totalExpense}
               isAdmin={isAdmin}
               onBudgetUpdated={fetchTripDetails}
+              onOpenSettings={() => setIsSettingsOpen(true)}
             />
 
             {/* Search & Category Pills */}
@@ -502,6 +519,17 @@ export default function TripDashboardPage() {
         isAdmin={isAdmin}
         existingExpense={editingExpense}
         onSuccess={handleExpenseSuccess}
+      />
+
+      {/* Trip Settings Modal */}
+      <TripSettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        tripId={trip.id}
+        currency={trip.currency}
+        currentApprovalMode={trip.approvalMode}
+        currentBudget={trip.budget}
+        onSettingsUpdated={fetchTripDetails}
       />
 
       <BottomNav />

@@ -11,18 +11,22 @@ interface TripBudgetCardProps {
   tripId: string;
   currency: string;
   budget?: number | null;
+  approvalMode?: boolean;
   totalSpent: number;
   isAdmin: boolean;
   onBudgetUpdated: () => void;
+  onOpenSettings?: () => void;
 }
 
 export const TripBudgetCard: React.FC<TripBudgetCardProps> = ({
   tripId,
   currency,
   budget,
+  approvalMode,
   totalSpent,
   isAdmin,
   onBudgetUpdated,
+  onOpenSettings,
 }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [budgetValue, setBudgetValue] = useState(budget ? budget.toString() : '');
@@ -62,6 +66,15 @@ export const TripBudgetCard: React.FC<TripBudgetCardProps> = ({
     }
   };
 
+  const handleSettingsClick = () => {
+    if (onOpenSettings) {
+      onOpenSettings();
+    } else {
+      setBudgetValue(budget ? budget.toString() : '');
+      setIsModalOpen(true);
+    }
+  };
+
   return (
     <>
       <div className="bg-white rounded-3xl p-5 border border-slate-100 apple-shadow space-y-4">
@@ -80,21 +93,31 @@ export const TripBudgetCard: React.FC<TripBudgetCardProps> = ({
               <PiggyBank className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-sm font-bold text-slate-900">Trip Budget & Tracking</h3>
-              <p className="text-[11px] text-slate-400 font-medium">Real-time overspending monitor</p>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-bold text-slate-900">Trip Budget & Verification</h3>
+                {approvalMode !== undefined && (
+                  <span
+                    className={`text-[9px] font-extrabold px-2 py-0.5 rounded-full border ${
+                      approvalMode
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                        : 'bg-slate-100 text-slate-600 border-slate-200'
+                    }`}
+                  >
+                    {approvalMode ? 'Verification ON' : 'Verification OFF'}
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] text-slate-400 font-medium">Real-time spending & workflow status</p>
             </div>
           </div>
 
           {isAdmin ? (
             <button
-              onClick={() => {
-                setBudgetValue(budget ? budget.toString() : '');
-                setIsModalOpen(true);
-              }}
+              onClick={handleSettingsClick}
               className="inline-flex items-center gap-1 text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-3 py-1.5 rounded-2xl transition-colors"
             >
               <Edit3 className="w-3.5 h-3.5" />
-              {hasBudget ? 'Edit Budget' : 'Set Budget'}
+              {onOpenSettings ? 'Settings' : hasBudget ? 'Edit Budget' : 'Set Budget'}
             </button>
           ) : (
             hasBudget && (
@@ -197,12 +220,12 @@ export const TripBudgetCard: React.FC<TripBudgetCardProps> = ({
             <p className="text-xs font-bold text-slate-700">No Trip Budget Set</p>
             <p className="text-[11px] text-slate-400 max-w-xs mx-auto">
               {isAdmin
-                ? 'Set a trip budget to track overspending and send real-time alerts to members.'
+                ? 'Set a trip budget and manage expense approval settings for this trip.'
                 : 'The Super Host has not set a total budget for this trip yet.'}
             </p>
             {isAdmin && (
-              <Button onClick={() => setIsModalOpen(true)} size="sm" className="mt-1">
-                Set Trip Budget
+              <Button onClick={handleSettingsClick} size="sm" className="mt-1">
+                {onOpenSettings ? 'Manage Trip Settings' : 'Set Trip Budget'}
               </Button>
             )}
           </div>
@@ -249,3 +272,4 @@ export const TripBudgetCard: React.FC<TripBudgetCardProps> = ({
     </>
   );
 };
+

@@ -602,8 +602,15 @@ export const dbStore = {
     const shareAmount = participantUserIds.length > 0 ? amount / participantUserIds.length : 0;
     const expenseObjectId = generateObjectId();
 
-    // Check expense approval mode
-    const status = trip.approvalMode && amount > 5000 ? 'PENDING_APPROVAL' : 'APPROVED';
+    // Check expense approval mode & creator role
+    const creatorMember = await prisma.tripMember.findFirst({
+      where: { tripId, userId: createdById },
+    });
+    const isCreatorAdmin = creatorMember?.role === 'ADMIN' || trip.createdById === createdById;
+
+    // Enabled: Every expense added by a member remains Pending until verified by Super Host/Admin.
+    // Super Host/Admin expenses are auto-approved. Disabled: All expenses are auto-approved.
+    const status = trip.approvalMode && !isCreatorAdmin ? 'PENDING_APPROVAL' : 'APPROVED';
 
     const expense = await prisma.expense.create({
       data: {
@@ -881,7 +888,8 @@ export const dbStore = {
 
     if (!trip) return [];
 
-    const totalTripSpent = trip.expenses.reduce((sum, e) => sum + e.amount, 0);
+    const approvedExpenses = trip.expenses.filter((e) => e.status === 'APPROVED');
+    const totalTripSpent = approvedExpenses.reduce((sum, e) => sum + e.amount, 0);
 
     return trip.members.map((mem) => {
       const u = mem.user;
@@ -891,7 +899,7 @@ export const dbStore = {
       let largestExpenseAmount = 0;
       const categoryCounts: Record<string, number> = {};
 
-      trip.expenses.forEach((e) => {
+      approvedExpenses.forEach((e) => {
         if (e.paidById === u.id) {
           totalPaid += e.amount;
         }
@@ -1334,6 +1342,14 @@ export const dbStore = {
   },
 
   async updateTripBudget(tripId: string, adminUserId: string, budget: number | null) {
+    return this.updateTripSettings(tripId, adminUserId, { budget });
+  },
+
+  async updateTripSettings(
+    tripId: string,
+    adminUserId: string,
+    data: { budget?: number | null; approvalMode?: boolean }
+  ) {
     await ensureDatabaseSeeded();
     const trip = await prisma.trip.findUnique({
       where: { id: tripId },
@@ -1344,22 +1360,43 @@ export const dbStore = {
     const adminMember = trip.members.find((m) => m.userId === adminUserId);
     const isAdmin = adminMember?.role === 'ADMIN' || trip.createdById === adminUserId;
     if (!isAdmin) {
-      throw new Error('Forbidden: Only Super Host / Trip Admin can set trip budget.');
+      throw new Error('Forbidden: Only Super Host / Trip Admin can update trip settings.');
     }
 
     const adminUser = await prisma.user.findUnique({ where: { id: adminUserId } });
 
+    const updateData: { budget?: number | null; approvalMode?: boolean } = {};
+
+    if (data.budget !== undefined) {
+      updateData.budget = data.budget !== null && data.budget > 0 ? data.budget : null;
+    }
+
+    if (data.approvalMode !== undefined) {
+      updateData.approvalMode = data.approvalMode;
+    }
+
     await prisma.trip.update({
       where: { id: tripId },
-      data: { budget: budget && budget > 0 ? budget : null },
+      data: updateData,
     });
 
-    await logActivity(
-      tripId,
-      adminUserId,
-      'BUDGET_UPDATED',
-      `${adminUser?.name || 'Admin'} updated total trip budget to ${budget && budget > 0 ? `${trip.currency}${budget}` : 'Unlimited'}`
-    );
+    if (data.approvalMode !== undefined && data.approvalMode !== trip.approvalMode) {
+      await logActivity(
+        tripId,
+        adminUserId,
+        'TRIP_UPDATED',
+        `${adminUser?.name || 'Admin'} ${data.approvalMode ? 'enabled' : 'disabled'} expense verification workflow`
+      );
+    }
+
+    if (data.budget !== undefined && data.budget !== trip.budget) {
+      await logActivity(
+        tripId,
+        adminUserId,
+        'BUDGET_UPDATED',
+        `${adminUser?.name || 'Admin'} updated total trip budget to ${data.budget && data.budget > 0 ? `${trip.currency}${data.budget}` : 'Unlimited'}`
+      );
+    }
 
     return true;
   },

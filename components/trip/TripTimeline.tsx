@@ -13,6 +13,9 @@ import {
   Trash2,
   CheckCircle2,
   ShieldAlert,
+  ShieldCheck,
+  Settings,
+  PiggyBank,
   Sparkles,
   ArrowRight,
 } from 'lucide-react';
@@ -28,6 +31,11 @@ const ACTION_ICONS: Record<string, { icon: React.ElementType; bg: string; color:
   EXPENSE_ADDED: { icon: Receipt, bg: 'bg-emerald-100 dark:bg-emerald-950', color: 'text-emerald-600' },
   EXPENSE_UPDATED: { icon: Edit2, bg: 'bg-amber-100 dark:bg-amber-950', color: 'text-amber-600' },
   EXPENSE_DELETED: { icon: Trash2, bg: 'bg-rose-100 dark:bg-rose-950', color: 'text-rose-600' },
+  EXPENSE_APPROVED: { icon: ShieldCheck, bg: 'bg-emerald-100 dark:bg-emerald-950', color: 'text-emerald-600' },
+  EXPENSE_REJECTED: { icon: ShieldAlert, bg: 'bg-rose-100 dark:bg-rose-950', color: 'text-rose-600' },
+  TRIP_UPDATED: { icon: Settings, bg: 'bg-emerald-100 dark:bg-emerald-950', color: 'text-emerald-600' },
+  APPROVAL_MODE_UPDATED: { icon: ShieldCheck, bg: 'bg-emerald-100 dark:bg-emerald-950', color: 'text-emerald-600' },
+  BUDGET_UPDATED: { icon: PiggyBank, bg: 'bg-amber-100 dark:bg-amber-950', color: 'text-amber-600' },
   SETTLEMENT_MARKED: { icon: CheckCircle2, bg: 'bg-purple-100 dark:bg-purple-950', color: 'text-purple-600' },
   SETTLEMENT_CONFIRMED: { icon: Sparkles, bg: 'bg-emerald-100 dark:bg-emerald-950', color: 'text-emerald-600' },
 };

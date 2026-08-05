@@ -110,7 +110,9 @@ export interface ActivityDetail {
     | 'BUDGET_UPDATED'
     | 'SETTLEMENT_MARKED' 
     | 'SETTLEMENT_CONFIRMED'
-    | 'TRIP_LOCKED';
+    | 'TRIP_LOCKED'
+    | 'TRIP_UPDATED'
+    | 'APPROVAL_MODE_UPDATED';
   details: string;
   amount?: number | null;
   category?: string | null;

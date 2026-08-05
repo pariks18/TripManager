@@ -177,6 +177,10 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to save expense');
 
+      if (data.expense?.status === 'PENDING_APPROVAL') {
+        alert('Expense submitted successfully! It is currently Pending review and approval by the Super Host / Admin.');
+      }
+
       onSuccess(data.expense);
       onClose();
     } catch (err: any) {
