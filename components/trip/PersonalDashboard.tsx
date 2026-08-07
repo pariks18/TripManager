@@ -19,6 +19,7 @@ interface PersonalDashboardProps {
   memberBalances?: MemberBalance[];
   tripId?: string;
   isAdmin?: boolean;
+  onMemberRemoved?: () => void;
 }
 
 export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
@@ -32,6 +33,7 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
   memberBalances = [],
   tripId,
   isAdmin = false,
+  onMemberRemoved,
 }) => {
   const isNetPositive = netBalance > 0;
   const isNetNegative = netBalance < 0;
@@ -241,6 +243,7 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
                 isAdmin={mb.user.id === (memberBalances[0]?.user.id || '')} // Organizer mark
                 isCurrentAdmin={isAdmin}
                 tripId={tripId}
+                onMemberRemoved={onMemberRemoved}
               />
             ))}
           </div>

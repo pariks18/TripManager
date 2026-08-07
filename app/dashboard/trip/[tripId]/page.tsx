@@ -21,6 +21,7 @@ import { TripSettingsModal } from '@/components/trip/TripSettingsModal';
 import { PendingApprovalsView } from '@/components/expense/PendingApprovalsView';
 import { ItineraryView } from '@/components/trip/ItineraryView';
 import { StayView } from '@/components/trip/StayView';
+import { TripWalletView } from '@/components/trip/TripWalletView';
 import {
   ArrowLeft,
   Plus,
@@ -43,6 +44,7 @@ import {
   Settings,
   Calendar,
   Hotel,
+  Wallet,
 } from 'lucide-react';
 
 export default function TripDashboardPage() {
@@ -53,7 +55,7 @@ export default function TripDashboardPage() {
   const [user, setUser] = useState<UserSession | null>(null);
   const [trip, setTrip] = useState<TripSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'overview' | 'expenses' | 'itinerary' | 'stay' | 'approvals' | 'settlement' | 'timeline' | 'analytics'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'wallet' | 'expenses' | 'itinerary' | 'stay' | 'approvals' | 'settlement' | 'timeline' | 'analytics'>('overview');
   const [copiedCode, setCopiedCode] = useState(false);
 
   // Expense modal state
@@ -203,8 +205,8 @@ export default function TripDashboardPage() {
   const totalPendingCount = pendingExpenses.length + pendingRequests.length;
 
   const approvedExpenses = trip.expenses.filter((e) => e.status === 'APPROVED');
-  const balances = calculateMemberBalances(trip.members, approvedExpenses);
-  const settlements = computeSettlements(trip.members, approvedExpenses);
+  const balances = calculateMemberBalances(trip.members, approvedExpenses, trip.settlementRecords, trip.advanceContributions);
+  const settlements = computeSettlements(trip.members, approvedExpenses, trip.settlementRecords, trip.advanceContributions);
 
   const currentUserBalanceRecord = balances.find((b) => b.user.id === user.id);
   const userTotalPaid = currentUserBalanceRecord?.paid || 0;
@@ -283,6 +285,17 @@ export default function TripDashboardPage() {
             }`}
           >
             <LayoutDashboard className="w-3.5 h-3.5 text-emerald-600" /> Summary
+          </button>
+
+          <button
+            onClick={() => setActiveTab('wallet')}
+            className={`flex-1 py-2.5 px-3 rounded-xl transition-all flex items-center justify-center gap-1 whitespace-nowrap ${
+              activeTab === 'wallet'
+                ? 'bg-white text-slate-900 shadow-sm'
+                : 'hover:text-slate-900'
+            }`}
+          >
+            <Wallet className="w-3.5 h-3.5 text-emerald-600" /> Trip Wallet
           </button>
 
           <button
@@ -395,8 +408,22 @@ export default function TripDashboardPage() {
               memberBalances={balances}
               tripId={trip.id}
               isAdmin={isAdmin}
+              onMemberRemoved={fetchTripDetails}
             />
           </div>
+        )}
+
+        {/* TAB 2: TRIP WALLET & ADVANCE FUND */}
+        {activeTab === 'wallet' && (
+          <TripWalletView
+            tripId={trip.id}
+            currency={trip.currency}
+            isAdmin={isAdmin}
+            currentUserId={user.id}
+            members={trip.members}
+            onOpenSettings={() => setIsSettingsOpen(true)}
+            onRefreshTrip={fetchTripDetails}
+          />
         )}
 
         {/* TAB 2: EXPENSES TIMELINE */}
@@ -526,8 +553,12 @@ export default function TripDashboardPage() {
         {activeTab === 'settlement' && (
           <SettlementList
             settlements={settlements}
+            settlementRecords={trip.settlementRecords}
             currency={trip.currency}
             currentUserId={user.id}
+            isAdmin={isAdmin}
+            tripId={trip.id}
+            onRefresh={fetchTripDetails}
           />
         )}
 
@@ -575,6 +606,8 @@ export default function TripDashboardPage() {
         currency={trip.currency}
         currentApprovalMode={trip.approvalMode}
         currentBudget={trip.budget}
+        currentAdvanceTarget={trip.advanceTargetPerMember}
+        currentRequireVerification={trip.requireAdvanceVerification}
         onSettingsUpdated={fetchTripDetails}
       />
 

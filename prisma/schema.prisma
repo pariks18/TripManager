@@ -25,6 +25,8 @@ model User {
   receivedSettlements Settlement[]         @relation("ToUser")
   documents           UserDocument[]
   editRequests        ExpenseEditRequest[]
+  advanceContributions AdvanceContribution[] @relation("UserAdvanceContributions")
+  walletTransactions WalletTransaction[]     @relation("CreatedWalletTransactions")
 }
 
 model Trip {
@@ -39,6 +41,8 @@ model Trip {
   createdById  String?   @db.ObjectId
   isLocked     Boolean   @default(false)
   approvalMode Boolean   @default(false)
+  advanceTargetPerMember Float?
+  requireAdvanceVerification Boolean @default(true)
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
@@ -49,6 +53,8 @@ model Trip {
   settlements Settlement[]
   itinerary ItineraryItem[]
   stays     StayDetail[]
+  advanceContributions AdvanceContribution[]
+  walletTransactions WalletTransaction[]
 }
 
 model TripMember {
@@ -195,4 +201,38 @@ model StayDetail {
 
   trip Trip @relation(fields: [tripId], references: [id], onDelete: Cascade)
 }
+
+model AdvanceContribution {
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  tripId          String   @db.ObjectId
+  userId          String   @db.ObjectId
+  amount          Float
+  utr             String?
+  screenshotUrl   String?
+  status          String   @default("PENDING") // PENDING, APPROVED, REJECTED
+  rejectionReason String?
+  note            String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  trip Trip @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  user User @relation("UserAdvanceContributions", fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model WalletTransaction {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  tripId      String   @db.ObjectId
+  createdById String   @db.ObjectId
+  title       String
+  amount      Float
+  category    String   @default("Miscellaneous")
+  receiptUrl  String?
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  trip      Trip @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  createdBy User @relation("CreatedWalletTransactions", fields: [createdById], references: [id], onDelete: Cascade)
+}
+
 

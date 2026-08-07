@@ -1,8 +1,10 @@
-import { ExpenseDetail, MemberBalance, SettlementTransaction, UserSummary } from '@/types';
+import { AdvanceContributionDetail, ExpenseDetail, MemberBalance, SettlementRecordDetail, SettlementTransaction, UserSummary } from '@/types';
 
 export function calculateMemberBalances(
   members: { user: UserSummary }[],
-  expenses: ExpenseDetail[]
+  expenses: ExpenseDetail[],
+  settlements?: SettlementRecordDetail[],
+  advanceContributions?: AdvanceContributionDetail[]
 ): MemberBalance[] {
   const balanceMap = new Map<string, { user: UserSummary; paid: number; share: number }>();
 
@@ -34,6 +36,36 @@ export function calculateMemberBalances(
     });
   });
 
+  // Incorporate CONFIRMED / COMPLETED settlements
+  if (settlements && settlements.length > 0) {
+    const confirmedSettlements = settlements.filter(
+      (s) => s.status === 'CONFIRMED' || s.status === 'COMPLETED'
+    );
+
+    confirmedSettlements.forEach((s) => {
+      // fromUser paid money to toUser
+      if (balanceMap.has(s.fromUserId)) {
+        const fromRecord = balanceMap.get(s.fromUserId)!;
+        fromRecord.paid += s.amount;
+      }
+      if (balanceMap.has(s.toUserId)) {
+        const toRecord = balanceMap.get(s.toUserId)!;
+        toRecord.share += s.amount;
+      }
+    });
+  }
+
+  // Incorporate APPROVED Advance Contributions
+  if (advanceContributions && advanceContributions.length > 0) {
+    const approvedContributions = advanceContributions.filter((c) => c.status === 'APPROVED');
+    approvedContributions.forEach((c) => {
+      if (balanceMap.has(c.userId)) {
+        const record = balanceMap.get(c.userId)!;
+        record.paid += c.amount;
+      }
+    });
+  }
+
   // Format into MemberBalance list
   const results: MemberBalance[] = [];
   balanceMap.forEach((record) => {
@@ -51,9 +83,11 @@ export function calculateMemberBalances(
 
 export function computeSettlements(
   members: { user: UserSummary }[],
-  expenses: ExpenseDetail[]
+  expenses: ExpenseDetail[],
+  settlements?: SettlementRecordDetail[],
+  advanceContributions?: AdvanceContributionDetail[]
 ): SettlementTransaction[] {
-  const balances = calculateMemberBalances(members, expenses);
+  const balances = calculateMemberBalances(members, expenses, settlements, advanceContributions);
 
   const debtors: { user: UserSummary; amount: number }[] = [];
   const creditors: { user: UserSummary; amount: number }[] = [];

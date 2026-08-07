@@ -5,8 +5,9 @@ import { MemberBalance, UserSummary } from '@/types';
 import { Avatar } from '@/components/ui/Avatar';
 import { Badge } from '@/components/ui/Badge';
 import { formatCurrency } from '@/lib/utils';
-import { ShieldCheck, User, FileText } from 'lucide-react';
+import { ShieldCheck, User, FileText, UserX } from 'lucide-react';
 import { MemberDocumentsModal } from './MemberDocumentsModal';
+import { RemoveMemberModal } from './RemoveMemberModal';
 
 interface MemberCardProps {
   memberBalance: MemberBalance;
@@ -15,6 +16,7 @@ interface MemberCardProps {
   isAdmin?: boolean;
   isCurrentAdmin?: boolean;
   tripId?: string;
+  onMemberRemoved?: () => void;
 }
 
 export const MemberCard: React.FC<MemberCardProps> = ({
@@ -24,15 +26,19 @@ export const MemberCard: React.FC<MemberCardProps> = ({
   isAdmin = false,
   isCurrentAdmin = false,
   tripId,
+  onMemberRemoved,
 }) => {
   const { user, netBalance, paid, share } = memberBalance;
   const [showDocsModal, setShowDocsModal] = useState(false);
+  const [showRemoveModal, setShowRemoveModal] = useState(false);
 
   const getsBack = netBalance > 0;
   const owes = netBalance < 0;
 
   // Super Host / Admin or self can view ID proof documents
   const canViewDocs = (isCurrentAdmin || isCurrentUser) && !!tripId;
+  // Super Host / Admin can remove other members (excluding self & organizer)
+  const canRemoveMember = isCurrentAdmin && !isAdmin && !isCurrentUser && !!tripId;
 
   return (
     <>
@@ -51,7 +57,7 @@ export const MemberCard: React.FC<MemberCardProps> = ({
                 </span>
               )}
             </div>
-            <div className="flex items-center gap-2 mt-0.5">
+            <div className="flex items-center gap-2 mt-0.5 flex-wrap">
               <p className="text-xs text-slate-400">
                 Paid {formatCurrency(paid, currency)} • Share {formatCurrency(share, currency)}
               </p>
@@ -61,6 +67,15 @@ export const MemberCard: React.FC<MemberCardProps> = ({
                   className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/80 px-2 py-0.5 rounded-full transition-colors"
                 >
                   <FileText className="w-3 h-3 text-emerald-600" /> ID Proofs
+                </button>
+              )}
+              {canRemoveMember && (
+                <button
+                  onClick={() => setShowRemoveModal(true)}
+                  className="inline-flex items-center gap-1 text-[10px] font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200/80 px-2 py-0.5 rounded-full transition-colors"
+                  title="Remove Member from Trip"
+                >
+                  <UserX className="w-3 h-3 text-rose-600" /> Remove
                 </button>
               )}
             </div>
@@ -103,6 +118,20 @@ export const MemberCard: React.FC<MemberCardProps> = ({
           tripId={tripId}
           memberUserId={user.id}
           memberName={user.name}
+        />
+      )}
+
+      {showRemoveModal && tripId && (
+        <RemoveMemberModal
+          isOpen={showRemoveModal}
+          onClose={() => setShowRemoveModal(false)}
+          tripId={tripId}
+          currency={currency}
+          memberUserId={user.id}
+          memberName={user.name}
+          onSuccess={() => {
+            if (onMemberRemoved) onMemberRemoved();
+          }}
         />
       )}
     </>

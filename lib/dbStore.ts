@@ -1,6 +1,7 @@
 import { prisma } from './prisma';
 import { generateTripCode, generateObjectId } from './utils';
-import { CategoryType, ExpenseDetail, TripSummary, UserSummary, ActivityDetail, SettlementRecordDetail, MemberAnalytics, DocumentType, UserDocumentDetail, ItineraryItemDetail, StayDetail } from '@/types';
+import { calculateMemberBalances } from './settlement';
+import { CategoryType, ExpenseDetail, TripSummary, UserSummary, ActivityDetail, SettlementRecordDetail, MemberBalance, MemberAnalytics, DocumentType, UserDocumentDetail, ItineraryItemDetail, StayDetail, AdvanceContributionDetail, WalletTransactionDetail, MemberAdvanceProgress, TripWalletSummary } from '@/types';
 
 const SEED_USERS = [
   {
@@ -368,6 +369,8 @@ export const dbStore = {
         settlements: { include: { fromUser: true, toUser: true }, orderBy: { updatedAt: 'desc' } },
         itinerary: { orderBy: [{ dayNumber: 'asc' }, { order: 'asc' }, { createdAt: 'asc' }] },
         stays: { orderBy: { createdAt: 'desc' } },
+        advanceContributions: { include: { user: true }, orderBy: { createdAt: 'desc' } },
+        walletTransactions: { include: { createdBy: true }, orderBy: { createdAt: 'desc' } },
       },
     });
 
@@ -412,6 +415,8 @@ export const dbStore = {
       createdById: directTrip.createdById || '',
       isLocked: directTrip.isLocked,
       approvalMode: directTrip.approvalMode,
+      advanceTargetPerMember: directTrip.advanceTargetPerMember || null,
+      requireAdvanceVerification: directTrip.requireAdvanceVerification,
       createdAt: directTrip.createdAt.toISOString(),
       members: directTrip.members.map((mem) => ({
         id: mem.id,
@@ -518,6 +523,33 @@ export const dbStore = {
       userBalance: paid - share,
       userTotalPaid: paid,
       userTotalShare: share,
+      advanceContributions: directTrip.advanceContributions?.map((c) => ({
+        id: c.id,
+        tripId: c.tripId,
+        userId: c.userId,
+        user: { id: c.user.id, name: c.user.name, email: c.user.email },
+        amount: c.amount,
+        utr: c.utr,
+        screenshotUrl: c.screenshotUrl,
+        status: c.status as 'PENDING' | 'APPROVED' | 'REJECTED',
+        rejectionReason: c.rejectionReason,
+        note: c.note,
+        createdAt: c.createdAt.toISOString(),
+        updatedAt: c.updatedAt.toISOString(),
+      })),
+      walletTransactions: directTrip.walletTransactions?.map((w) => ({
+        id: w.id,
+        tripId: w.tripId,
+        createdById: w.createdById,
+        createdBy: { id: w.createdBy.id, name: w.createdBy.name, email: w.createdBy.email },
+        title: w.title,
+        amount: w.amount,
+        category: w.category as CategoryType,
+        receiptUrl: w.receiptUrl,
+        notes: w.notes,
+        createdAt: w.createdAt.toISOString(),
+        updatedAt: w.updatedAt.toISOString(),
+      })),
     };
   },
 
@@ -906,6 +938,234 @@ export const dbStore = {
       createdAt: settlement.createdAt.toISOString(),
       updatedAt: settlement.updatedAt.toISOString(),
     };
+  },
+
+  async updateSettlementStatus(
+    tripId: string,
+    settlementId: string,
+    currentUserId: string,
+    status: 'CONFIRMED' | 'REJECTED' | 'COMPLETED',
+    note?: string
+  ): Promise<SettlementRecordDetail> {
+    await ensureDatabaseSeeded();
+
+    const settlement = await prisma.settlement.findUnique({
+      where: { id: settlementId },
+      include: { trip: { include: { members: true } }, fromUser: true, toUser: true },
+    });
+    if (!settlement || settlement.tripId !== tripId) throw new Error('Settlement record not found');
+
+    const currentMember = settlement.trip.members.find((m) => m.userId === currentUserId);
+    const isAdmin = currentMember?.role === 'ADMIN' || settlement.trip.createdById === currentUserId;
+    const isReceiver = settlement.toUserId === currentUserId;
+
+    if (!isReceiver && !isAdmin) {
+      throw new Error('Forbidden: Only the payment recipient or Super Host/Admin can update settlement status.');
+    }
+
+    const updated = await prisma.settlement.update({
+      where: { id: settlementId },
+      data: { status, note: note !== undefined ? note : settlement.note, updatedAt: new Date() },
+      include: { fromUser: true, toUser: true },
+    });
+
+    const currentUser = await prisma.user.findUnique({ where: { id: currentUserId } });
+    const actionType = status === 'REJECTED' ? 'SETTLEMENT_REJECTED' : 'SETTLEMENT_CONFIRMED';
+    const verb = status === 'REJECTED' ? 'rejected' : 'approved';
+
+    await logActivity(
+      tripId,
+      currentUserId,
+      actionType,
+      `${currentUser?.name || 'User'} ${verb} settlement of ${settlement.trip.currency || '₹'}${settlement.amount} from ${settlement.fromUser.name} to ${settlement.toUser.name}`,
+      settlement.amount
+    );
+
+    return {
+      id: updated.id,
+      tripId: updated.tripId,
+      fromUserId: updated.fromUserId,
+      fromUser: { id: updated.fromUser.id, name: updated.fromUser.name, email: updated.fromUser.email },
+      toUserId: updated.toUserId,
+      toUser: { id: updated.toUser.id, name: updated.toUser.name, email: updated.toUser.email },
+      amount: updated.amount,
+      status: updated.status as SettlementRecordDetail['status'],
+      note: updated.note,
+      createdAt: updated.createdAt.toISOString(),
+      updatedAt: updated.updatedAt.toISOString(),
+    };
+  },
+
+  async checkMemberRemovalStatus(
+    tripId: string,
+    targetUserId: string
+  ) {
+    await ensureDatabaseSeeded();
+    const tripSummary = await this.getTripById(tripId, targetUserId);
+    if (!tripSummary) throw new Error('Trip not found');
+
+    const targetMember = tripSummary.members.find((m) => m.userId === targetUserId);
+    if (!targetMember) throw new Error('Member not found in trip');
+
+    // Compute member net balance incorporating settlements
+    const balances = calculateMemberBalances(tripSummary.members, tripSummary.expenses, tripSummary.settlementRecords);
+    const targetBalanceRecord = balances.find((b: MemberBalance) => b.user.id === targetUserId);
+    const netBalance = targetBalanceRecord ? targetBalanceRecord.netBalance : 0;
+
+    // Check pending settlement records involving targetUserId
+    const pendingSettlements = (tripSummary.settlementRecords || []).filter(
+      (s) => (s.fromUserId === targetUserId || s.toUserId === targetUserId) && s.status === 'PENDING'
+    );
+
+    // Check pending expense approvals
+    const pendingExpenses = tripSummary.expenses.filter(
+      (e) => e.status === 'PENDING_APPROVAL' && (e.paidById === targetUserId || e.participants.some((p) => p.userId === targetUserId))
+    );
+
+    // Check pending edit requests
+    const pendingEditRequests = (tripSummary.editRequests || []).filter(
+      (r) => r.requestedById === targetUserId && r.status === 'PENDING'
+    );
+
+    const canRemoveDirectly = netBalance === 0 && pendingSettlements.length === 0 && pendingExpenses.length === 0 && pendingEditRequests.length === 0;
+
+    return {
+      targetUser: targetMember.user,
+      role: targetMember.role,
+      canRemoveDirectly,
+      netBalance,
+      pendingSettlementsCount: pendingSettlements.length,
+      pendingExpensesCount: pendingExpenses.length,
+      pendingEditRequestsCount: pendingEditRequests.length,
+      details: {
+        paidAmount: targetBalanceRecord?.paid || 0,
+        shareAmount: targetBalanceRecord?.share || 0,
+        owes: netBalance < 0 ? Math.abs(netBalance) : 0,
+        getsBack: netBalance > 0 ? netBalance : 0,
+      },
+    };
+  },
+
+  async removeTripMember(
+    tripId: string,
+    adminUserId: string,
+    targetUserId: string,
+    action: 'REMOVE' | 'SETTLE_AND_REMOVE' | 'REASSIGN_AND_REMOVE' = 'REMOVE',
+    reassignToUserId?: string
+  ) {
+    await ensureDatabaseSeeded();
+    const trip = await prisma.trip.findUnique({
+      where: { id: tripId },
+      include: { members: { include: { user: true } } },
+    });
+    if (!trip) throw new Error('Trip not found');
+
+    const adminMember = trip.members.find((m) => m.userId === adminUserId);
+    const isAdmin = adminMember?.role === 'ADMIN' || trip.createdById === adminUserId;
+    if (!isAdmin) throw new Error('Forbidden: Only Super Host / Trip Admin can remove members.');
+
+    if (targetUserId === trip.createdById) {
+      throw new Error('Forbidden: Super Host / Primary Trip Creator cannot be removed.');
+    }
+    if (adminUserId === targetUserId) {
+      throw new Error('Trip Admin cannot remove themselves via member removal.');
+    }
+
+    const targetMember = trip.members.find((m) => m.userId === targetUserId);
+    if (!targetMember) throw new Error('Target user is not a member of this trip.');
+
+    const adminUser = await prisma.user.findUnique({ where: { id: adminUserId } });
+    const targetUser = targetMember.user;
+
+    if (action === 'SETTLE_AND_REMOVE') {
+      const checkStatus = await this.checkMemberRemovalStatus(tripId, targetUserId);
+      const net = checkStatus.netBalance;
+
+      if (net < 0) {
+        // Target user owes money: Create confirmed settlement from targetUser to adminUserId
+        await prisma.settlement.create({
+          data: {
+            id: generateObjectId(),
+            tripId,
+            fromUserId: targetUserId,
+            toUserId: adminUserId,
+            amount: Math.abs(net),
+            status: 'CONFIRMED',
+            note: 'Auto-settled by Host upon member removal',
+          },
+        });
+      } else if (net > 0) {
+        // Target user gets back money: Create confirmed settlement from adminUserId to targetUser
+        await prisma.settlement.create({
+          data: {
+            id: generateObjectId(),
+            tripId,
+            fromUserId: adminUserId,
+            toUserId: targetUserId,
+            amount: net,
+            status: 'CONFIRMED',
+            note: 'Auto-settled by Host upon member removal',
+          },
+        });
+      }
+
+      // Reject all pending settlement requests involving targetUser
+      await prisma.settlement.updateMany({
+        where: { tripId, OR: [{ fromUserId: targetUserId }, { toUserId: targetUserId }], status: 'PENDING' },
+        data: { status: 'REJECTED' },
+      });
+    } else if (action === 'REASSIGN_AND_REMOVE') {
+      const fallbackUserId = reassignToUserId || adminUserId;
+      // Reassign paid expenses
+      await prisma.expense.updateMany({
+        where: { tripId, paidById: targetUserId },
+        data: { paidById: fallbackUserId },
+      });
+
+      // Remove targetUser from expense participants and re-split
+      const targetParticipants = await prisma.expenseParticipant.findMany({
+        where: { userId: targetUserId, expense: { tripId } },
+        include: { expense: { include: { participants: true } } },
+      });
+
+      for (const p of targetParticipants) {
+        await prisma.expenseParticipant.delete({ where: { id: p.id } });
+        const remainingParticipants = p.expense.participants.filter((part) => part.userId !== targetUserId);
+        if (remainingParticipants.length > 0) {
+          const newShare = p.expense.amount / remainingParticipants.length;
+          await prisma.expenseParticipant.updateMany({
+            where: { expenseId: p.expenseId },
+            data: { shareAmount: newShare },
+          });
+        }
+      }
+
+      // Reject pending settlements
+      await prisma.settlement.updateMany({
+        where: { tripId, OR: [{ fromUserId: targetUserId }, { toUserId: targetUserId }], status: 'PENDING' },
+        data: { status: 'REJECTED' },
+      });
+    } else {
+      const checkStatus = await this.checkMemberRemovalStatus(tripId, targetUserId);
+      if (!checkStatus.canRemoveDirectly) {
+        throw new Error(
+          `Cannot remove member directly. Unsettled balance: ${checkStatus.netBalance}, Pending settlements: ${checkStatus.pendingSettlementsCount}, Pending expenses: ${checkStatus.pendingExpensesCount}.`
+        );
+      }
+    }
+
+    await prisma.tripMember.delete({
+      where: { id: targetMember.id },
+    });
+
+    await logActivity(
+      tripId,
+      adminUserId,
+      'MEMBER_REMOVED',
+      `${adminUser?.name || 'Admin'} removed ${targetUser.name} from the trip`
+    );
+
+    return true;
   },
 
   async getMemberAnalytics(tripId: string): Promise<MemberAnalytics[]> {
@@ -1724,6 +1984,368 @@ export const dbStore = {
 
     await prisma.stayDetail.delete({ where: { id: stayId } });
     return true;
+  },
+
+  // --- ADVANCE TRIP FUND & WALLET METHODS ---
+  async updateTripAdvanceSettings(
+    tripId: string,
+    adminUserId: string,
+    advanceTargetPerMember: number | null,
+    requireAdvanceVerification: boolean
+  ) {
+    await ensureDatabaseSeeded();
+    const trip = await prisma.trip.findUnique({
+      where: { id: tripId },
+      include: { members: true },
+    });
+    if (!trip) throw new Error('Trip not found');
+
+    const adminMember = trip.members.find((m) => m.userId === adminUserId);
+    const isAdmin = adminMember?.role === 'ADMIN' || trip.createdById === adminUserId;
+    if (!isAdmin) throw new Error('Forbidden: Only Super Host / Trip Admin can update Advance Trip Fund settings.');
+
+    const adminUser = await prisma.user.findUnique({ where: { id: adminUserId } });
+
+    await prisma.trip.update({
+      where: { id: tripId },
+      data: {
+        advanceTargetPerMember: advanceTargetPerMember && advanceTargetPerMember > 0 ? advanceTargetPerMember : null,
+        requireAdvanceVerification,
+      },
+    });
+
+    await logActivity(
+      tripId,
+      adminUserId,
+      'ADVANCE_FUND_UPDATED',
+      `${adminUser?.name || 'Admin'} updated Advance Trip Fund target to ${advanceTargetPerMember ? `${trip.currency}${advanceTargetPerMember}` : 'Unset'} (Verification: ${requireAdvanceVerification ? 'Enabled' : 'Disabled'})`
+    );
+
+    return true;
+  },
+
+  async submitAdvanceContribution(
+    tripId: string,
+    userId: string,
+    amount: number,
+    utr?: string,
+    screenshotUrl?: string,
+    note?: string
+  ): Promise<AdvanceContributionDetail> {
+    await ensureDatabaseSeeded();
+    const trip = await prisma.trip.findUnique({ where: { id: tripId } });
+    if (!trip) throw new Error('Trip not found');
+
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new Error('User not found');
+
+    if (!amount || amount <= 0) {
+      throw new Error('Contribution amount must be greater than zero.');
+    }
+
+    if (trip.requireAdvanceVerification) {
+      if (!utr || !utr.trim()) {
+        throw new Error('UTR / Transaction ID is mandatory when verification is enabled.');
+      }
+      if (!screenshotUrl || !screenshotUrl.trim()) {
+        throw new Error('Payment screenshot proof is mandatory when verification is enabled.');
+      }
+    }
+
+    const contribution = await prisma.advanceContribution.create({
+      data: {
+        id: generateObjectId(),
+        tripId,
+        userId,
+        amount,
+        utr: utr ? utr.trim() : null,
+        screenshotUrl: screenshotUrl ? screenshotUrl.trim() : null,
+        note: note ? note.trim() : null,
+        status: 'PENDING',
+      },
+      include: { user: true },
+    });
+
+    await logActivity(
+      tripId,
+      userId,
+      'ADVANCE_CONTRIBUTION_SUBMITTED',
+      `${user.name} submitted an advance payment of ${trip.currency}${amount} (Pending Super Host approval)`
+    );
+
+    return {
+      id: contribution.id,
+      tripId: contribution.tripId,
+      userId: contribution.userId,
+      user: { id: contribution.user.id, name: contribution.user.name, email: contribution.user.email },
+      amount: contribution.amount,
+      utr: contribution.utr,
+      screenshotUrl: contribution.screenshotUrl,
+      status: contribution.status as 'PENDING' | 'APPROVED' | 'REJECTED',
+      rejectionReason: contribution.rejectionReason,
+      note: contribution.note,
+      createdAt: contribution.createdAt.toISOString(),
+      updatedAt: contribution.updatedAt.toISOString(),
+    };
+  },
+
+  async approveAdvanceContribution(contributionId: string, adminUserId: string): Promise<boolean> {
+    await ensureDatabaseSeeded();
+    const contrib = await prisma.advanceContribution.findUnique({
+      where: { id: contributionId },
+      include: { trip: { include: { members: true } }, user: true },
+    });
+    if (!contrib) throw new Error('Advance contribution record not found');
+
+    const adminMember = contrib.trip.members.find((m) => m.userId === adminUserId);
+    const isAdmin = adminMember?.role === 'ADMIN' || contrib.trip.createdById === adminUserId;
+    if (!isAdmin) throw new Error('Forbidden: Only Super Host / Trip Admin can approve advance contributions.');
+
+    const adminUser = await prisma.user.findUnique({ where: { id: adminUserId } });
+
+    await prisma.advanceContribution.update({
+      where: { id: contributionId },
+      data: { status: 'APPROVED', rejectionReason: null, updatedAt: new Date() },
+    });
+
+    await logActivity(
+      contrib.tripId,
+      adminUserId,
+      'ADVANCE_CONTRIBUTION_APPROVED',
+      `${adminUser?.name || 'Admin'} approved ${contrib.user.name}'s advance contribution of ${contrib.trip.currency}${contrib.amount}`,
+      contrib.amount
+    );
+
+    return true;
+  },
+
+  async rejectAdvanceContribution(contributionId: string, adminUserId: string, reason?: string): Promise<boolean> {
+    await ensureDatabaseSeeded();
+    const contrib = await prisma.advanceContribution.findUnique({
+      where: { id: contributionId },
+      include: { trip: { include: { members: true } }, user: true },
+    });
+    if (!contrib) throw new Error('Advance contribution record not found');
+
+    const adminMember = contrib.trip.members.find((m) => m.userId === adminUserId);
+    const isAdmin = adminMember?.role === 'ADMIN' || contrib.trip.createdById === adminUserId;
+    if (!isAdmin) throw new Error('Forbidden: Only Super Host / Trip Admin can reject advance contributions.');
+
+    const adminUser = await prisma.user.findUnique({ where: { id: adminUserId } });
+
+    await prisma.advanceContribution.update({
+      where: { id: contributionId },
+      data: { status: 'REJECTED', rejectionReason: reason || null, updatedAt: new Date() },
+    });
+
+    await logActivity(
+      contrib.tripId,
+      adminUserId,
+      'ADVANCE_CONTRIBUTION_REJECTED',
+      `${adminUser?.name || 'Admin'} rejected ${contrib.user.name}'s advance payment of ${contrib.trip.currency}${contrib.amount}${reason ? ` (Reason: ${reason})` : ''}`
+    );
+
+    return true;
+  },
+
+  async spendFromTripWallet(
+    tripId: string,
+    adminUserId: string,
+    title: string,
+    amount: number,
+    category: CategoryType | string,
+    participantUserIds: string[],
+    receiptUrl?: string,
+    notes?: string
+  ): Promise<WalletTransactionDetail> {
+    await ensureDatabaseSeeded();
+    const trip = await prisma.trip.findUnique({
+      where: { id: tripId },
+      include: {
+        members: { include: { user: true } },
+        advanceContributions: true,
+        walletTransactions: true,
+      },
+    });
+    if (!trip) throw new Error('Trip not found');
+
+    const adminMember = trip.members.find((m) => m.userId === adminUserId);
+    const isAdmin = adminMember?.role === 'ADMIN' || trip.createdById === adminUserId;
+    if (!isAdmin) throw new Error('Forbidden: Only Super Host / Trip Admin can spend from Trip Wallet.');
+
+    const adminUser = await prisma.user.findUnique({ where: { id: adminUserId } });
+    if (!adminUser) throw new Error('Admin user not found');
+
+    if (!amount || amount <= 0) {
+      throw new Error('Spending amount must be greater than zero.');
+    }
+
+    const totalCollected = trip.advanceContributions
+      .filter((c) => c.status === 'APPROVED')
+      .reduce((sum, c) => sum + c.amount, 0);
+    const totalSpent = trip.walletTransactions.reduce((sum, w) => sum + w.amount, 0);
+    const availableBalance = totalCollected - totalSpent;
+
+    if (amount > availableBalance) {
+      throw new Error(
+        `Insufficient Trip Wallet balance! Available: ${trip.currency}${availableBalance}, Requested: ${trip.currency}${amount}.`
+      );
+    }
+
+    // 1. Create WalletTransaction record
+    const walletTx = await prisma.walletTransaction.create({
+      data: {
+        id: generateObjectId(),
+        tripId,
+        createdById: adminUserId,
+        title,
+        amount,
+        category: category || 'Miscellaneous',
+        receiptUrl: receiptUrl || null,
+        notes: notes || null,
+      },
+      include: { createdBy: true },
+    });
+
+    // 2. Automatically log an approved Expense paid by Super Host from Trip Wallet
+    const shareAmount = participantUserIds.length > 0 ? amount / participantUserIds.length : 0;
+    await prisma.expense.create({
+      data: {
+        id: generateObjectId(),
+        tripId,
+        title: `[Trip Wallet] ${title}`,
+        amount,
+        category: category || 'Miscellaneous',
+        paidById: adminUserId,
+        createdById: adminUserId,
+        status: 'APPROVED',
+        receiptUrl: receiptUrl || null,
+        date: new Date(),
+        participants: {
+          create: participantUserIds.map((uid) => ({
+            id: generateObjectId(),
+            userId: uid,
+            shareAmount,
+          })),
+        },
+      },
+    });
+
+    await logActivity(
+      tripId,
+      adminUserId,
+      'WALLET_SPENT',
+      `${adminUser.name} paid ${trip.currency}${amount} from Trip Wallet for "${title}" (${category})`,
+      amount,
+      category
+    );
+
+    return {
+      id: walletTx.id,
+      tripId: walletTx.tripId,
+      createdById: walletTx.createdById,
+      createdBy: { id: adminUser.id, name: adminUser.name, email: adminUser.email },
+      title: walletTx.title,
+      amount: walletTx.amount,
+      category: walletTx.category as CategoryType,
+      receiptUrl: walletTx.receiptUrl,
+      notes: walletTx.notes,
+      createdAt: walletTx.createdAt.toISOString(),
+      updatedAt: walletTx.updatedAt.toISOString(),
+    };
+  },
+
+  async getTripWalletSummary(tripId: string): Promise<TripWalletSummary> {
+    await ensureDatabaseSeeded();
+    const trip = await prisma.trip.findUnique({
+      where: { id: tripId },
+      include: {
+        members: { include: { user: true } },
+        advanceContributions: { include: { user: true }, orderBy: { createdAt: 'desc' } },
+        walletTransactions: { include: { createdBy: true }, orderBy: { createdAt: 'desc' } },
+      },
+    });
+    if (!trip) throw new Error('Trip not found');
+
+    const targetPerMember = trip.advanceTargetPerMember || 0;
+    const approvedContributions = trip.advanceContributions.filter((c) => c.status === 'APPROVED');
+    const pendingContributions = trip.advanceContributions.filter((c) => c.status === 'PENDING');
+
+    const totalCollected = approvedContributions.reduce((sum, c) => sum + c.amount, 0);
+    const totalSpent = trip.walletTransactions.reduce((sum, w) => sum + w.amount, 0);
+    const availableBalance = Math.max(0, totalCollected - totalSpent);
+
+    const memberProgress: MemberAdvanceProgress[] = trip.members.map((m) => {
+      const u = m.user;
+      const userApproved = approvedContributions.filter((c) => c.userId === u.id);
+      const userPending = pendingContributions.filter((c) => c.userId === u.id);
+
+      const paidAmount = userApproved.reduce((sum, c) => sum + c.amount, 0);
+      const pendingAmount = userPending.reduce((sum, c) => sum + c.amount, 0);
+      const remainingAmount = Math.max(0, targetPerMember - paidAmount);
+      const percentagePaid = targetPerMember > 0 ? Math.min(100, Math.round((paidAmount / targetPerMember) * 100)) : 100;
+
+      return {
+        user: { id: u.id, name: u.name, email: u.email },
+        targetAmount: targetPerMember,
+        paidAmount,
+        pendingAmount,
+        remainingAmount,
+        percentagePaid,
+      };
+    });
+
+    return {
+      tripId: trip.id,
+      currency: trip.currency,
+      advanceTargetPerMember: trip.advanceTargetPerMember || null,
+      requireAdvanceVerification: trip.requireAdvanceVerification,
+      totalCollected: Math.round(totalCollected * 100) / 100,
+      totalSpent: Math.round(totalSpent * 100) / 100,
+      availableBalance: Math.round(availableBalance * 100) / 100,
+      memberProgress,
+      pendingContributions: pendingContributions.map((c) => ({
+        id: c.id,
+        tripId: c.tripId,
+        userId: c.userId,
+        user: { id: c.user.id, name: c.user.name, email: c.user.email },
+        amount: c.amount,
+        utr: c.utr,
+        screenshotUrl: c.screenshotUrl,
+        status: c.status as 'PENDING' | 'APPROVED' | 'REJECTED',
+        rejectionReason: c.rejectionReason,
+        note: c.note,
+        createdAt: c.createdAt.toISOString(),
+        updatedAt: c.updatedAt.toISOString(),
+      })),
+      transactions: trip.walletTransactions.map((w) => ({
+        id: w.id,
+        tripId: w.tripId,
+        createdById: w.createdById,
+        createdBy: { id: w.createdBy.id, name: w.createdBy.name, email: w.createdBy.email },
+        title: w.title,
+        amount: w.amount,
+        category: w.category as CategoryType,
+        receiptUrl: w.receiptUrl,
+        notes: w.notes,
+        createdAt: w.createdAt.toISOString(),
+        updatedAt: w.updatedAt.toISOString(),
+      })),
+      allContributions: trip.advanceContributions.map((c) => ({
+        id: c.id,
+        tripId: c.tripId,
+        userId: c.userId,
+        user: { id: c.user.id, name: c.user.name, email: c.user.email },
+        amount: c.amount,
+        utr: c.utr,
+        screenshotUrl: c.screenshotUrl,
+        status: c.status as 'PENDING' | 'APPROVED' | 'REJECTED',
+        rejectionReason: c.rejectionReason,
+        note: c.note,
+        createdAt: c.createdAt.toISOString(),
+        updatedAt: c.updatedAt.toISOString(),
+      })),
+    };
   },
 };
 
