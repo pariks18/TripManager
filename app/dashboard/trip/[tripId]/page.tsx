@@ -22,6 +22,8 @@ import { PendingApprovalsView } from '@/components/expense/PendingApprovalsView'
 import { ItineraryView } from '@/components/trip/ItineraryView';
 import { StayView } from '@/components/trip/StayView';
 import { TripWalletView } from '@/components/trip/TripWalletView';
+import { LivePollsView } from '@/components/trip/LivePollsView';
+import { LiveLocationView } from '@/components/trip/LiveLocationView';
 import {
   ArrowLeft,
   Plus,
@@ -45,6 +47,9 @@ import {
   Calendar,
   Hotel,
   Wallet,
+  Vote,
+  Radio,
+  MapPin,
 } from 'lucide-react';
 
 export default function TripDashboardPage() {
@@ -55,7 +60,7 @@ export default function TripDashboardPage() {
   const [user, setUser] = useState<UserSession | null>(null);
   const [trip, setTrip] = useState<TripSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'overview' | 'wallet' | 'expenses' | 'itinerary' | 'stay' | 'approvals' | 'settlement' | 'timeline' | 'analytics'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'wallet' | 'polls' | 'location' | 'expenses' | 'itinerary' | 'stay' | 'approvals' | 'settlement' | 'timeline' | 'analytics'>('overview');
   const [copiedCode, setCopiedCode] = useState(false);
 
   // Expense modal state
@@ -299,6 +304,28 @@ export default function TripDashboardPage() {
           </button>
 
           <button
+            onClick={() => setActiveTab('polls')}
+            className={`flex-1 py-2.5 px-3 rounded-xl transition-all flex items-center justify-center gap-1 whitespace-nowrap ${
+              activeTab === 'polls'
+                ? 'bg-white text-slate-900 shadow-sm'
+                : 'hover:text-slate-900'
+            }`}
+          >
+            <Vote className="w-3.5 h-3.5 text-emerald-600" /> Live Polls
+          </button>
+
+          <button
+            onClick={() => setActiveTab('location')}
+            className={`flex-1 py-2.5 px-3 rounded-xl transition-all flex items-center justify-center gap-1 whitespace-nowrap ${
+              activeTab === 'location'
+                ? 'bg-white text-slate-900 shadow-sm'
+                : 'hover:text-slate-900'
+            }`}
+          >
+            <Radio className="w-3.5 h-3.5 text-indigo-600 animate-pulse" /> Live Map
+          </button>
+
+          <button
             onClick={() => setActiveTab('expenses')}
             className={`flex-1 py-2.5 px-3 rounded-xl transition-all flex items-center justify-center gap-1 whitespace-nowrap ${
               activeTab === 'expenses'
@@ -422,6 +449,26 @@ export default function TripDashboardPage() {
             currentUserId={user.id}
             members={trip.members}
             onOpenSettings={() => setIsSettingsOpen(true)}
+            onRefreshTrip={fetchTripDetails}
+          />
+        )}
+
+        {/* TAB 3: LIVE DECISION POLLS */}
+        {activeTab === 'polls' && (
+          <LivePollsView
+            tripId={trip.id}
+            isAdmin={isAdmin}
+            currentUserId={user.id}
+            onRefreshTrip={fetchTripDetails}
+          />
+        )}
+
+        {/* TAB 4: LIVE GPS LOCATION & MAP */}
+        {activeTab === 'location' && (
+          <LiveLocationView
+            tripId={trip.id}
+            currentUserId={user.id}
+            isAdmin={isAdmin}
             onRefreshTrip={fetchTripDetails}
           />
         )}

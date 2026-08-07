@@ -1,7 +1,7 @@
 import { prisma } from './prisma';
 import { generateTripCode, generateObjectId } from './utils';
 import { calculateMemberBalances } from './settlement';
-import { CategoryType, ExpenseDetail, TripSummary, UserSummary, ActivityDetail, SettlementRecordDetail, MemberBalance, MemberAnalytics, DocumentType, UserDocumentDetail, ItineraryItemDetail, StayDetail, AdvanceContributionDetail, WalletTransactionDetail, MemberAdvanceProgress, TripWalletSummary } from '@/types';
+import { CategoryType, ExpenseDetail, TripSummary, UserSummary, ActivityDetail, SettlementRecordDetail, MemberBalance, MemberAnalytics, DocumentType, UserDocumentDetail, ItineraryItemDetail, StayDetail, AdvanceContributionDetail, WalletTransactionDetail, MemberAdvanceProgress, TripWalletSummary, PollDetail, PollOptionDetail, PollVoteDetail, MemberLocationDetail } from '@/types';
 
 const SEED_USERS = [
   {
@@ -2347,5 +2347,350 @@ export const dbStore = {
       })),
     };
   },
+
+  // --- LIVE POLLS METHODS ---
+  async createPoll(
+    tripId: string,
+    adminUserId: string,
+    question: string,
+    category: string = 'General',
+    optionsTextArray: string[]
+  ): Promise<PollDetail> {
+    await ensureDatabaseSeeded();
+    const trip = await prisma.trip.findUnique({
+      where: { id: tripId },
+      include: { members: true },
+    });
+    if (!trip) throw new Error('Trip not found');
+
+    const adminMember = trip.members.find((m) => m.userId === adminUserId);
+    const isAdmin = adminMember?.role === 'ADMIN' || trip.createdById === adminUserId;
+    if (!isAdmin) throw new Error('Forbidden: Only Super Host / Trip Admin can create live polls.');
+
+    const adminUser = await prisma.user.findUnique({ where: { id: adminUserId } });
+    if (!adminUser) throw new Error('Admin user not found');
+
+    if (!question || !question.trim()) {
+      throw new Error('Poll question / title cannot be empty.');
+    }
+
+    const validOptions = optionsTextArray.map((o) => o.trim()).filter((o) => o.length > 0);
+    if (validOptions.length < 2) {
+      throw new Error('A live poll must have at least 2 valid options.');
+    }
+
+    const pollId = generateObjectId();
+
+    const poll = await prisma.poll.create({
+      data: {
+        id: pollId,
+        tripId,
+        createdById: adminUserId,
+        question: question.trim(),
+        category: category.trim() || 'General',
+        isClosed: false,
+        options: {
+          create: validOptions.map((text) => ({
+            id: generateObjectId(),
+            text,
+          })),
+        },
+      },
+      include: {
+        createdBy: true,
+        options: { include: { votes: { include: { user: true } } } },
+      },
+    });
+
+    await logActivity(
+      tripId,
+      adminUserId,
+      'POLL_CREATED',
+      `${adminUser.name} created live poll "${question.trim()}" (${validOptions.length} options)`
+    );
+
+    return {
+      id: poll.id,
+      tripId: poll.tripId,
+      createdById: poll.createdById,
+      createdBy: { id: adminUser.id, name: adminUser.name, email: adminUser.email },
+      question: poll.question,
+      category: poll.category,
+      isClosed: poll.isClosed,
+      totalVotes: 0,
+      options: poll.options.map((o) => ({
+        id: o.id,
+        pollId: o.pollId,
+        text: o.text,
+        voteCount: 0,
+        percentage: 0,
+        votes: [],
+        votedByCurrentUser: false,
+      })),
+      createdAt: poll.createdAt.toISOString(),
+      updatedAt: poll.updatedAt.toISOString(),
+    };
+  },
+
+  async voteInPoll(
+    tripId: string,
+    userId: string,
+    pollId: string,
+    optionId: string
+  ): Promise<boolean> {
+    await ensureDatabaseSeeded();
+    const poll = await prisma.poll.findUnique({
+      where: { id: pollId },
+      include: { options: true },
+    });
+    if (!poll || poll.tripId !== tripId) throw new Error('Poll not found');
+
+    if (poll.isClosed) {
+      throw new Error('This live poll has been closed by the organizer. Further voting is disabled.');
+    }
+
+    const targetOption = poll.options.find((o) => o.id === optionId);
+    if (!targetOption) throw new Error('Invalid option selected');
+
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new Error('User not found');
+
+    // Upsert vote (User can change their vote to another option in the same poll)
+    const existingVote = await prisma.pollVote.findUnique({
+      where: { pollId_userId: { pollId, userId } },
+    });
+
+    if (existingVote) {
+      await prisma.pollVote.update({
+        where: { id: existingVote.id },
+        data: { optionId },
+      });
+    } else {
+      await prisma.pollVote.create({
+        data: {
+          id: generateObjectId(),
+          pollId,
+          optionId,
+          userId,
+        },
+      });
+    }
+
+    await logActivity(
+      tripId,
+      userId,
+      'POLL_VOTED',
+      `${user.name} voted for "${targetOption.text}" in poll "${poll.question}"`
+    );
+
+    return true;
+  },
+
+  async closePoll(tripId: string, adminUserId: string, pollId: string, isClosed: boolean = true): Promise<boolean> {
+    await ensureDatabaseSeeded();
+    const poll = await prisma.poll.findUnique({
+      where: { id: pollId },
+      include: { trip: { include: { members: true } } },
+    });
+    if (!poll || poll.tripId !== tripId) throw new Error('Poll not found');
+
+    const adminMember = poll.trip.members.find((m) => m.userId === adminUserId);
+    const isAdmin = adminMember?.role === 'ADMIN' || poll.trip.createdById === adminUserId;
+    if (!isAdmin) throw new Error('Forbidden: Only Super Host / Trip Admin can close or reopen polls.');
+
+    const adminUser = await prisma.user.findUnique({ where: { id: adminUserId } });
+
+    await prisma.poll.update({
+      where: { id: pollId },
+      data: { isClosed, updatedAt: new Date() },
+    });
+
+    await logActivity(
+      tripId,
+      adminUserId,
+      'POLL_CLOSED',
+      `${adminUser?.name || 'Admin'} ${isClosed ? 'closed' : 'reopened'} live poll "${poll.question}"`
+    );
+
+    return true;
+  },
+
+  async getTripPolls(tripId: string, currentUserId?: string): Promise<PollDetail[]> {
+    await ensureDatabaseSeeded();
+    const polls = await prisma.poll.findMany({
+      where: { tripId },
+      include: {
+        createdBy: true,
+        options: {
+          include: {
+            votes: { include: { user: true } },
+          },
+        },
+        votes: true,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return polls.map((p) => {
+      const totalVotes = p.votes.length;
+      const userVote = currentUserId ? p.votes.find((v) => v.userId === currentUserId) : null;
+
+      const mappedOptions: PollOptionDetail[] = p.options.map((opt) => {
+        const optionVoteCount = opt.votes.length;
+        const percentage = totalVotes > 0 ? Math.round((optionVoteCount / totalVotes) * 100) : 0;
+        const votedByCurrentUser = currentUserId ? opt.votes.some((v) => v.userId === currentUserId) : false;
+
+        return {
+          id: opt.id,
+          pollId: opt.pollId,
+          text: opt.text,
+          voteCount: optionVoteCount,
+          percentage,
+          votes: opt.votes.map((v) => ({
+            id: v.id,
+            pollId: v.pollId,
+            optionId: v.optionId,
+            userId: v.userId,
+            user: { id: v.user.id, name: v.user.name, email: v.user.email },
+            createdAt: v.createdAt.toISOString(),
+          })),
+          votedByCurrentUser,
+        };
+      });
+
+      return {
+        id: p.id,
+        tripId: p.tripId,
+        createdById: p.createdById,
+        createdBy: { id: p.createdBy.id, name: p.createdBy.name, email: p.createdBy.email },
+        question: p.question,
+        category: p.category,
+        isClosed: p.isClosed,
+        totalVotes,
+        options: mappedOptions,
+        userVotedOptionId: userVote?.optionId || null,
+        createdAt: p.createdAt.toISOString(),
+        updatedAt: p.updatedAt.toISOString(),
+      };
+    });
+  },
+
+  // --- LIVE LOCATION METHODS ---
+  async updateMemberLocation(
+    tripId: string,
+    userId: string,
+    latitude: number,
+    longitude: number,
+    accuracy?: number,
+    isSharing: boolean = true
+  ): Promise<MemberLocationDetail> {
+    await ensureDatabaseSeeded();
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new Error('User not found');
+
+    const existing = await prisma.memberLocation.findUnique({
+      where: { tripId_userId: { tripId, userId } },
+    });
+
+    let loc;
+    if (existing) {
+      loc = await prisma.memberLocation.update({
+        where: { id: existing.id },
+        data: {
+          latitude,
+          longitude,
+          accuracy: accuracy || null,
+          isSharing,
+          updatedAt: new Date(),
+        },
+        include: { user: true },
+      });
+    } else {
+      loc = await prisma.memberLocation.create({
+        data: {
+          id: generateObjectId(),
+          tripId,
+          userId,
+          latitude,
+          longitude,
+          accuracy: accuracy || null,
+          isSharing,
+        },
+        include: { user: true },
+      });
+    }
+
+    if (isSharing && (!existing || !existing.isSharing)) {
+      await logActivity(
+        tripId,
+        userId,
+        'LOCATION_SHARED',
+        `${user.name} enabled live GPS location sharing`
+      );
+    }
+
+    return {
+      id: loc.id,
+      tripId: loc.tripId,
+      userId: loc.userId,
+      user: { id: loc.user.id, name: loc.user.name, email: loc.user.email },
+      latitude: loc.latitude,
+      longitude: loc.longitude,
+      accuracy: loc.accuracy,
+      isSharing: loc.isSharing,
+      updatedAt: loc.updatedAt.toISOString(),
+    };
+  },
+
+  async getTripMemberLocations(tripId: string, currentUserId?: string): Promise<MemberLocationDetail[]> {
+    await ensureDatabaseSeeded();
+    const locations = await prisma.memberLocation.findMany({
+      where: { tripId, isSharing: true },
+      include: { user: true },
+      orderBy: { updatedAt: 'desc' },
+    });
+
+    let currentUserLoc = currentUserId
+      ? locations.find((l) => l.userId === currentUserId)
+      : null;
+
+    return locations.map((l) => {
+      let distanceKm: number | null = null;
+
+      if (currentUserLoc && currentUserLoc.userId !== l.userId) {
+        distanceKm = calculateHaversineDistanceKm(
+          currentUserLoc.latitude,
+          currentUserLoc.longitude,
+          l.latitude,
+          l.longitude
+        );
+      }
+
+      return {
+        id: l.id,
+        tripId: l.tripId,
+        userId: l.userId,
+        user: { id: l.user.id, name: l.user.name, email: l.user.email },
+        latitude: l.latitude,
+        longitude: l.longitude,
+        accuracy: l.accuracy,
+        isSharing: l.isSharing,
+        distanceKm,
+        updatedAt: l.updatedAt.toISOString(),
+      };
+    });
+  },
 };
+
+function calculateHaversineDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371; // Earth radius in km
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return Math.round(R * c * 100) / 100;
+}
+
 

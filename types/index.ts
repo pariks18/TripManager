@@ -117,6 +117,10 @@ export interface ActivityDetail {
     | 'ADVANCE_CONTRIBUTION_APPROVED'
     | 'ADVANCE_CONTRIBUTION_REJECTED'
     | 'WALLET_SPENT'
+    | 'POLL_CREATED'
+    | 'POLL_VOTED'
+    | 'POLL_CLOSED'
+    | 'LOCATION_SHARED'
     | 'TRIP_LOCKED'
     | 'TRIP_UPDATED'
     | 'APPROVAL_MODE_UPDATED';
@@ -253,6 +257,53 @@ export interface TripWalletSummary {
   pendingContributions: AdvanceContributionDetail[];
   transactions: WalletTransactionDetail[];
   allContributions: AdvanceContributionDetail[];
+}
+
+export interface PollVoteDetail {
+  id: string;
+  pollId: string;
+  optionId: string;
+  userId: string;
+  user: UserSummary;
+  createdAt: string;
+}
+
+export interface PollOptionDetail {
+  id: string;
+  pollId: string;
+  text: string;
+  voteCount: number;
+  percentage: number;
+  votes: PollVoteDetail[];
+  votedByCurrentUser: boolean;
+}
+
+export interface PollDetail {
+  id: string;
+  tripId: string;
+  createdById: string;
+  createdBy: UserSummary;
+  question: string;
+  category?: string | null;
+  isClosed: boolean;
+  totalVotes: number;
+  options: PollOptionDetail[];
+  userVotedOptionId?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MemberLocationDetail {
+  id: string;
+  tripId: string;
+  userId: string;
+  user: UserSummary;
+  latitude: number;
+  longitude: number;
+  accuracy?: number | null;
+  isSharing: boolean;
+  distanceKm?: number | null;
+  updatedAt: string;
 }
 
 export interface SettlementTransaction {
