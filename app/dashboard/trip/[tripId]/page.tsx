@@ -199,6 +199,47 @@ export default function TripDashboardPage() {
     }
   }, [tripId, fetchTripDetails]);
 
+  const pendingExpenses = React.useMemo(() => {
+    if (!trip) return [];
+    return trip.expenses.filter((e) => e.status === 'PENDING_APPROVAL');
+  }, [trip?.expenses]);
+
+  const pendingRequests = React.useMemo(() => {
+    if (!trip) return [];
+    return trip.editRequests?.filter((r) => r.status === 'PENDING') || [];
+  }, [trip?.editRequests]);
+
+  const totalPendingCount = pendingExpenses.length + pendingRequests.length;
+
+  const approvedExpenses = React.useMemo(() => {
+    if (!trip) return [];
+    return trip.expenses.filter((e) => e.status === 'APPROVED');
+  }, [trip?.expenses]);
+
+  const balances = React.useMemo(() => {
+    if (!trip) return [];
+    return calculateMemberBalances(trip.members, approvedExpenses, trip.settlementRecords, trip.advanceContributions);
+  }, [trip?.members, approvedExpenses, trip?.settlementRecords, trip?.advanceContributions]);
+
+  const settlements = React.useMemo(() => {
+    if (!trip) return [];
+    return computeSettlements(trip.members, approvedExpenses, trip.settlementRecords, trip.advanceContributions);
+  }, [trip?.members, approvedExpenses, trip?.settlementRecords, trip?.advanceContributions]);
+
+  const filteredExpenses = React.useMemo(() => {
+    if (!trip) return [];
+    return trip.expenses.filter((exp) => {
+      const matchesCategory = selectedCategory === 'ALL' || exp.category === selectedCategory;
+      const q = debouncedSearch.toLowerCase().trim();
+      const matchesSearch =
+        !q ||
+        exp.title.toLowerCase().includes(q) ||
+        exp.paidBy?.name.toLowerCase().includes(q) ||
+        exp.amount.toString().includes(q);
+      return matchesCategory && matchesSearch;
+    });
+  }, [trip?.expenses, selectedCategory, debouncedSearch]);
+
   if (isLoading || !trip || !user) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
@@ -214,41 +255,12 @@ export default function TripDashboardPage() {
   const currentMember = trip.members.find((m) => m.userId === user.id);
   const isAdmin = currentMember?.role === 'ADMIN' || trip.createdById === user.id;
 
-  const pendingExpenses = React.useMemo(() => trip.expenses.filter((e) => e.status === 'PENDING_APPROVAL'), [trip.expenses]);
-  const pendingRequests = React.useMemo(() => trip.editRequests?.filter((r) => r.status === 'PENDING') || [], [trip.editRequests]);
-  const totalPendingCount = pendingExpenses.length + pendingRequests.length;
-
-  const approvedExpenses = React.useMemo(() => trip.expenses.filter((e) => e.status === 'APPROVED'), [trip.expenses]);
-  
-  const balances = React.useMemo(
-    () => calculateMemberBalances(trip.members, approvedExpenses, trip.settlementRecords, trip.advanceContributions),
-    [trip.members, approvedExpenses, trip.settlementRecords, trip.advanceContributions]
-  );
-
-  const settlements = React.useMemo(
-    () => computeSettlements(trip.members, approvedExpenses, trip.settlementRecords, trip.advanceContributions),
-    [trip.members, approvedExpenses, trip.settlementRecords, trip.advanceContributions]
-  );
-
   const currentUserBalanceRecord = balances.find((b) => b.user.id === user.id);
   const userTotalPaid = currentUserBalanceRecord?.paid || 0;
   const userTotalShare = currentUserBalanceRecord?.share || 0;
   const userNetBalance = currentUserBalanceRecord?.netBalance || 0;
 
   const categories: string[] = ['ALL', 'Food', 'Travel', 'Fuel', 'Stay', 'Entertainment', 'Shopping', 'Miscellaneous'];
-
-  const filteredExpenses = React.useMemo(() => {
-    return trip.expenses.filter((exp) => {
-      const matchesCategory = selectedCategory === 'ALL' || exp.category === selectedCategory;
-      const q = debouncedSearch.toLowerCase().trim();
-      const matchesSearch =
-        !q ||
-        exp.title.toLowerCase().includes(q) ||
-        exp.paidBy?.name.toLowerCase().includes(q) ||
-        exp.amount.toString().includes(q);
-      return matchesCategory && matchesSearch;
-    });
-  }, [trip.expenses, selectedCategory, debouncedSearch]);
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 pb-24">
