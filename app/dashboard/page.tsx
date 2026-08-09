@@ -12,24 +12,33 @@ import { Button } from '@/components/ui/Button';
 import { formatCurrency } from '@/lib/utils';
 import { Plus, KeyRound, Compass, Sparkles, Search, User, LogOut, Wallet } from 'lucide-react';
 
+import { fetchClientSession, clearClientSession } from '@/lib/clientSession';
+
 export default function DashboardPage() {
   const router = useRouter();
   const [user, setUser] = useState<UserSession | null>(null);
   const [trips, setTrips] = useState<TripSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState('');
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isJoinOpen, setIsJoinOpen] = useState(false);
 
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedQuery(searchQuery);
+    }, 200);
+    return () => clearTimeout(handler);
+  }, [searchQuery]);
+
   const fetchTrips = async () => {
     try {
-      const resMe = await fetch('/api/auth/me');
-      const dataMe = await resMe.json();
-      if (!dataMe.user) {
+      const meUser = await fetchClientSession();
+      if (!meUser) {
         router.push('/login');
         return;
       }
-      setUser(dataMe.user);
+      setUser(meUser);
 
       const resTrips = await fetch('/api/trips');
       const dataTrips = await resTrips.json();
@@ -48,17 +57,24 @@ export default function DashboardPage() {
   }, []);
 
   const handleLogout = async () => {
+    clearClientSession();
     await fetch('/api/auth/logout', { method: 'POST' });
     router.push('/login');
   };
 
-  const filteredTrips = trips.filter(
-    (t) =>
-      t.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      t.code.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredTrips = React.useMemo(() => {
+    const q = debouncedQuery.toLowerCase().trim();
+    if (!q) return trips;
+    return trips.filter(
+      (t) =>
+        t.name.toLowerCase().includes(q) ||
+        t.code.toLowerCase().includes(q)
+    );
+  }, [trips, debouncedQuery]);
 
-  const totalSpentAcrossTrips = trips.reduce((sum, t) => sum + t.totalExpense, 0);
+  const totalSpentAcrossTrips = React.useMemo(() => {
+    return trips.reduce((sum, t) => sum + t.totalExpense, 0);
+  }, [trips]);
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 pb-28 md:pb-12">

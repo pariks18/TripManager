@@ -214,17 +214,24 @@ export const dbStore = {
       include: {
         trip: {
           include: {
-            members: { include: { user: true } },
-            expenses: {
-              include: {
-                paidBy: true,
-                createdBy: true,
-                participants: { include: { user: true } },
-                editRequests: { include: { requestedBy: true } },
+            members: {
+              select: {
+                id: true,
+                tripId: true,
+                userId: true,
+                role: true,
+                joinedAt: true,
+                user: { select: { id: true, name: true, email: true } },
               },
             },
-            activities: { include: { user: true }, orderBy: { createdAt: 'desc' } },
-            settlements: { include: { fromUser: true, toUser: true }, orderBy: { updatedAt: 'desc' } },
+            expenses: {
+              where: { status: 'APPROVED' },
+              select: {
+                amount: true,
+                paidById: true,
+                participants: { select: { userId: true, shareAmount: true } },
+              },
+            },
           },
         },
       },
@@ -232,32 +239,16 @@ export const dbStore = {
 
     return userMemberships.map((m) => {
       const trip = m.trip;
-      const approvedExpenses = trip.expenses.filter((e) => e.status === 'APPROVED');
-      const totalExpense = approvedExpenses.reduce((sum, e) => sum + e.amount, 0);
+      const totalExpense = trip.expenses.reduce((sum, e) => sum + e.amount, 0);
 
       let paid = 0;
       let share = 0;
-      approvedExpenses.forEach((e) => {
+      trip.expenses.forEach((e) => {
         if (e.paidById === userId) paid += e.amount;
         e.participants.forEach((p) => {
           if (p.userId === userId) share += p.shareAmount;
         });
       });
-
-      const allEditRequests = trip.expenses.flatMap((e) =>
-        (e.editRequests || []).map((req) => ({
-          id: req.id,
-          expenseId: req.expenseId,
-          requestedById: req.requestedById,
-          requestedBy: { id: req.requestedBy.id, name: req.requestedBy.name, email: req.requestedBy.email },
-          requestType: req.requestType as 'EDIT' | 'DELETE',
-          proposedData: req.proposedData,
-          reason: req.reason,
-          status: req.status as 'PENDING' | 'APPROVED' | 'REJECTED',
-          createdAt: req.createdAt.toISOString(),
-          updatedAt: req.updatedAt.toISOString(),
-        }))
-      );
 
       return {
         id: trip.id,
@@ -280,68 +271,10 @@ export const dbStore = {
           joinedAt: mem.joinedAt.toISOString(),
           user: { id: mem.user.id, name: mem.user.name, email: mem.user.email },
         })),
-        expenses: trip.expenses.map((e) => ({
-          id: e.id,
-          tripId: e.tripId,
-          title: e.title,
-          amount: e.amount,
-          category: e.category as CategoryType,
-          paidById: e.paidById,
-          paidBy: { id: e.paidBy.id, name: e.paidBy.name, email: e.paidBy.email },
-          createdById: e.createdById || e.paidById,
-          createdBy: e.createdBy ? { id: e.createdBy.id, name: e.createdBy.name, email: e.createdBy.email } : undefined,
-          lastUpdatedById: e.lastUpdatedById,
-          status: e.status as 'APPROVED' | 'PENDING_APPROVAL' | 'REJECTED',
-          rejectionReason: e.rejectionReason,
-          date: e.date.toISOString(),
-          createdAt: e.createdAt.toISOString(),
-          updatedAt: e.updatedAt.toISOString(),
-          receiptUrl: e.receiptUrl,
-          participants: e.participants.map((p) => ({
-            id: p.id,
-            expenseId: p.expenseId,
-            userId: p.userId,
-            shareAmount: p.shareAmount,
-            user: { id: p.user.id, name: p.user.name, email: p.user.email },
-          })),
-          editRequests: e.editRequests?.map((req) => ({
-            id: req.id,
-            expenseId: req.expenseId,
-            requestedById: req.requestedById,
-            requestedBy: { id: req.requestedBy.id, name: req.requestedBy.name, email: req.requestedBy.email },
-            requestType: req.requestType as 'EDIT' | 'DELETE',
-            proposedData: req.proposedData,
-            reason: req.reason,
-            status: req.status as 'PENDING' | 'APPROVED' | 'REJECTED',
-            createdAt: req.createdAt.toISOString(),
-            updatedAt: req.updatedAt.toISOString(),
-          })),
-        })),
-        editRequests: allEditRequests,
-        activities: trip.activities?.map((a) => ({
-          id: a.id,
-          tripId: a.tripId,
-          userId: a.userId,
-          user: { id: a.user.id, name: a.user.name, email: a.user.email },
-          actionType: a.actionType as ActivityDetail['actionType'],
-          details: a.details,
-          amount: a.amount,
-          category: a.category,
-          createdAt: a.createdAt.toISOString(),
-        })),
-        settlementRecords: trip.settlements?.map((s) => ({
-          id: s.id,
-          tripId: s.tripId,
-          fromUserId: s.fromUserId,
-          fromUser: { id: s.fromUser.id, name: s.fromUser.name, email: s.fromUser.email },
-          toUserId: s.toUserId,
-          toUser: { id: s.toUser.id, name: s.toUser.name, email: s.toUser.email },
-          amount: s.amount,
-          status: s.status as SettlementRecordDetail['status'],
-          note: s.note,
-          createdAt: s.createdAt.toISOString(),
-          updatedAt: s.updatedAt.toISOString(),
-        })),
+        expenses: [],
+        editRequests: [],
+        activities: [],
+        settlementRecords: [],
         totalExpense,
         userBalance: paid - share,
         userTotalPaid: paid,
@@ -353,24 +286,26 @@ export const dbStore = {
   async getTripById(tripId: string, userId: string): Promise<TripSummary | null> {
     await ensureDatabaseSeeded();
 
+    const userSelect = { select: { id: true, name: true, email: true } };
+
     const directTrip = await prisma.trip.findUnique({
       where: { id: tripId },
       include: {
-        members: { include: { user: true } },
+        members: { include: { user: userSelect } },
         expenses: {
           include: {
-            paidBy: true,
-            createdBy: true,
-            participants: { include: { user: true } },
-            editRequests: { include: { requestedBy: true } },
+            paidBy: userSelect,
+            createdBy: userSelect,
+            participants: { include: { user: userSelect } },
+            editRequests: { include: { requestedBy: userSelect } },
           },
         },
-        activities: { include: { user: true }, orderBy: { createdAt: 'desc' } },
-        settlements: { include: { fromUser: true, toUser: true }, orderBy: { updatedAt: 'desc' } },
+        activities: { include: { user: userSelect }, orderBy: { createdAt: 'desc' } },
+        settlements: { include: { fromUser: userSelect, toUser: userSelect }, orderBy: { updatedAt: 'desc' } },
         itinerary: { orderBy: [{ dayNumber: 'asc' }, { order: 'asc' }, { createdAt: 'asc' }] },
         stays: { orderBy: { createdAt: 'desc' } },
-        advanceContributions: { include: { user: true }, orderBy: { createdAt: 'desc' } },
-        walletTransactions: { include: { createdBy: true }, orderBy: { createdAt: 'desc' } },
+        advanceContributions: { include: { user: userSelect }, orderBy: { createdAt: 'desc' } },
+        walletTransactions: { include: { createdBy: userSelect }, orderBy: { createdAt: 'desc' } },
       },
     });
 

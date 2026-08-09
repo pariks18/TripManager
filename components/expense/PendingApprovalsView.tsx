@@ -16,7 +16,7 @@ interface PendingApprovalsViewProps {
   onActionComplete: () => void;
 }
 
-export const PendingApprovalsView: React.FC<PendingApprovalsViewProps> = ({
+export const PendingApprovalsView: React.FC<PendingApprovalsViewProps> = React.memo(({
   tripId,
   currency,
   pendingExpenses,
@@ -312,4 +312,4 @@ export const PendingApprovalsView: React.FC<PendingApprovalsViewProps> = ({
       )}
     </div>
   );
-};
+});

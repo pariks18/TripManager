@@ -40,7 +40,7 @@ const ACTION_ICONS: Record<string, { icon: React.ElementType; bg: string; color:
   SETTLEMENT_CONFIRMED: { icon: Sparkles, bg: 'bg-emerald-100 dark:bg-emerald-950', color: 'text-emerald-600' },
 };
 
-export const TripTimeline: React.FC<TripTimelineProps> = ({ activities, currency }) => {
+export const TripTimeline: React.FC<TripTimelineProps> = React.memo(({ activities, currency }) => {
   if (!activities || activities.length === 0) {
     return (
       <div className="bg-white rounded-3xl p-8 border border-slate-100 text-center space-y-3 apple-shadow">
@@ -105,4 +105,4 @@ export const TripTimeline: React.FC<TripTimelineProps> = ({ activities, currency
       })}
     </div>
   );
-};
+});

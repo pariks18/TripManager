@@ -96,6 +96,9 @@ model Expense {
   createdBy    User?                @relation("CreatedBy", fields: [createdById], references: [id])
   participants ExpenseParticipant[]
   editRequests ExpenseEditRequest[]
+
+  @@index([tripId])
+  @@index([paidById])
 }
 
 model ExpenseParticipant {
@@ -122,6 +125,8 @@ model Activity {
 
   trip Trip @relation(fields: [tripId], references: [id], onDelete: Cascade)
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tripId, createdAt])
 }
 
 model Settlement {
@@ -138,6 +143,8 @@ model Settlement {
   trip     Trip @relation(fields: [tripId], references: [id], onDelete: Cascade)
   fromUser User @relation("FromUser", fields: [fromUserId], references: [id], onDelete: Cascade)
   toUser   User @relation("ToUser", fields: [toUserId], references: [id], onDelete: Cascade)
+
+  @@index([tripId])
 }
 
 model UserDocument {
@@ -186,6 +193,8 @@ model ItineraryItem {
   updatedAt   DateTime  @updatedAt
 
   trip Trip @relation(fields: [tripId], references: [id], onDelete: Cascade)
+
+  @@index([tripId, dayNumber])
 }
 
 model StayDetail {
@@ -205,6 +214,8 @@ model StayDetail {
   updatedAt    DateTime  @updatedAt
 
   trip Trip @relation(fields: [tripId], references: [id], onDelete: Cascade)
+
+  @@index([tripId])
 }
 
 model AdvanceContribution {
@@ -222,6 +233,8 @@ model AdvanceContribution {
 
   trip Trip @relation(fields: [tripId], references: [id], onDelete: Cascade)
   user User @relation("UserAdvanceContributions", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tripId, userId])
 }
 
 model WalletTransaction {
@@ -238,6 +251,8 @@ model WalletTransaction {
 
   trip      Trip @relation(fields: [tripId], references: [id], onDelete: Cascade)
   createdBy User @relation("CreatedWalletTransactions", fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@index([tripId])
 }
 
 model Poll {
@@ -254,6 +269,8 @@ model Poll {
   createdBy User         @relation("CreatedPolls", fields: [createdById], references: [id], onDelete: Cascade)
   options   PollOption[]
   votes     PollVote[]
+
+  @@index([tripId])
 }
 
 model PollOption {

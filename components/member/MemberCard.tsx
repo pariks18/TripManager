@@ -19,7 +19,7 @@ interface MemberCardProps {
   onMemberRemoved?: () => void;
 }
 
-export const MemberCard: React.FC<MemberCardProps> = ({
+export const MemberCard: React.FC<MemberCardProps> = React.memo(({
   memberBalance,
   currency,
   isCurrentUser,
@@ -136,5 +136,5 @@ export const MemberCard: React.FC<MemberCardProps> = ({
       )}
     </>
   );
-};
+});
 

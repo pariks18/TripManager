@@ -35,7 +35,7 @@ interface TripWalletViewProps {
   onRefreshTrip?: () => void;
 }
 
-export const TripWalletView: React.FC<TripWalletViewProps> = ({
+export const TripWalletView: React.FC<TripWalletViewProps> = React.memo(({
   tripId,
   currency,
   isAdmin,
@@ -501,4 +501,4 @@ export const TripWalletView: React.FC<TripWalletViewProps> = ({
       )}
     </div>
   );
-};
+});

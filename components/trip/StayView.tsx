@@ -29,7 +29,7 @@ interface StayViewProps {
   onRefresh: () => void;
 }
 
-export const StayView: React.FC<StayViewProps> = ({
+export const StayView: React.FC<StayViewProps> = React.memo(({
   tripId,
   stays,
   isAdmin,
@@ -428,4 +428,4 @@ export const StayView: React.FC<StayViewProps> = ({
       )}
     </div>
   );
-};
+});

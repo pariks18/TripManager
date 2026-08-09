@@ -2,28 +2,32 @@
 
 import React, { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
+import dynamic from 'next/dynamic';
+import { fetchClientSession } from '@/lib/clientSession';
 import { ExpenseDetail, TripSummary, UserSession, CategoryType, MemberBalance, SettlementTransaction } from '@/types';
 import { calculateMemberBalances, computeSettlements } from '@/lib/settlement';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { ExpenseCard } from '@/components/expense/ExpenseCard';
 import { AddExpenseModal } from '@/components/expense/AddExpenseModal';
 import { MemberCard } from '@/components/member/MemberCard';
-import { SettlementList } from '@/components/settlement/SettlementList';
 import { PersonalDashboard } from '@/components/trip/PersonalDashboard';
-import { TripTimeline } from '@/components/trip/TripTimeline';
-import { AnalyticsView } from '@/components/trip/AnalyticsView';
+
+const SettlementList = dynamic(() => import('@/components/settlement/SettlementList').then((m) => m.SettlementList));
+const TripTimeline = dynamic(() => import('@/components/trip/TripTimeline').then((m) => m.TripTimeline));
+const AnalyticsView = dynamic(() => import('@/components/trip/AnalyticsView').then((m) => m.AnalyticsView));
+const PendingApprovalsView = dynamic(() => import('@/components/expense/PendingApprovalsView').then((m) => m.PendingApprovalsView));
+const ItineraryView = dynamic(() => import('@/components/trip/ItineraryView').then((m) => m.ItineraryView));
+const StayView = dynamic(() => import('@/components/trip/StayView').then((m) => m.StayView));
+const TripWalletView = dynamic(() => import('@/components/trip/TripWalletView').then((m) => m.TripWalletView));
+const LivePollsView = dynamic(() => import('@/components/trip/LivePollsView').then((m) => m.LivePollsView));
+const LiveLocationView = dynamic(() => import('@/components/trip/LiveLocationView').then((m) => m.LiveLocationView));
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { BottomNav } from '@/components/ui/BottomNav';
 import { TripBudgetCard } from '@/components/trip/TripBudgetCard';
 import { TripSettingsModal } from '@/components/trip/TripSettingsModal';
-import { PendingApprovalsView } from '@/components/expense/PendingApprovalsView';
-import { ItineraryView } from '@/components/trip/ItineraryView';
-import { StayView } from '@/components/trip/StayView';
-import { TripWalletView } from '@/components/trip/TripWalletView';
-import { LivePollsView } from '@/components/trip/LivePollsView';
-import { LiveLocationView } from '@/components/trip/LiveLocationView';
+
 import {
   ArrowLeft,
   Plus,
@@ -70,17 +74,22 @@ export default function TripDashboardPage() {
 
   // Search & Filters
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
 
-  const fetchTripDetails = async () => {
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(searchQuery), 200);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  const fetchTripDetails = React.useCallback(async () => {
     try {
-      const resMe = await fetch('/api/auth/me');
-      const dataMe = await resMe.json();
-      if (!dataMe.user) {
+      const meUser = await fetchClientSession();
+      if (!meUser) {
         router.push('/login');
         return;
       }
-      setUser(dataMe.user);
+      setUser(meUser);
 
       const resTrip = await fetch(`/api/trips/${tripId}`);
       const dataTrip = await resTrip.json();
@@ -94,11 +103,11 @@ export default function TripDashboardPage() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [tripId, router]);
 
   useEffect(() => {
     if (tripId) fetchTripDetails();
-  }, [tripId]);
+  }, [tripId, fetchTripDetails]);
 
   const handleCopyCode = () => {
     if (!trip) return;
@@ -107,11 +116,11 @@ export default function TripDashboardPage() {
     setTimeout(() => setCopiedCode(false), 2000);
   };
 
-  const handleExpenseSuccess = (newExpense: ExpenseDetail) => {
+  const handleExpenseSuccess = React.useCallback((newExpense: ExpenseDetail) => {
     fetchTripDetails();
-  };
+  }, [fetchTripDetails]);
 
-  const handleDeleteExpense = async (expenseId: string) => {
+  const handleDeleteExpense = React.useCallback(async (expenseId: string) => {
     if (!confirm('Are you sure you want to delete this expense?')) return;
     try {
       const res = await fetch(`/api/expenses/${expenseId}`, { method: 'DELETE' });
@@ -124,9 +133,9 @@ export default function TripDashboardPage() {
     } catch (err: any) {
       alert(err.message);
     }
-  };
+  }, [fetchTripDetails]);
 
-  const handleApproveExpense = async (expenseId: string) => {
+  const handleApproveExpense = React.useCallback(async (expenseId: string) => {
     try {
       const res = await fetch(`/api/expenses/${expenseId}/approval`, {
         method: 'POST',
@@ -138,9 +147,9 @@ export default function TripDashboardPage() {
     } catch (err: any) {
       alert(err.message);
     }
-  };
+  }, [fetchTripDetails]);
 
-  const handleRejectExpense = async (expenseId: string) => {
+  const handleRejectExpense = React.useCallback(async (expenseId: string) => {
     const reason = prompt('Rejection note / reason (optional):');
     try {
       const res = await fetch(`/api/expenses/${expenseId}/approval`, {
@@ -153,9 +162,9 @@ export default function TripDashboardPage() {
     } catch (err: any) {
       alert(err.message);
     }
-  };
+  }, [fetchTripDetails]);
 
-  const handleRequestDeleteExpense = async (expenseId: string) => {
+  const handleRequestDeleteExpense = React.useCallback(async (expenseId: string) => {
     if (!confirm('Submit a delete request for this approved expense to the Super Host?')) return;
     try {
       const res = await fetch(`/api/expenses/${expenseId}/edit-request`, {
@@ -169,9 +178,9 @@ export default function TripDashboardPage() {
     } catch (err: any) {
       alert(err.message);
     }
-  };
+  }, [fetchTripDetails]);
 
-  const handleMarkSettled = async (tx: SettlementTransaction) => {
+  const handleMarkSettled = React.useCallback(async (tx: SettlementTransaction) => {
     try {
       const res = await fetch(`/api/trips/${tripId}/settlement`, {
         method: 'POST',
@@ -188,7 +197,7 @@ export default function TripDashboardPage() {
     } catch (err: any) {
       alert(err.message);
     }
-  };
+  }, [tripId, fetchTripDetails]);
 
   if (isLoading || !trip || !user) {
     return (
@@ -205,13 +214,21 @@ export default function TripDashboardPage() {
   const currentMember = trip.members.find((m) => m.userId === user.id);
   const isAdmin = currentMember?.role === 'ADMIN' || trip.createdById === user.id;
 
-  const pendingExpenses = trip.expenses.filter((e) => e.status === 'PENDING_APPROVAL');
-  const pendingRequests = trip.editRequests?.filter((r) => r.status === 'PENDING') || [];
+  const pendingExpenses = React.useMemo(() => trip.expenses.filter((e) => e.status === 'PENDING_APPROVAL'), [trip.expenses]);
+  const pendingRequests = React.useMemo(() => trip.editRequests?.filter((r) => r.status === 'PENDING') || [], [trip.editRequests]);
   const totalPendingCount = pendingExpenses.length + pendingRequests.length;
 
-  const approvedExpenses = trip.expenses.filter((e) => e.status === 'APPROVED');
-  const balances = calculateMemberBalances(trip.members, approvedExpenses, trip.settlementRecords, trip.advanceContributions);
-  const settlements = computeSettlements(trip.members, approvedExpenses, trip.settlementRecords, trip.advanceContributions);
+  const approvedExpenses = React.useMemo(() => trip.expenses.filter((e) => e.status === 'APPROVED'), [trip.expenses]);
+  
+  const balances = React.useMemo(
+    () => calculateMemberBalances(trip.members, approvedExpenses, trip.settlementRecords, trip.advanceContributions),
+    [trip.members, approvedExpenses, trip.settlementRecords, trip.advanceContributions]
+  );
+
+  const settlements = React.useMemo(
+    () => computeSettlements(trip.members, approvedExpenses, trip.settlementRecords, trip.advanceContributions),
+    [trip.members, approvedExpenses, trip.settlementRecords, trip.advanceContributions]
+  );
 
   const currentUserBalanceRecord = balances.find((b) => b.user.id === user.id);
   const userTotalPaid = currentUserBalanceRecord?.paid || 0;
@@ -220,16 +237,18 @@ export default function TripDashboardPage() {
 
   const categories: string[] = ['ALL', 'Food', 'Travel', 'Fuel', 'Stay', 'Entertainment', 'Shopping', 'Miscellaneous'];
 
-  const filteredExpenses = trip.expenses.filter((exp) => {
-    const matchesCategory = selectedCategory === 'ALL' || exp.category === selectedCategory;
-    const q = searchQuery.toLowerCase().trim();
-    const matchesSearch =
-      !q ||
-      exp.title.toLowerCase().includes(q) ||
-      exp.paidBy?.name.toLowerCase().includes(q) ||
-      exp.amount.toString().includes(q);
-    return matchesCategory && matchesSearch;
-  });
+  const filteredExpenses = React.useMemo(() => {
+    return trip.expenses.filter((exp) => {
+      const matchesCategory = selectedCategory === 'ALL' || exp.category === selectedCategory;
+      const q = debouncedSearch.toLowerCase().trim();
+      const matchesSearch =
+        !q ||
+        exp.title.toLowerCase().includes(q) ||
+        exp.paidBy?.name.toLowerCase().includes(q) ||
+        exp.amount.toString().includes(q);
+      return matchesCategory && matchesSearch;
+    });
+  }, [trip.expenses, selectedCategory, debouncedSearch]);
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 pb-24">

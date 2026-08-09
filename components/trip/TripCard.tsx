@@ -13,7 +13,7 @@ interface TripCardProps {
   trip: TripSummary;
 }
 
-export const TripCard: React.FC<TripCardProps> = ({ trip }) => {
+export const TripCard: React.FC<TripCardProps> = React.memo(({ trip }) => {
   const router = useRouter();
 
   const isNetPositive = trip.userBalance > 0;
@@ -97,4 +97,5 @@ export const TripCard: React.FC<TripCardProps> = ({ trip }) => {
       </div>
     </Card>
   );
-};
+});
+

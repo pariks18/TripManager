@@ -30,7 +30,7 @@ interface LivePollsViewProps {
   onRefreshTrip?: () => void;
 }
 
-export const LivePollsView: React.FC<LivePollsViewProps> = ({
+export const LivePollsView: React.FC<LivePollsViewProps> = React.memo(({
   tripId,
   isAdmin,
   currentUserId,
@@ -519,4 +519,4 @@ export const LivePollsView: React.FC<LivePollsViewProps> = ({
       )}
     </div>
   );
-};
+});

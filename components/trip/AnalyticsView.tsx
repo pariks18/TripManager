@@ -11,7 +11,7 @@ interface AnalyticsViewProps {
   currency: string;
 }
 
-export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ tripId, currency }) => {
+export const AnalyticsView: React.FC<AnalyticsViewProps> = React.memo(({ tripId, currency }) => {
   const [analytics, setAnalytics] = useState<MemberAnalytics[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -129,4 +129,4 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ tripId, currency }
       </div>
     </div>
   );
-};
+});

@@ -26,7 +26,7 @@ interface SettlementListProps {
   onRefresh?: () => void;
 }
 
-export const SettlementList: React.FC<SettlementListProps> = ({
+export const SettlementList: React.FC<SettlementListProps> = React.memo(({
   settlements,
   settlementRecords = [],
   currency,
@@ -38,9 +38,9 @@ export const SettlementList: React.FC<SettlementListProps> = ({
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [submittingId, setSubmittingId] = useState<string | null>(null);
 
-  const pendingRecords = settlementRecords.filter((r) => r.status === 'PENDING');
-  const confirmedRecords = settlementRecords.filter((r) => r.status === 'CONFIRMED' || r.status === 'COMPLETED');
-  const rejectedRecords = settlementRecords.filter((r) => r.status === 'REJECTED');
+  const pendingRecords = React.useMemo(() => settlementRecords.filter((r) => r.status === 'PENDING'), [settlementRecords]);
+  const confirmedRecords = React.useMemo(() => settlementRecords.filter((r) => r.status === 'CONFIRMED' || r.status === 'COMPLETED'), [settlementRecords]);
+  const rejectedRecords = React.useMemo(() => settlementRecords.filter((r) => r.status === 'REJECTED'), [settlementRecords]);
 
   const handleCopyUPI = (fromName: string, toName: string, amount: number, id: string) => {
     const text = `Hey ${fromName}, please pay ${formatCurrency(amount, currency)} to ${toName} for the trip settlement.`;
@@ -359,4 +359,4 @@ export const SettlementList: React.FC<SettlementListProps> = ({
       )}
     </div>
   );
-};
+});

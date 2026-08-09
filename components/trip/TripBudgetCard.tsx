@@ -18,7 +18,7 @@ interface TripBudgetCardProps {
   onOpenSettings?: () => void;
 }
 
-export const TripBudgetCard: React.FC<TripBudgetCardProps> = ({
+export const TripBudgetCard: React.FC<TripBudgetCardProps> = React.memo(({
   tripId,
   currency,
   budget,
@@ -271,5 +271,5 @@ export const TripBudgetCard: React.FC<TripBudgetCardProps> = ({
       )}
     </>
   );
-};
+});
 

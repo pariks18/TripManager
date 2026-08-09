@@ -29,7 +29,7 @@ const ICON_MAP: Record<string, React.ElementType> = {
   Sparkles,
 };
 
-export const ExpenseCard: React.FC<ExpenseCardProps> = ({
+export const ExpenseCard: React.FC<ExpenseCardProps> = React.memo(({
   expense,
   currency,
   currentUserId,
@@ -334,4 +334,5 @@ export const ExpenseCard: React.FC<ExpenseCardProps> = ({
       )}
     </>
   );
-};
+});
+

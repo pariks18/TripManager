@@ -40,7 +40,7 @@ const CATEGORY_ICONS: Record<string, { icon: React.ElementType; bg: string; colo
   Activity: { icon: Compass, bg: 'bg-teal-100 text-teal-700', color: 'text-teal-600' },
 };
 
-export const ItineraryView: React.FC<ItineraryViewProps> = ({
+export const ItineraryView: React.FC<ItineraryViewProps> = React.memo(({
   tripId,
   itinerary,
   isAdmin,
@@ -61,14 +61,16 @@ export const ItineraryView: React.FC<ItineraryViewProps> = ({
   const [error, setError] = useState('');
 
   // Group items by dayNumber
-  const daysMap = new Map<number, ItineraryItemDetail[]>();
-  itinerary.forEach((item) => {
-    const list = daysMap.get(item.dayNumber) || [];
-    list.push(item);
-    daysMap.set(item.dayNumber, list);
-  });
-
-  const sortedDays = Array.from(daysMap.keys()).sort((a, b) => a - b);
+  const { daysMap, sortedDays } = React.useMemo(() => {
+    const map = new Map<number, ItineraryItemDetail[]>();
+    itinerary.forEach((item) => {
+      const list = map.get(item.dayNumber) || [];
+      list.push(item);
+      map.set(item.dayNumber, list);
+    });
+    const sorted = Array.from(map.keys()).sort((a, b) => a - b);
+    return { daysMap: map, sortedDays: sorted };
+  }, [itinerary]);
 
   const handleOpenAddModal = (targetDay?: number) => {
     setEditingItem(null);
@@ -406,4 +408,4 @@ export const ItineraryView: React.FC<ItineraryViewProps> = ({
       )}
     </div>
   );
-};
+});

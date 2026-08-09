@@ -26,7 +26,7 @@ interface LiveLocationViewProps {
   onRefreshTrip?: () => void;
 }
 
-export const LiveLocationView: React.FC<LiveLocationViewProps> = ({
+export const LiveLocationView: React.FC<LiveLocationViewProps> = React.memo(({
   tripId,
   currentUserId,
   isAdmin,
@@ -131,7 +131,7 @@ export const LiveLocationView: React.FC<LiveLocationViewProps> = ({
   };
 
   // Default map center: first available member or Goa coordinates
-  const activeLocations = locations.filter((l) => l.isSharing);
+  const activeLocations = React.useMemo(() => locations.filter((l) => l.isSharing), [locations]);
   const centerLat = activeLocations.length > 0 ? activeLocations[0].latitude : 15.2993;
   const centerLng = activeLocations.length > 0 ? activeLocations[0].longitude : 74.124;
 
@@ -331,4 +331,4 @@ export const LiveLocationView: React.FC<LiveLocationViewProps> = ({
       </div>
     </div>
   );
-};
+});

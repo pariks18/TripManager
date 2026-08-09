@@ -22,7 +22,7 @@ interface PersonalDashboardProps {
   onMemberRemoved?: () => void;
 }
 
-export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
+export const PersonalDashboard: React.FC<PersonalDashboardProps> = React.memo(({
   currentUserId,
   currency,
   totalPaid,
@@ -251,5 +251,5 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
       )}
     </div>
   );
-};
+});
 
