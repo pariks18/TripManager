@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { CategoryType, ExpenseDetail, TripMemberDetail, UserSummary } from '@/types';
 import { CATEGORY_CONFIG, formatCurrency } from '@/lib/utils';
-import { Utensils, Plane, Fuel, Home, Ticket, ShoppingBag, Sparkles, Check, CheckSquare, Square, Camera, Image as ImageIcon, Trash2, Receipt, X } from 'lucide-react';
+import { Utensils, Plane, Fuel, Home, Ticket, ShoppingBag, Sparkles, Check, CheckSquare, Square, Camera, Image as ImageIcon, Trash2, Receipt, X, Wallet, Info } from 'lucide-react';
 
 interface AddExpenseModalProps {
   isOpen: boolean;
@@ -17,6 +17,8 @@ interface AddExpenseModalProps {
   currentUserId: string;
   isAdmin?: boolean;
   existingExpense?: ExpenseDetail | null;
+  defaultPaymentSource?: 'PERSONAL' | 'WALLET';
+  availableWalletBalance?: number;
   onSuccess: (expense: ExpenseDetail) => void;
 }
 
@@ -39,11 +41,14 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
   currentUserId,
   isAdmin = false,
   existingExpense,
+  defaultPaymentSource = 'PERSONAL',
+  availableWalletBalance,
   onSuccess,
 }) => {
   const [title, setTitle] = useState('');
   const [amount, setAmount] = useState('');
   const [category, setCategory] = useState<CategoryType>('Food');
+  const [paymentSource, setPaymentSource] = useState<'PERSONAL' | 'WALLET'>('PERSONAL');
   const [paidById, setPaidById] = useState(currentUserId);
   const [splitBetween, setSplitBetween] = useState<string[]>([]);
   const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
@@ -62,6 +67,7 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
       setTitle(existingExpense.title);
       setAmount(existingExpense.amount.toString());
       setCategory(existingExpense.category);
+      setPaymentSource(existingExpense.paymentSource || 'PERSONAL');
       setPaidById(existingExpense.paidById);
       setSplitBetween(existingExpense.participants.map((p) => p.userId));
       setReceiptUrl(existingExpense.receiptUrl || null);
@@ -69,11 +75,12 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
       setTitle('');
       setAmount('');
       setCategory('Food');
+      setPaymentSource(defaultPaymentSource);
       setPaidById(currentUserId);
       setSplitBetween(members.map((m) => m.userId));
       setReceiptUrl(null);
     }
-  }, [existingExpense, isOpen, members, currentUserId]);
+  }, [existingExpense, isOpen, members, currentUserId, defaultPaymentSource]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -125,6 +132,11 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
       return;
     }
 
+    if (paymentSource === 'WALLET' && availableWalletBalance !== undefined && numAmount > availableWalletBalance) {
+      setError(`Insufficient Trip Wallet balance! Available: ${formatCurrency(availableWalletBalance, currency)}, Requested: ${formatCurrency(numAmount, currency)}.`);
+      return;
+    }
+
     setIsLoading(true);
     setError('');
 
@@ -140,6 +152,7 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
               title: title.trim(),
               amount: numAmount,
               category,
+              paymentSource,
               paidById,
               splitBetween,
               receiptUrl,
@@ -168,6 +181,7 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
           title: title.trim(),
           amount: numAmount,
           category,
+          paymentSource,
           paidById,
           splitBetween,
           receiptUrl,
@@ -230,6 +244,51 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
           </div>
         )}
 
+        {/* Payment Source Picker */}
+        <div>
+          <label className="block text-xs font-semibold text-slate-700 tracking-wide uppercase mb-1.5">
+            Payment Source
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => setPaymentSource('PERSONAL')}
+              className={`p-3 rounded-2xl border flex items-center justify-center gap-2 text-xs font-bold transition-all ${
+                paymentSource === 'PERSONAL'
+                  ? 'bg-emerald-50 border-emerald-500 text-emerald-900 ring-2 ring-emerald-500/20'
+                  : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+              <span>Personal Money</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setPaymentSource('WALLET')}
+              className={`p-3 rounded-2xl border flex items-center justify-center gap-2 text-xs font-bold transition-all ${
+                paymentSource === 'WALLET'
+                  ? 'bg-purple-50 border-purple-500 text-purple-900 ring-2 ring-purple-500/20'
+                  : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              <Wallet className="w-4 h-4 text-purple-600" />
+              <span>Trip Wallet</span>
+            </button>
+          </div>
+          {paymentSource === 'WALLET' && (
+            <p className="text-[11px] text-purple-700 font-medium mt-1.5 flex items-center gap-1">
+              <Info className="w-3.5 h-3.5 shrink-0" />
+              Paid directly from Trip Wallet fund pool.
+              {availableWalletBalance !== undefined && (
+                <span className="font-bold ml-1">
+                  (Available: {formatCurrency(availableWalletBalance, currency)})
+                </span>
+              )}
+            </p>
+          )}
+        </div>
+
         <Input
           label="Expense Title"
           placeholder="e.g. Resort, Lunch, Fuel, Taxi"
@@ -258,17 +317,23 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
             <label className="block text-xs font-semibold text-slate-700 tracking-wide uppercase mb-1.5">
               Paid By
             </label>
-            <select
-              value={paidById}
-              onChange={(e) => setPaidById(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 text-slate-900 text-sm rounded-2xl p-3 focus:outline-none focus:border-emerald-500 focus:bg-white"
-            >
-              {members.map((m) => (
-                <option key={m.userId} value={m.userId}>
-                  {m.user.name} {m.userId === currentUserId ? '(You)' : ''}
-                </option>
-              ))}
-            </select>
+            {paymentSource === 'WALLET' ? (
+              <div className="w-full bg-purple-50 border border-purple-200 text-purple-900 text-xs font-bold rounded-2xl p-3.5">
+                Trip Wallet (Shared Fund)
+              </div>
+            ) : (
+              <select
+                value={paidById}
+                onChange={(e) => setPaidById(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 text-slate-900 text-sm rounded-2xl p-3 focus:outline-none focus:border-emerald-500 focus:bg-white"
+              >
+                {members.map((m) => (
+                  <option key={m.userId} value={m.userId}>
+                    {m.user.name} {m.userId === currentUserId ? '(You)' : ''}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
         </div>
 

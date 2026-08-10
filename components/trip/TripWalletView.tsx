@@ -6,7 +6,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { ContributeAdvanceModal } from './ContributeAdvanceModal';
-import { SpendWalletModal } from './SpendWalletModal';
+import { AddExpenseModal } from '@/components/expense/AddExpenseModal';
 import {
   Wallet,
   CheckCircle2,
@@ -47,7 +47,7 @@ export const TripWalletView: React.FC<TripWalletViewProps> = React.memo(({
   const [walletSummary, setWalletSummary] = useState<TripWalletSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isContributeModalOpen, setIsContributeModalOpen] = useState(false);
-  const [isSpendModalOpen, setIsSpendModalOpen] = useState(false);
+  const [isAddWalletExpenseOpen, setIsAddWalletExpenseOpen] = useState(false);
   const [previewScreenshotUrl, setPreviewScreenshotUrl] = useState<string | null>(null);
   const [actionId, setActionId] = useState<string | null>(null);
 
@@ -394,54 +394,52 @@ export const TripWalletView: React.FC<TripWalletViewProps> = React.memo(({
         </div>
       </div>
 
-      {/* 5. Trip Wallet Spending Log */}
+      {/* 5. Trip Wallet Expenses Log */}
       <div className="bg-white rounded-3xl p-5 border border-slate-100 apple-shadow space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Wallet className="w-4 h-4 text-purple-600" />
-            <h4 className="text-sm font-bold text-slate-900">Wallet Bookings & Spending</h4>
+            <h4 className="text-sm font-bold text-slate-900">Wallet Bookings & Expenses</h4>
           </div>
 
-          {isAdmin && (
-            <Button
-              onClick={() => setIsSpendModalOpen(true)}
-              disabled={availableBalance <= 0}
-              size="sm"
-              className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs"
-            >
-              <Plus className="w-4 h-4 mr-1" /> Spend from Wallet
-            </Button>
-          )}
+          <Button
+            onClick={() => setIsAddWalletExpenseOpen(true)}
+            disabled={availableBalance <= 0}
+            size="sm"
+            className="bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs"
+          >
+            <Plus className="w-4 h-4 mr-1" /> Add Wallet Expense
+          </Button>
         </div>
 
         {transactions.length > 0 ? (
           <div className="space-y-2.5">
-            {transactions.map((tx) => (
+            {transactions.map((exp) => (
               <div
-                key={tx.id}
-                className="flex items-center justify-between p-3.5 rounded-2xl bg-slate-50 border border-slate-100"
+                key={exp.id}
+                className="flex items-center justify-between p-3.5 rounded-2xl bg-purple-50/50 border border-purple-100"
               >
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-slate-900">{tx.title}</span>
-                    <span className="bg-indigo-50 text-indigo-700 border border-indigo-200 text-[10px] font-bold px-2 py-0.5 rounded-full">
-                      {tx.category}
+                    <span className="text-xs font-bold text-slate-900">{exp.title}</span>
+                    <span className="bg-purple-100 text-purple-800 border border-purple-200 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                      {exp.category}
                     </span>
                   </div>
-                  <span className="text-[10px] text-slate-400 block mt-0.5">
-                    Paid by {tx.createdBy.name} from Wallet • {formatDate(tx.createdAt)}
+                  <span className="text-[10px] text-slate-500 block mt-0.5">
+                    Paid from Trip Wallet • Split among {exp.participants?.length || 0} members • {formatDate(exp.createdAt)}
                   </span>
                 </div>
 
                 <span className="text-sm font-extrabold text-purple-700">
-                  {formatCurrency(tx.amount, currency)}
+                  {formatCurrency(exp.amount, currency)}
                 </span>
               </div>
             ))}
           </div>
         ) : (
           <div className="py-6 text-center text-slate-400 italic text-xs">
-            No advance wallet transactions recorded yet. Super Host can log hotel, transport, and ticket bookings from the wallet pool.
+            No expenses paid through the Trip Wallet yet. Click "+ Add Wallet Expense" or select "Trip Wallet" when adding an expense.
           </div>
         )}
       </div>
@@ -461,14 +459,17 @@ export const TripWalletView: React.FC<TripWalletViewProps> = React.memo(({
         />
       )}
 
-      {isSpendModalOpen && (
-        <SpendWalletModal
-          isOpen={isSpendModalOpen}
-          onClose={() => setIsSpendModalOpen(false)}
+      {isAddWalletExpenseOpen && (
+        <AddExpenseModal
+          isOpen={isAddWalletExpenseOpen}
+          onClose={() => setIsAddWalletExpenseOpen(false)}
           tripId={tripId}
           currency={currency}
-          availableBalance={availableBalance}
           members={members}
+          currentUserId={currentUserId}
+          isAdmin={isAdmin}
+          defaultPaymentSource="WALLET"
+          availableWalletBalance={availableBalance}
           onSuccess={() => {
             fetchWalletSummary();
             if (onRefreshTrip) onRefreshTrip();

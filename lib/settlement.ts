@@ -21,8 +21,8 @@ export function calculateMemberBalances(
   const approvedExpenses = expenses.filter((e) => e.status === 'APPROVED');
 
   approvedExpenses.forEach((expense) => {
-    // Add to paid amount of the payer
-    if (balanceMap.has(expense.paidById)) {
+    // Only credit paid amount if expense was paid out of personal money (not from Trip Wallet)
+    if (expense.paymentSource !== 'WALLET' && balanceMap.has(expense.paidById)) {
       const payerRecord = balanceMap.get(expense.paidById)!;
       payerRecord.paid += expense.amount;
     }

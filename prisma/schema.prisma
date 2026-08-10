@@ -81,6 +81,7 @@ model Expense {
   title           String
   amount          Float
   category        String   @default("Miscellaneous")
+  paymentSource   String   @default("PERSONAL") // PERSONAL or WALLET
   paidById        String   @db.ObjectId
   createdById     String?  @db.ObjectId
   lastUpdatedById String?  @db.ObjectId

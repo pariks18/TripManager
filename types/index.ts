@@ -42,6 +42,7 @@ export interface ExpenseDetail {
   title: string;
   amount: number;
   category: CategoryType;
+  paymentSource: 'PERSONAL' | 'WALLET';
   paidById: string;
   paidBy: UserSummary;
   createdById?: string | null;
@@ -255,7 +256,7 @@ export interface TripWalletSummary {
   availableBalance: number;
   memberProgress: MemberAdvanceProgress[];
   pendingContributions: AdvanceContributionDetail[];
-  transactions: WalletTransactionDetail[];
+  transactions: ExpenseDetail[];
   allContributions: AdvanceContributionDetail[];
 }
 
