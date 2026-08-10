@@ -18,7 +18,6 @@ const AnalyticsView = dynamic(() => import('@/components/trip/AnalyticsView').th
 const PendingApprovalsView = dynamic(() => import('@/components/expense/PendingApprovalsView').then((m) => m.PendingApprovalsView));
 const ItineraryView = dynamic(() => import('@/components/trip/ItineraryView').then((m) => m.ItineraryView));
 const StayView = dynamic(() => import('@/components/trip/StayView').then((m) => m.StayView));
-const TripWalletView = dynamic(() => import('@/components/trip/TripWalletView').then((m) => m.TripWalletView));
 const LivePollsView = dynamic(() => import('@/components/trip/LivePollsView').then((m) => m.LivePollsView));
 const LiveLocationView = dynamic(() => import('@/components/trip/LiveLocationView').then((m) => m.LiveLocationView));
 import { Avatar } from '@/components/ui/Avatar';
@@ -38,6 +37,7 @@ import {
   Receipt,
   ArrowLeftRight,
   Info,
+  Lock,
   Search,
   Sparkles,
   Filter,
@@ -50,7 +50,6 @@ import {
   Settings,
   Calendar,
   Hotel,
-  Wallet,
   Vote,
   Radio,
   MapPin,
@@ -64,7 +63,7 @@ export default function TripDashboardPage() {
   const [user, setUser] = useState<UserSession | null>(null);
   const [trip, setTrip] = useState<TripSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'overview' | 'wallet' | 'polls' | 'location' | 'expenses' | 'itinerary' | 'stay' | 'approvals' | 'settlement' | 'timeline' | 'analytics'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'polls' | 'location' | 'expenses' | 'itinerary' | 'stay' | 'approvals' | 'settlement' | 'timeline' | 'analytics'>('overview');
   const [copiedCode, setCopiedCode] = useState(false);
 
   // Expense modal state
@@ -218,13 +217,13 @@ export default function TripDashboardPage() {
 
   const balances = React.useMemo(() => {
     if (!trip) return [];
-    return calculateMemberBalances(trip.members, approvedExpenses, trip.settlementRecords, trip.advanceContributions);
-  }, [trip?.members, approvedExpenses, trip?.settlementRecords, trip?.advanceContributions]);
+    return calculateMemberBalances(trip.members, approvedExpenses, trip.settlementRecords);
+  }, [trip?.members, approvedExpenses, trip?.settlementRecords]);
 
   const settlements = React.useMemo(() => {
     if (!trip) return [];
-    return computeSettlements(trip.members, approvedExpenses, trip.settlementRecords, trip.advanceContributions);
-  }, [trip?.members, approvedExpenses, trip?.settlementRecords, trip?.advanceContributions]);
+    return computeSettlements(trip.members, approvedExpenses, trip.settlementRecords);
+  }, [trip?.members, approvedExpenses, trip?.settlementRecords]);
 
   const filteredExpenses = React.useMemo(() => {
     if (!trip) return [];
@@ -321,17 +320,6 @@ export default function TripDashboardPage() {
             }`}
           >
             <LayoutDashboard className="w-3.5 h-3.5 text-emerald-600" /> Summary
-          </button>
-
-          <button
-            onClick={() => setActiveTab('wallet')}
-            className={`flex-1 py-2.5 px-3 rounded-xl transition-all flex items-center justify-center gap-1 whitespace-nowrap ${
-              activeTab === 'wallet'
-                ? 'bg-white text-slate-900 shadow-sm'
-                : 'hover:text-slate-900'
-            }`}
-          >
-            <Wallet className="w-3.5 h-3.5 text-emerald-600" /> Trip Wallet
           </button>
 
           <button
@@ -469,19 +457,6 @@ export default function TripDashboardPage() {
               onMemberRemoved={fetchTripDetails}
             />
           </div>
-        )}
-
-        {/* TAB 2: TRIP WALLET & ADVANCE FUND */}
-        {activeTab === 'wallet' && (
-          <TripWalletView
-            tripId={trip.id}
-            currency={trip.currency}
-            isAdmin={isAdmin}
-            currentUserId={user.id}
-            members={trip.members}
-            onOpenSettings={() => setIsSettingsOpen(true)}
-            onRefreshTrip={fetchTripDetails}
-          />
         )}
 
         {/* TAB 3: LIVE DECISION POLLS */}
@@ -684,8 +659,6 @@ export default function TripDashboardPage() {
         currency={trip.currency}
         currentApprovalMode={trip.approvalMode}
         currentBudget={trip.budget}
-        currentAdvanceTarget={trip.advanceTargetPerMember}
-        currentRequireVerification={trip.requireAdvanceVerification}
         onSettingsUpdated={fetchTripDetails}
       />
 

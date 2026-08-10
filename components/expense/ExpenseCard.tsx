@@ -5,7 +5,7 @@ import { ExpenseDetail } from '@/types';
 import { CATEGORY_CONFIG, formatCurrency, formatDate } from '@/lib/utils';
 import { Avatar } from '@/components/ui/Avatar';
 import { Modal } from '@/components/ui/Modal';
-import { Utensils, Plane, Fuel, Home, Ticket, ShoppingBag, Sparkles, MoreVertical, Edit2, Trash2, ShieldCheck, Lock, ChevronDown, ChevronUp, Receipt, ExternalLink, Download, Wallet } from 'lucide-react';
+import { Utensils, Plane, Fuel, Home, Ticket, ShoppingBag, Sparkles, MoreVertical, Edit2, Trash2, ShieldCheck, Lock, ChevronDown, ChevronUp, Receipt, ExternalLink, Download } from 'lucide-react';
 
 interface ExpenseCardProps {
   expense: ExpenseDetail;
@@ -62,15 +62,7 @@ export const ExpenseCard: React.FC<ExpenseCardProps> = React.memo(({
   let netText = '';
   let netColor = '';
 
-  if (expense.paymentSource === 'WALLET') {
-    if (userParticipant) {
-      netText = `your share: ${formatCurrency(perPersonShare, currency)}`;
-      netColor = 'text-purple-600 font-bold';
-    } else {
-      netText = 'not involved';
-      netColor = 'text-slate-400 font-medium';
-    }
-  } else if (isPayer && userParticipant) {
+  if (isPayer && userParticipant) {
     const netGain = expense.amount - perPersonShare;
     netText = `you lent ${formatCurrency(netGain, currency)}`;
     netColor = 'text-emerald-600 font-bold';
@@ -98,11 +90,6 @@ export const ExpenseCard: React.FC<ExpenseCardProps> = React.memo(({
             <div>
               <div className="flex flex-wrap items-center gap-1.5">
                 <h4 className="text-base font-bold text-slate-900 line-clamp-1">{expense.title}</h4>
-                {expense.paymentSource === 'WALLET' && (
-                  <span className="bg-purple-100 text-purple-800 text-[10px] font-bold px-2 py-0.5 rounded-full inline-flex items-center gap-1">
-                    <Wallet className="w-3 h-3 text-purple-600" /> Trip Wallet
-                  </span>
-                )}
                 {isPending && (
                   <span className="bg-amber-100 text-amber-800 text-[10px] font-bold px-2 py-0.5 rounded-full">
                     ⏳ Pending Review
@@ -131,11 +118,7 @@ export const ExpenseCard: React.FC<ExpenseCardProps> = React.memo(({
                 )}
               </div>
               <p className="text-xs text-slate-500 mt-0.5">
-                {expense.paymentSource === 'WALLET' ? (
-                  <>Paid from <span className="font-semibold text-purple-700">Trip Wallet</span> • {formatDate(expense.date)}</>
-                ) : (
-                  <>Paid by <span className="font-semibold text-slate-800">{isPayer ? 'You' : expense.paidBy?.name}</span> • {formatDate(expense.date)}</>
-                )}
+                Paid by <span className="font-semibold text-slate-800">{isPayer ? 'You' : expense.paidBy?.name}</span> • {formatDate(expense.date)}
               </p>
             </div>
           </div>
@@ -352,4 +335,3 @@ export const ExpenseCard: React.FC<ExpenseCardProps> = React.memo(({
     </>
   );
 });
-

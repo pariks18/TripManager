@@ -42,7 +42,6 @@ export interface ExpenseDetail {
   title: string;
   amount: number;
   category: CategoryType;
-  paymentSource: 'PERSONAL' | 'WALLET';
   paidById: string;
   paidBy: UserSummary;
   createdById?: string | null;
@@ -116,11 +115,6 @@ export interface ActivityDetail {
     | 'SETTLEMENT_ROLLBACK_APPROVED'
     | 'SETTLEMENT_ROLLBACK_REJECTED'
     | 'MEMBER_REMOVED'
-    | 'ADVANCE_FUND_UPDATED'
-    | 'ADVANCE_CONTRIBUTION_SUBMITTED'
-    | 'ADVANCE_CONTRIBUTION_APPROVED'
-    | 'ADVANCE_CONTRIBUTION_REJECTED'
-    | 'WALLET_SPENT'
     | 'POLL_CREATED'
     | 'POLL_VOTED'
     | 'POLL_CLOSED'
@@ -193,8 +187,6 @@ export interface TripSummary {
   createdById?: string | null;
   isLocked: boolean;
   approvalMode: boolean;
-  advanceTargetPerMember?: number | null;
-  requireAdvanceVerification?: boolean;
   createdAt: string;
   members: TripMemberDetail[];
   expenses: ExpenseDetail[];
@@ -203,64 +195,10 @@ export interface TripSummary {
   settlementRecords?: SettlementRecordDetail[];
   itinerary?: ItineraryItemDetail[];
   stays?: StayDetail[];
-  advanceContributions?: AdvanceContributionDetail[];
-  walletTransactions?: WalletTransactionDetail[];
   totalExpense: number;
   userBalance: number;
   userTotalPaid: number;
   userTotalShare: number;
-}
-
-export interface AdvanceContributionDetail {
-  id: string;
-  tripId: string;
-  userId: string;
-  user: UserSummary;
-  amount: number;
-  utr?: string | null;
-  screenshotUrl?: string | null;
-  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'DELETED';
-  rejectionReason?: string | null;
-  note?: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface WalletTransactionDetail {
-  id: string;
-  tripId: string;
-  createdById: string;
-  createdBy: UserSummary;
-  title: string;
-  amount: number;
-  category: CategoryType | string;
-  receiptUrl?: string | null;
-  notes?: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface MemberAdvanceProgress {
-  user: UserSummary;
-  targetAmount: number;
-  paidAmount: number;
-  pendingAmount: number;
-  remainingAmount: number;
-  percentagePaid: number;
-}
-
-export interface TripWalletSummary {
-  tripId: string;
-  currency: string;
-  advanceTargetPerMember: number | null;
-  requireAdvanceVerification: boolean;
-  totalCollected: number;
-  totalSpent: number;
-  availableBalance: number;
-  memberProgress: MemberAdvanceProgress[];
-  pendingContributions: AdvanceContributionDetail[];
-  transactions: ExpenseDetail[];
-  allContributions: AdvanceContributionDetail[];
 }
 
 export interface PollVoteDetail {
