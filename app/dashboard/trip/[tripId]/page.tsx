@@ -609,6 +609,7 @@ export default function TripDashboardPage() {
             settlementRecords={trip.settlementRecords}
             currency={trip.currency}
             currentUserId={user.id}
+            members={trip.members}
             isAdmin={isAdmin}
             tripId={trip.id}
             onRefresh={fetchTripDetails}

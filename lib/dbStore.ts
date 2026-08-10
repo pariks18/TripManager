@@ -1,6 +1,6 @@
 import { prisma } from './prisma';
 import { generateTripCode, generateObjectId } from './utils';
-import { calculateMemberBalances } from './settlement';
+import { calculateMemberBalances, computeSettlements } from './settlement';
 import { CategoryType, ExpenseDetail, TripSummary, UserSummary, ActivityDetail, SettlementRecordDetail, MemberBalance, MemberAnalytics, DocumentType, UserDocumentDetail, ItineraryItemDetail, StayDetail, PollDetail, PollOptionDetail, PollVoteDetail, MemberLocationDetail } from '@/types';
 
 const SEED_USERS = [
@@ -29,6 +29,8 @@ const SEED_USERS = [
     password: '$2a$10$e8w.xM09L0n98QvY.wGZReHl50FwP/WjQ/119aE1k.w4lE6HjC5x.',
   },
 ];
+
+const userSelect = { select: { id: true, name: true, email: true } };
 
 const SEED_TRIPS = [
   {
@@ -791,15 +793,71 @@ export const dbStore = {
   ): Promise<SettlementRecordDetail> {
     await ensureDatabaseSeeded();
 
+    if (!amount || isNaN(amount) || amount <= 0) {
+      throw new Error('Settlement amount must be greater than zero.');
+    }
+
+    const roundedAmount = Math.round(amount * 100) / 100;
+
     const fromUser = await prisma.user.findUnique({ where: { id: fromUserId } });
     const toUser = await prisma.user.findUnique({ where: { id: toUserId } });
     if (!fromUser || !toUser) throw new Error('Users not found');
+
+    const trip = await prisma.trip.findUnique({
+      where: { id: tripId },
+      include: {
+        members: { include: { user: userSelect } },
+        expenses: {
+          include: {
+            paidBy: userSelect,
+            createdBy: userSelect,
+            participants: { include: { user: userSelect } },
+          },
+        },
+        settlements: { include: { fromUser: userSelect, toUser: userSelect } },
+      },
+    });
+    if (!trip) throw new Error('Trip not found');
+
+    // Calculate current live outstanding debt from fromUser to toUser
+    const approvedExpenses = trip.expenses
+      .filter((e) => e.status === 'APPROVED')
+      .map((e) => ({
+        ...e,
+        category: e.category as CategoryType,
+        date: e.date.toISOString(),
+        createdAt: e.createdAt.toISOString(),
+        updatedAt: e.updatedAt.toISOString(),
+        status: e.status as any,
+        participants: e.participants.map((p) => ({ ...p, user: p.user })),
+      }));
+
+    const settlementRecords = trip.settlements.map((s) => ({
+      ...s,
+      status: s.status as any,
+      createdAt: s.createdAt.toISOString(),
+      updatedAt: s.updatedAt.toISOString(),
+    }));
+
+    const mappedMembers = trip.members.map((m) => ({
+      user: { id: m.user.id, name: m.user.name, email: m.user.email },
+    }));
+
+    const computedSettlements = computeSettlements(mappedMembers, approvedExpenses, settlementRecords);
+    const pairTx = computedSettlements.find((tx) => tx.fromUser.id === fromUserId && tx.toUser.id === toUserId);
+    const currentOutstanding = pairTx ? pairTx.amount : 0;
+
+    if (roundedAmount > currentOutstanding + 0.01) {
+      throw new Error(
+        `Settlement amount (${trip.currency}${roundedAmount}) cannot exceed current outstanding debt (${trip.currency}${currentOutstanding}).`
+      );
+    }
 
     const existingPending = await prisma.settlement.findFirst({
       where: { tripId, fromUserId, toUserId, status: 'PENDING' },
     });
     if (existingPending && status === 'PENDING') {
-      throw new Error('A settlement approval request is already pending for this payment.');
+      throw new Error('A settlement approval request is already pending for this payment. Please wait for host approval.');
     }
 
     const existingRollback = await prisma.settlement.findFirst({
@@ -809,39 +867,27 @@ export const dbStore = {
       throw new Error('A settlement rollback request is currently pending for this payment.');
     }
 
-    const existingConfirmed = await prisma.settlement.findFirst({
-      where: { tripId, fromUserId, toUserId, status: { in: ['CONFIRMED', 'COMPLETED'] } },
+    // Always create a new distinct settlement record for this partial/full payment
+    const settlement = await prisma.settlement.create({
+      data: {
+        id: generateObjectId(),
+        tripId,
+        fromUserId,
+        toUserId,
+        amount: roundedAmount,
+        status,
+        note: note ? note.trim() : null,
+      },
+      include: { fromUser: true, toUser: true },
     });
-
-    let settlement;
-    if (existingConfirmed) {
-      settlement = await prisma.settlement.update({
-        where: { id: existingConfirmed.id },
-        data: { amount, status, note, updatedAt: new Date() },
-        include: { fromUser: true, toUser: true },
-      });
-    } else {
-      settlement = await prisma.settlement.create({
-        data: {
-          id: generateObjectId(),
-          tripId,
-          fromUserId,
-          toUserId,
-          amount,
-          status,
-          note,
-        },
-        include: { fromUser: true, toUser: true },
-      });
-    }
 
     const actionType = status === 'CONFIRMED' ? 'SETTLEMENT_CONFIRMED' : 'SETTLEMENT_MARKED';
     await logActivity(
       tripId,
       fromUserId,
       actionType,
-      `${fromUser.name} ${status === 'CONFIRMED' ? 'confirmed' : 'requested'} settlement of ${amount} to ${toUser.name} (Pending Host approval)`,
-      amount
+      `${fromUser.name} ${status === 'CONFIRMED' ? 'confirmed' : 'requested'} settlement of ${trip.currency}${roundedAmount} to ${toUser.name}${status === 'PENDING' ? ' (Pending Host approval)' : ''}`,
+      roundedAmount
     );
 
     return {
@@ -878,6 +924,60 @@ export const dbStore = {
     const isAdmin = currentMember?.role === 'ADMIN' || settlement.trip.createdById === currentUserId;
     const isReceiver = settlement.toUserId === currentUserId;
     const isPayer = settlement.fromUserId === currentUserId;
+
+    // Re-validate against current outstanding balance on approval
+    if (targetStatus === 'CONFIRMED' && settlement.status === 'PENDING') {
+      const trip = await prisma.trip.findUnique({
+        where: { id: tripId },
+        include: {
+          members: { include: { user: userSelect } },
+          expenses: {
+            include: {
+              paidBy: userSelect,
+              createdBy: userSelect,
+              participants: { include: { user: userSelect } },
+            },
+          },
+          settlements: { include: { fromUser: userSelect, toUser: userSelect } },
+        },
+      });
+      if (trip) {
+        const approvedExpenses = trip.expenses
+          .filter((e) => e.status === 'APPROVED')
+          .map((e) => ({
+            ...e,
+            category: e.category as CategoryType,
+            date: e.date.toISOString(),
+            createdAt: e.createdAt.toISOString(),
+            updatedAt: e.updatedAt.toISOString(),
+            status: e.status as any,
+            participants: e.participants.map((p) => ({ ...p, user: p.user })),
+          }));
+
+        const settlementRecords = trip.settlements.map((s) => ({
+          ...s,
+          status: s.status as any,
+          createdAt: s.createdAt.toISOString(),
+          updatedAt: s.updatedAt.toISOString(),
+        }));
+
+        const mappedMembers = trip.members.map((m) => ({
+          user: { id: m.user.id, name: m.user.name, email: m.user.email },
+        }));
+
+        const computedSettlements = computeSettlements(mappedMembers, approvedExpenses, settlementRecords);
+        const pairTx = computedSettlements.find(
+          (tx) => tx.fromUser.id === settlement.fromUserId && tx.toUser.id === settlement.toUserId
+        );
+        const currentOutstanding = pairTx ? pairTx.amount : 0;
+
+        if (settlement.amount > currentOutstanding + 0.01) {
+          throw new Error(
+            `Cannot approve settlement: requested amount (${trip.currency}${settlement.amount}) exceeds current outstanding debt (${trip.currency}${currentOutstanding}).`
+          );
+        }
+      }
+    }
 
     // Validate state transitions & permissions
     if (targetStatus === 'CONFIRMED' || targetStatus === 'REJECTED') {

@@ -57,6 +57,6 @@ export async function POST(
 
     return NextResponse.json({ record });
   } catch (error: any) {
-    return NextResponse.json({ error: error.message || 'Failed to update settlement' }, { status: 500 });
+    return NextResponse.json({ error: error.message || 'Failed to update settlement' }, { status: 400 });
   }
 }

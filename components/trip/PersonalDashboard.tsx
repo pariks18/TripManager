@@ -6,6 +6,7 @@ import { formatCurrency } from '@/lib/utils';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { MemberCard } from '@/components/member/MemberCard';
+import { SettleUpModal } from '@/components/settlement/SettleUpModal';
 import { Wallet, ArrowUpRight, ArrowDownLeft, CheckCircle2, ArrowRight, Sparkles, Users } from 'lucide-react';
 
 interface PersonalDashboardProps {
@@ -35,6 +36,9 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = React.memo(({
   isAdmin = false,
   onMemberRemoved,
 }) => {
+  const [selectedTx, setSelectedTx] = useState<SettlementTransaction | null>(null);
+  const [isSettleModalOpen, setIsSettleModalOpen] = useState(false);
+
   const isNetPositive = netBalance > 0;
   const isNetNegative = netBalance < 0;
 
@@ -45,6 +49,15 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = React.memo(({
   // Outgoing settlements (people you owe)
   const outgoingSettlements = settlements.filter((s) => s.fromUser.id === currentUserId);
   const totalOutgoing = outgoingSettlements.reduce((sum, s) => sum + s.amount, 0);
+
+  const handleSettleClick = (tx: SettlementTransaction) => {
+    if (tripId) {
+      setSelectedTx(tx);
+      setIsSettleModalOpen(true);
+    } else {
+      onMarkSettled(tx);
+    }
+  };
 
   return (
     <div className="space-y-5">
@@ -206,10 +219,10 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = React.memo(({
                   </span>
                   <Button
                     size="sm"
-                    onClick={() => onMarkSettled(tx)}
+                    onClick={() => handleSettleClick(tx)}
                     className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1.5 rounded-xl"
                   >
-                    <CheckCircle2 className="w-3.5 h-3.5 mr-1" /> Mark Settled
+                    <CheckCircle2 className="w-3.5 h-3.5 mr-1" /> Settle Up
                   </Button>
                 </div>
               </div>
@@ -248,6 +261,22 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = React.memo(({
             ))}
           </div>
         </div>
+      )}
+
+      {/* Settle Up Modal */}
+      {tripId && (
+        <SettleUpModal
+          isOpen={isSettleModalOpen}
+          onClose={() => setIsSettleModalOpen(false)}
+          tripId={tripId}
+          currency={currency}
+          transaction={selectedTx}
+          currentUserId={currentUserId}
+          isAdmin={isAdmin}
+          onSuccess={() => {
+            if (onMemberRemoved) onMemberRemoved();
+          }}
+        />
       )}
     </div>
   );

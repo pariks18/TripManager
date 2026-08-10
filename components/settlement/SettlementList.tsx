@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { SettlementRecordDetail, SettlementTransaction } from '@/types';
+import { SettlementRecordDetail, SettlementTransaction, TripMemberDetail } from '@/types';
 import { Avatar } from '@/components/ui/Avatar';
 import { formatCurrency } from '@/lib/utils';
+import { SettleUpModal } from './SettleUpModal';
 import {
   ArrowRight,
   CheckCircle2,
@@ -16,6 +17,8 @@ import {
   Undo2,
   AlertTriangle,
   History,
+  Plus,
+  FileText,
 } from 'lucide-react';
 
 interface SettlementListProps {
@@ -23,6 +26,7 @@ interface SettlementListProps {
   settlementRecords?: SettlementRecordDetail[];
   currency: string;
   currentUserId: string;
+  members?: TripMemberDetail[];
   isAdmin?: boolean;
   tripId?: string;
   onRefresh?: () => void;
@@ -33,6 +37,7 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
   settlementRecords = [],
   currency,
   currentUserId,
+  members = [],
   isAdmin = false,
   tripId,
   onRefresh,
@@ -40,6 +45,10 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [submittingId, setSubmittingId] = useState<string | null>(null);
   const [rollbackConfirmId, setRollbackConfirmId] = useState<string | null>(null);
+
+  // Settle Up Modal State
+  const [isSettleModalOpen, setIsSettleModalOpen] = useState(false);
+  const [settleModalTx, setSettleModalTx] = useState<SettlementTransaction | null>(null);
 
   const pendingRecords = React.useMemo(() => settlementRecords.filter((r) => r.status === 'PENDING'), [settlementRecords]);
   const rollbackRecords = React.useMemo(() => settlementRecords.filter((r) => r.status === 'ROLLBACK_REQUESTED'), [settlementRecords]);
@@ -53,29 +62,9 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
     setTimeout(() => setCopiedId(null), 2000);
   };
 
-  const handleMarkAsSettled = async (tx: SettlementTransaction) => {
-    if (!tripId) return;
-    setSubmittingId(tx.id);
-    try {
-      const res = await fetch(`/api/trips/${tripId}/settlement`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          fromUserId: tx.fromUser.id,
-          toUserId: tx.toUser.id,
-          amount: tx.amount,
-          status: 'PENDING',
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to submit settlement request');
-
-      if (onRefresh) onRefresh();
-    } catch (err: any) {
-      alert(err.message || 'Failed to submit settlement request');
-    } finally {
-      setSubmittingId(null);
-    }
+  const handleOpenSettleModal = (tx: SettlementTransaction | null) => {
+    setSettleModalTx(tx);
+    setIsSettleModalOpen(true);
   };
 
   const handleApproveSettlement = async (settlementId: string) => {
@@ -205,6 +194,13 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
               const isReceiver = record.toUserId === currentUserId;
               const canApprove = isReceiver || isAdmin;
 
+              // Find live outstanding balance between this pair
+              const pairTx = settlements.find(
+                (s) => s.fromUser.id === record.fromUserId && s.toUser.id === record.toUserId
+              );
+              const currentOutstanding = pairTx ? pairTx.amount : 0;
+              const remainingAfterApproval = Math.max(0, Math.round((currentOutstanding - record.amount) * 100) / 100);
+
               return (
                 <div
                   key={record.id}
@@ -236,6 +232,28 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
                       </span>
                       <Avatar name={record.toUser.name} size="sm" />
                     </div>
+                  </div>
+
+                  {/* Calculation Breakdown Preview */}
+                  <div className="bg-slate-50 border border-slate-100 rounded-xl p-2.5 space-y-1 text-[11px] text-slate-600">
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Current Outstanding:</span>
+                      <span className="font-bold text-slate-900">{formatCurrency(currentOutstanding, currency)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-amber-700 font-semibold">Amount Being Settled:</span>
+                      <span className="font-extrabold text-amber-800">- {formatCurrency(record.amount, currency)}</span>
+                    </div>
+                    <div className="flex justify-between pt-1 border-t border-slate-200/60 font-bold">
+                      <span className="text-slate-700">Remaining After Approval:</span>
+                      <span className="font-mono text-emerald-700">{formatCurrency(remainingAfterApproval, currency)}</span>
+                    </div>
+                    {record.note && (
+                      <div className="pt-1 text-slate-700 italic flex items-center gap-1">
+                        <FileText className="w-3 h-3 text-slate-400 shrink-0" />
+                        <span>Note: "{record.note}"</span>
+                      </div>
+                    )}
                   </div>
 
                   {/* Actions & Status */}
@@ -374,13 +392,24 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
       )}
 
       {/* 2. Debt Optimization Header */}
-      <div className="bg-blue-50/70 border border-blue-200/80 rounded-3xl p-4 flex items-center gap-3">
-        <div className="p-2.5 bg-blue-100 text-blue-700 rounded-2xl shrink-0">
-          <Wallet className="w-5 h-5" />
+      <div className="bg-blue-50/70 border border-blue-200/80 rounded-3xl p-4 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 bg-blue-100 text-blue-700 rounded-2xl shrink-0">
+            <Wallet className="w-5 h-5" />
+          </div>
+          <p className="text-xs text-blue-900 leading-relaxed font-medium">
+            <span className="font-bold">Debt Optimization Engine:</span> We consolidated all expense shares down to <span className="underline font-bold">{settlements.length}</span> minimal transfer{settlements.length > 1 ? 's' : ''}.
+          </p>
         </div>
-        <p className="text-xs text-blue-900 leading-relaxed font-medium">
-          <span className="font-bold">Debt Optimization Engine:</span> We consolidated all expense shares down to <span className="underline font-bold">{settlements.length}</span> minimal transfer{settlements.length > 1 ? 's' : ''}.
-        </p>
+
+        {tripId && (
+          <button
+            onClick={() => handleOpenSettleModal(null)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-white hover:bg-blue-50 text-blue-700 border border-blue-200 rounded-xl shadow-sm transition-all shrink-0"
+          >
+            <Plus className="w-3.5 h-3.5" /> Record Settlement / Advance
+          </button>
+        )}
       </div>
 
       {/* 3. Calculated Minimal Transfer List */}
@@ -461,12 +490,12 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
                     </span>
                   ) : (
                     <button
-                      onClick={() => handleMarkAsSettled(tx)}
+                      onClick={() => handleOpenSettleModal(tx)}
                       disabled={submittingId === tx.id}
                       className="flex items-center gap-1.5 text-xs font-bold px-3.5 py-1.5 rounded-2xl bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm transition-all"
                     >
                       <CheckCircle2 className="w-4 h-4" />
-                      {submittingId === tx.id ? 'Submitting...' : 'Mark as Settled'}
+                      Settle Up
                     </button>
                   )}
                 </div>
@@ -512,6 +541,11 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
                     <span className="font-bold text-slate-900">{rec.fromUser.name}</span>
                     <span className="text-slate-400">paid</span>
                     <span className="font-bold text-slate-900">{rec.toUser.name}</span>
+                    {rec.note && (
+                      <span className="text-[11px] text-slate-500 italic bg-white px-2 py-0.5 rounded-lg border border-slate-200">
+                        "{rec.note}"
+                      </span>
+                    )}
                   </div>
 
                   <div className="flex items-center gap-2">
@@ -563,6 +597,9 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
                   <span className="font-bold text-slate-700 line-through">{rec.fromUser.name}</span>
                   <span className="text-slate-400">paid</span>
                   <span className="font-bold text-slate-700 line-through">{rec.toUser.name}</span>
+                  {rec.note && (
+                    <span className="text-[10px] text-slate-500 italic">"{rec.note}"</span>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-2">
@@ -583,6 +620,23 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
             ))}
           </div>
         </div>
+      )}
+
+      {/* Settle Up Modal */}
+      {tripId && (
+        <SettleUpModal
+          isOpen={isSettleModalOpen}
+          onClose={() => setIsSettleModalOpen(false)}
+          tripId={tripId}
+          currency={currency}
+          transaction={settleModalTx}
+          members={members}
+          currentUserId={currentUserId}
+          isAdmin={isAdmin}
+          onSuccess={() => {
+            if (onRefresh) onRefresh();
+          }}
+        />
       )}
 
       {/* Rollback Request Confirmation Modal */}
