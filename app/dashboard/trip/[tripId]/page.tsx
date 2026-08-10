@@ -189,7 +189,7 @@ export default function TripDashboardPage() {
           fromUserId: tx.fromUser.id,
           toUserId: tx.toUser.id,
           amount: tx.amount,
-          status: 'CONFIRMED',
+          status: 'PENDING',
         }),
       });
       if (!res.ok) throw new Error('Failed to record settlement');

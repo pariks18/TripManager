@@ -14,11 +14,22 @@ export async function PATCH(
   try {
     const { action, note } = await request.json();
 
-    if (!action || !['APPROVE', 'REJECT', 'CONFIRM'].includes(action)) {
+    if (!action || !['APPROVE', 'REJECT', 'CONFIRM', 'REQUEST_ROLLBACK', 'APPROVE_ROLLBACK', 'REJECT_ROLLBACK'].includes(action)) {
       return NextResponse.json({ error: 'Invalid settlement action' }, { status: 400 });
     }
 
-    const targetStatus = action === 'REJECT' ? 'REJECTED' : 'CONFIRMED';
+    let targetStatus: 'CONFIRMED' | 'REJECTED' | 'ROLLBACK_REQUESTED' | 'ROLLED_BACK' = 'CONFIRMED';
+    if (action === 'REJECT') {
+      targetStatus = 'REJECTED';
+    } else if (action === 'REQUEST_ROLLBACK') {
+      targetStatus = 'ROLLBACK_REQUESTED';
+    } else if (action === 'APPROVE_ROLLBACK') {
+      targetStatus = 'ROLLED_BACK';
+    } else if (action === 'REJECT_ROLLBACK') {
+      targetStatus = 'CONFIRMED';
+    } else {
+      targetStatus = 'CONFIRMED';
+    }
 
     const record = await dbStore.updateSettlementStatus(
       params.tripId,

@@ -39,7 +39,7 @@ export function calculateMemberBalances(
   // Incorporate CONFIRMED / COMPLETED settlements
   if (settlements && settlements.length > 0) {
     const confirmedSettlements = settlements.filter(
-      (s) => s.status === 'CONFIRMED' || s.status === 'COMPLETED'
+      (s) => s.status === 'CONFIRMED' || s.status === 'COMPLETED' || s.status === 'ROLLBACK_REQUESTED'
     );
 
     confirmedSettlements.forEach((s) => {

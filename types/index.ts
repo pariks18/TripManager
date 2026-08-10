@@ -112,6 +112,9 @@ export interface ActivityDetail {
     | 'SETTLEMENT_MARKED' 
     | 'SETTLEMENT_CONFIRMED'
     | 'SETTLEMENT_REJECTED'
+    | 'SETTLEMENT_ROLLBACK_REQUESTED'
+    | 'SETTLEMENT_ROLLBACK_APPROVED'
+    | 'SETTLEMENT_ROLLBACK_REJECTED'
     | 'MEMBER_REMOVED'
     | 'ADVANCE_FUND_UPDATED'
     | 'ADVANCE_CONTRIBUTION_SUBMITTED'
@@ -139,7 +142,7 @@ export interface SettlementRecordDetail {
   toUserId: string;
   toUser: UserSummary;
   amount: number;
-  status: 'PENDING' | 'CONFIRMED' | 'REJECTED' | 'COMPLETED';
+  status: 'PENDING' | 'CONFIRMED' | 'REJECTED' | 'COMPLETED' | 'ROLLBACK_REQUESTED' | 'ROLLED_BACK';
   note?: string | null;
   createdAt: string;
   updatedAt: string;

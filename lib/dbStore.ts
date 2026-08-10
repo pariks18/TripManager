@@ -864,14 +864,28 @@ export const dbStore = {
     const toUser = await prisma.user.findUnique({ where: { id: toUserId } });
     if (!fromUser || !toUser) throw new Error('Users not found');
 
-    const existing = await prisma.settlement.findFirst({
-      where: { tripId, fromUserId, toUserId, status: { in: ['PENDING', 'CONFIRMED'] } },
+    const existingPending = await prisma.settlement.findFirst({
+      where: { tripId, fromUserId, toUserId, status: 'PENDING' },
+    });
+    if (existingPending && status === 'PENDING') {
+      throw new Error('A settlement approval request is already pending for this payment.');
+    }
+
+    const existingRollback = await prisma.settlement.findFirst({
+      where: { tripId, fromUserId, toUserId, status: 'ROLLBACK_REQUESTED' },
+    });
+    if (existingRollback && status === 'PENDING') {
+      throw new Error('A settlement rollback request is currently pending for this payment.');
+    }
+
+    const existingConfirmed = await prisma.settlement.findFirst({
+      where: { tripId, fromUserId, toUserId, status: { in: ['CONFIRMED', 'COMPLETED'] } },
     });
 
     let settlement;
-    if (existing) {
+    if (existingConfirmed) {
       settlement = await prisma.settlement.update({
-        where: { id: existing.id },
+        where: { id: existingConfirmed.id },
         data: { amount, status, note, updatedAt: new Date() },
         include: { fromUser: true, toUser: true },
       });
@@ -895,7 +909,7 @@ export const dbStore = {
       tripId,
       fromUserId,
       actionType,
-      `${fromUser.name} ${status === 'CONFIRMED' ? 'confirmed' : 'marked'} settlement of ${amount} to ${toUser.name}`,
+      `${fromUser.name} ${status === 'CONFIRMED' ? 'confirmed' : 'requested'} settlement of ${amount} to ${toUser.name} (Pending Host approval)`,
       amount
     );
 
@@ -918,7 +932,7 @@ export const dbStore = {
     tripId: string,
     settlementId: string,
     currentUserId: string,
-    status: 'CONFIRMED' | 'REJECTED' | 'COMPLETED',
+    targetStatus: 'CONFIRMED' | 'REJECTED' | 'COMPLETED' | 'ROLLBACK_REQUESTED' | 'ROLLED_BACK',
     note?: string
   ): Promise<SettlementRecordDetail> {
     await ensureDatabaseSeeded();
@@ -932,26 +946,73 @@ export const dbStore = {
     const currentMember = settlement.trip.members.find((m) => m.userId === currentUserId);
     const isAdmin = currentMember?.role === 'ADMIN' || settlement.trip.createdById === currentUserId;
     const isReceiver = settlement.toUserId === currentUserId;
+    const isPayer = settlement.fromUserId === currentUserId;
 
-    if (!isReceiver && !isAdmin) {
-      throw new Error('Forbidden: Only the payment recipient or Super Host/Admin can update settlement status.');
+    // Validate state transitions & permissions
+    if (targetStatus === 'CONFIRMED' || targetStatus === 'REJECTED') {
+      if (settlement.status === 'ROLLBACK_REQUESTED') {
+        // Rejecting rollback: client or admin can reject the rollback, reverting status to CONFIRMED
+        if (!isPayer && !isAdmin) {
+          throw new Error('Forbidden: Only the client (payer) or Super Host/Admin can reject a rollback request.');
+        }
+      } else {
+        // Approving or rejecting a pending settlement request
+        if (!isReceiver && !isAdmin) {
+          throw new Error('Forbidden: Only the payment recipient or Super Host/Admin can approve/reject settlement requests.');
+        }
+      }
+    } else if (targetStatus === 'ROLLBACK_REQUESTED') {
+      // Initiating rollback request on a confirmed settlement
+      if (!isReceiver && !isAdmin) {
+        throw new Error('Forbidden: Only the Super Host/Admin or recipient can request a settlement rollback.');
+      }
+      if (settlement.status !== 'CONFIRMED' && settlement.status !== 'COMPLETED') {
+        throw new Error('Invalid action: Only confirmed settlements can be requested for rollback.');
+      }
+    } else if (targetStatus === 'ROLLED_BACK') {
+      // Client approving rollback request
+      if (!isPayer && !isAdmin) {
+        throw new Error('Forbidden: Only the client (payer) or Super Host/Admin can approve a settlement rollback.');
+      }
+      if (settlement.status !== 'ROLLBACK_REQUESTED') {
+        throw new Error('Invalid action: No rollback request is currently pending for this settlement.');
+      }
     }
 
     const updated = await prisma.settlement.update({
       where: { id: settlementId },
-      data: { status, note: note !== undefined ? note : settlement.note, updatedAt: new Date() },
+      data: { status: targetStatus, note: note !== undefined ? note : settlement.note, updatedAt: new Date() },
       include: { fromUser: true, toUser: true },
     });
 
     const currentUser = await prisma.user.findUnique({ where: { id: currentUserId } });
-    const actionType = status === 'REJECTED' ? 'SETTLEMENT_REJECTED' : 'SETTLEMENT_CONFIRMED';
-    const verb = status === 'REJECTED' ? 'rejected' : 'approved';
+    let actionType: ActivityDetail['actionType'] = 'SETTLEMENT_CONFIRMED';
+    let activityText = '';
+
+    if (targetStatus === 'CONFIRMED') {
+      if (settlement.status === 'ROLLBACK_REQUESTED') {
+        actionType = 'SETTLEMENT_ROLLBACK_REJECTED';
+        activityText = `${currentUser?.name || 'User'} rejected settlement rollback. Settlement of ${settlement.trip.currency || '₹'}${settlement.amount} between ${settlement.fromUser.name} and ${settlement.toUser.name} remains valid.`;
+      } else {
+        actionType = 'SETTLEMENT_CONFIRMED';
+        activityText = `${currentUser?.name || 'User'} approved settlement of ${settlement.trip.currency || '₹'}${settlement.amount} from ${settlement.fromUser.name} to ${settlement.toUser.name}`;
+      }
+    } else if (targetStatus === 'REJECTED') {
+      actionType = 'SETTLEMENT_REJECTED';
+      activityText = `${currentUser?.name || 'User'} rejected settlement request of ${settlement.trip.currency || '₹'}${settlement.amount} from ${settlement.fromUser.name} to ${settlement.toUser.name}`;
+    } else if (targetStatus === 'ROLLBACK_REQUESTED') {
+      actionType = 'SETTLEMENT_ROLLBACK_REQUESTED';
+      activityText = `${currentUser?.name || 'User'} requested rollback of settlement (${settlement.trip.currency || '₹'}${settlement.amount}) with ${settlement.fromUser.name} (Pending client approval)`;
+    } else if (targetStatus === 'ROLLED_BACK') {
+      actionType = 'SETTLEMENT_ROLLBACK_APPROVED';
+      activityText = `${currentUser?.name || 'User'} approved rollback of settlement (${settlement.trip.currency || '₹'}${settlement.amount}). Settlement reversed to unsettled.`;
+    }
 
     await logActivity(
       tripId,
       currentUserId,
       actionType,
-      `${currentUser?.name || 'User'} ${verb} settlement of ${settlement.trip.currency || '₹'}${settlement.amount} from ${settlement.fromUser.name} to ${settlement.toUser.name}`,
+      activityText,
       settlement.amount
     );
 

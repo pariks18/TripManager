@@ -136,7 +136,7 @@ model Settlement {
   fromUserId String   @db.ObjectId
   toUserId   String   @db.ObjectId
   amount     Float
-  status     String   @default("PENDING") // PENDING, CONFIRMED, REJECTED, COMPLETED
+  status     String   @default("PENDING") // PENDING, CONFIRMED, REJECTED, COMPLETED, ROLLBACK_REQUESTED, ROLLED_BACK
   note       String?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
