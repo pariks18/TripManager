@@ -50,7 +50,7 @@
   "app/dashboard/trip/[tripId]/page.tsx -> @/components/trip/TripWalletView": {
     "id": 2996,
     "files": [
-      "static/chunks/996.a568c047b3b6fb5c.js"
+      "static/chunks/996.bfbc5fda68fc86ea.js"
     ]
   }
 }

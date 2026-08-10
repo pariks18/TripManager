@@ -2134,6 +2134,40 @@ export const dbStore = {
     return true;
   },
 
+  async deleteAdvanceContribution(contributionId: string, adminUserId: string, reason?: string): Promise<boolean> {
+    await ensureDatabaseSeeded();
+    const contrib = await prisma.advanceContribution.findUnique({
+      where: { id: contributionId },
+      include: { trip: { include: { members: true } }, user: true },
+    });
+    if (!contrib) throw new Error('Advance contribution record not found');
+
+    const adminMember = contrib.trip.members.find((m) => m.userId === adminUserId);
+    const isAdmin = adminMember?.role === 'ADMIN' || contrib.trip.createdById === adminUserId;
+    if (!isAdmin) throw new Error('Forbidden: Only Super Host / Trip Admin can delete or void wallet contributions.');
+
+    const adminUser = await prisma.user.findUnique({ where: { id: adminUserId } });
+
+    await prisma.advanceContribution.update({
+      where: { id: contributionId },
+      data: {
+        status: 'DELETED',
+        rejectionReason: reason ? `Deleted by ${adminUser?.name || 'Admin'}: ${reason}` : `Deleted by ${adminUser?.name || 'Admin'}`,
+        updatedAt: new Date(),
+      },
+    });
+
+    await logActivity(
+      contrib.tripId,
+      adminUserId,
+      'ADVANCE_CONTRIBUTION_REJECTED',
+      `${adminUser?.name || 'Admin'} deleted/voided ${contrib.user.name}'s advance contribution of ${contrib.trip.currency}${contrib.amount}${reason ? ` (Reason: ${reason})` : ''}`,
+      contrib.amount
+    );
+
+    return true;
+  },
+
   async getTripWalletSummary(tripId: string): Promise<TripWalletSummary> {
     await ensureDatabaseSeeded();
     const trip = await prisma.trip.findUnique({

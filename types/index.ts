@@ -216,7 +216,7 @@ export interface AdvanceContributionDetail {
   amount: number;
   utr?: string | null;
   screenshotUrl?: string | null;
-  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'DELETED';
   rejectionReason?: string | null;
   note?: string | null;
   createdAt: string;
