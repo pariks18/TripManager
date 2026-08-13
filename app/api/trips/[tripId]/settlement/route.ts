@@ -40,7 +40,7 @@ export async function POST(
   }
 
   try {
-    const { fromUserId, toUserId, amount, status, note } = await request.json();
+    const { fromUserId, toUserId, amount, status, note, isAdvance } = await request.json();
 
     if (!fromUserId || !toUserId || !amount || amount <= 0) {
       return NextResponse.json({ error: 'Invalid settlement payload' }, { status: 400 });
@@ -52,7 +52,8 @@ export async function POST(
       toUserId,
       amount,
       (status as SettlementRecordDetail['status']) || 'PENDING',
-      note
+      note,
+      Boolean(isAdvance)
     );
 
     return NextResponse.json({ record });

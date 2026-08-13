@@ -1,4 +1,5 @@
 import { prisma } from './prisma';
+import { hashPassword, comparePassword } from './auth';
 import { generateTripCode, generateObjectId } from './utils';
 import { calculateMemberBalances, computeSettlements } from './settlement';
 import { CategoryType, ExpenseDetail, TripSummary, UserSummary, ActivityDetail, SettlementRecordDetail, MemberBalance, MemberAnalytics, DocumentType, UserDocumentDetail, ItineraryItemDetail, StayDetail, PollDetail, PollOptionDetail, PollVoteDetail, MemberLocationDetail } from '@/types';
@@ -419,6 +420,7 @@ export const dbStore = {
         toUser: { id: s.toUser.id, name: s.toUser.name, email: s.toUser.email },
         amount: s.amount,
         status: s.status as SettlementRecordDetail['status'],
+        isAdvance: (s as any).isAdvance ?? false,
         note: s.note,
         createdAt: s.createdAt.toISOString(),
         updatedAt: s.updatedAt.toISOString(),
@@ -789,7 +791,8 @@ export const dbStore = {
     toUserId: string,
     amount: number,
     status: SettlementRecordDetail['status'] = 'PENDING',
-    note?: string
+    note?: string,
+    isAdvance: boolean = false
   ): Promise<SettlementRecordDetail> {
     await ensureDatabaseSeeded();
 
@@ -847,9 +850,11 @@ export const dbStore = {
     const pairTx = computedSettlements.find((tx) => tx.fromUser.id === fromUserId && tx.toUser.id === toUserId);
     const currentOutstanding = pairTx ? pairTx.amount : 0;
 
-    if (roundedAmount > currentOutstanding + 0.01) {
+    const isExplicitAdvance = isAdvance || roundedAmount > currentOutstanding + 0.01;
+
+    if (!isExplicitAdvance && roundedAmount > currentOutstanding + 0.01) {
       throw new Error(
-        `Settlement amount (${trip.currency}${roundedAmount}) cannot exceed current outstanding debt (${trip.currency}${currentOutstanding}).`
+        `Settlement amount (${trip.currency}${roundedAmount}) cannot exceed current outstanding debt (${trip.currency}${currentOutstanding}) unless marked as Advance Payment.`
       );
     }
 
@@ -876,6 +881,7 @@ export const dbStore = {
         toUserId,
         amount: roundedAmount,
         status,
+        isAdvance: isExplicitAdvance,
         note: note ? note.trim() : null,
       },
       include: { fromUser: true, toUser: true },
@@ -886,7 +892,7 @@ export const dbStore = {
       tripId,
       fromUserId,
       actionType,
-      `${fromUser.name} ${status === 'CONFIRMED' ? 'confirmed' : 'requested'} settlement of ${trip.currency}${roundedAmount} to ${toUser.name}${status === 'PENDING' ? ' (Pending Host approval)' : ''}`,
+      `${fromUser.name} ${status === 'CONFIRMED' ? 'confirmed' : 'requested'} ${isExplicitAdvance ? 'Advance Payment' : 'settlement'} of ${trip.currency}${roundedAmount} to ${toUser.name}${status === 'PENDING' ? ' (Pending Host approval)' : ''}`,
       roundedAmount
     );
 
@@ -899,6 +905,7 @@ export const dbStore = {
       toUser: { id: settlement.toUser.id, name: settlement.toUser.name, email: settlement.toUser.email },
       amount: settlement.amount,
       status: settlement.status as SettlementRecordDetail['status'],
+      isAdvance: (settlement as any).isAdvance ?? false,
       note: settlement.note,
       createdAt: settlement.createdAt.toISOString(),
       updatedAt: settlement.updatedAt.toISOString(),
@@ -1056,6 +1063,7 @@ export const dbStore = {
       toUser: { id: updated.toUser.id, name: updated.toUser.name, email: updated.toUser.email },
       amount: updated.amount,
       status: updated.status as SettlementRecordDetail['status'],
+      isAdvance: (updated as any).isAdvance ?? false,
       note: updated.note,
       createdAt: updated.createdAt.toISOString(),
       updatedAt: updated.updatedAt.toISOString(),
@@ -2384,6 +2392,119 @@ export const dbStore = {
         updatedAt: l.updatedAt.toISOString(),
       };
     });
+  },
+
+  async getUserProfile(userId: string) {
+    await ensureDatabaseSeeded();
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new Error('User not found');
+    return {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      mobile: user.mobile,
+      dob: user.dob,
+      gender: user.gender,
+      isEmailVerified: user.isEmailVerified,
+      isMobileVerified: user.isMobileVerified,
+      nationality: user.nationality,
+      preferredCurrency: user.preferredCurrency || '₹',
+      emergencyContactName: user.emergencyContactName,
+      emergencyContactPhone: user.emergencyContactPhone,
+      travelPreferences: user.travelPreferences,
+      createdAt: user.createdAt.toISOString(),
+      updatedAt: user.updatedAt.toISOString(),
+    };
+  },
+
+  async updateUserProfile(userId: string, data: Record<string, any>) {
+    await ensureDatabaseSeeded();
+    
+    // Filter allowed fields
+    const allowedKeys = [
+      'name',
+      'email',
+      'mobile',
+      'dob',
+      'gender',
+      'isEmailVerified',
+      'isMobileVerified',
+      'nationality',
+      'preferredCurrency',
+      'emergencyContactName',
+      'emergencyContactPhone',
+      'travelPreferences',
+    ];
+
+    const updateData: Record<string, any> = {};
+    for (const key of allowedKeys) {
+      if (data[key] !== undefined) {
+        updateData[key] = data[key];
+      }
+    }
+
+    if (updateData.email) {
+      const existing = await prisma.user.findFirst({
+        where: { email: updateData.email, NOT: { id: userId } },
+      });
+      if (existing) {
+        throw new Error('Email address is already in use by another account.');
+      }
+    }
+
+    const updated = await prisma.user.update({
+      where: { id: userId },
+      data: updateData,
+    });
+
+    return {
+      id: updated.id,
+      name: updated.name,
+      email: updated.email,
+      mobile: updated.mobile,
+      dob: updated.dob,
+      gender: updated.gender,
+      isEmailVerified: updated.isEmailVerified,
+      isMobileVerified: updated.isMobileVerified,
+      nationality: updated.nationality,
+      preferredCurrency: updated.preferredCurrency || '₹',
+      emergencyContactName: updated.emergencyContactName,
+      emergencyContactPhone: updated.emergencyContactPhone,
+      travelPreferences: updated.travelPreferences,
+      createdAt: updated.createdAt.toISOString(),
+      updatedAt: updated.updatedAt.toISOString(),
+    };
+  },
+
+  async changeUserPassword(userId: string, currentPassword: string, newPassword: string) {
+    await ensureDatabaseSeeded();
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new Error('User not found');
+
+    const isValid = await comparePassword(currentPassword, user.password);
+    if (!isValid) throw new Error('Current password is incorrect.');
+
+    if (!newPassword || newPassword.length < 6) {
+      throw new Error('New password must be at least 6 characters long.');
+    }
+
+    const hashedPassword = await hashPassword(newPassword);
+    await prisma.user.update({
+      where: { id: userId },
+      data: { password: hashedPassword },
+    });
+
+    return true;
+  },
+
+  async deleteUserAccount(userId: string) {
+    await ensureDatabaseSeeded();
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new Error('User not found');
+
+    // Cascades take care of user documents, member locations, etc.
+    await prisma.user.delete({ where: { id: userId } });
+    return true;
   },
 };
 

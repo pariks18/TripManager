@@ -11,12 +11,37 @@ export interface UserSession {
   id: string;
   name: string;
   email: string;
+  mobile?: string | null;
+  dob?: string | null;
+  gender?: string | null;
+  isEmailVerified?: boolean;
+  isMobileVerified?: boolean;
+  nationality?: string | null;
+  preferredCurrency?: string | null;
+  emergencyContactName?: string | null;
+  emergencyContactPhone?: string | null;
+  travelPreferences?: string | null;
 }
 
 export interface UserSummary {
   id: string;
   name: string;
   email: string;
+  mobile?: string | null;
+  dob?: string | null;
+  gender?: string | null;
+  isEmailVerified?: boolean;
+  isMobileVerified?: boolean;
+  nationality?: string | null;
+  preferredCurrency?: string | null;
+  emergencyContactName?: string | null;
+  emergencyContactPhone?: string | null;
+  travelPreferences?: string | null;
+}
+
+export interface UserProfileDetail extends UserSummary {
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface TripMemberDetail {
@@ -137,6 +162,7 @@ export interface SettlementRecordDetail {
   toUser: UserSummary;
   amount: number;
   status: 'PENDING' | 'CONFIRMED' | 'REJECTED' | 'COMPLETED' | 'ROLLBACK_REQUESTED' | 'ROLLED_BACK';
+  isAdvance?: boolean;
   note?: string | null;
   createdAt: string;
   updatedAt: string;

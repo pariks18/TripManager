@@ -6,9 +6,9 @@
     ]
   },
   "app/dashboard/trip/[tripId]/page.tsx -> @/components/settlement/SettlementList": {
-    "id": 6516,
+    "id": 208,
     "files": [
-      "static/chunks/516.2e5a9e27cbb9af54.js"
+      "static/chunks/208.2aafbbd11c86b681.js"
     ]
   },
   "app/dashboard/trip/[tripId]/page.tsx -> @/components/trip/AnalyticsView": {
@@ -36,15 +36,15 @@
     ]
   },
   "app/dashboard/trip/[tripId]/page.tsx -> @/components/trip/StayView": {
-    "id": 4359,
+    "id": 6563,
     "files": [
-      "static/chunks/359.6e5c35bedb6c17a7.js"
+      "static/chunks/563.f0495728cdef925f.js"
     ]
   },
   "app/dashboard/trip/[tripId]/page.tsx -> @/components/trip/TripTimeline": {
-    "id": 217,
+    "id": 616,
     "files": [
-      "static/chunks/217.d2c20ccc3acc5db2.js"
+      "static/chunks/616.c6eb6f7798ae87e6.js"
     ]
   }
 }
