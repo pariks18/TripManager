@@ -211,82 +211,215 @@ export const dbStore = {
     return { id: u.id, name: u.name, email: u.email };
   },
 
-  async getUserTrips(userId: string): Promise<TripSummary[]> {
-    await ensureDatabaseSeeded();
+  // async getUserTrips(userId: string): Promise<TripSummary[]> {
+  //   await ensureDatabaseSeeded();
 
-    const userMemberships = await prisma.tripMember.findMany({
-      where: { userId },
-      include: {
-        trip: {
-          include: {
-            members: {
-              select: {
-                id: true,
-                tripId: true,
-                userId: true,
-                role: true,
-                joinedAt: true,
-                user: { select: { id: true, name: true, email: true } },
-              },
+  //   const userMemberships = await prisma.tripMember.findMany({
+  //     where: { userId },
+  //     include: {
+  //       trip: {
+  //         include: {
+  //           members: {
+  //             select: {
+  //               id: true,
+  //               tripId: true,
+  //               userId: true,
+  //               role: true,
+  //               joinedAt: true,
+  //               user: { select: { id: true, name: true, email: true } },
+  //             },
+  //           },
+  //           expenses: {
+  //             where: { status: 'APPROVED' },
+  //             select: {
+  //               amount: true,
+  //               paidById: true,
+  //               participants: { select: { userId: true, shareAmount: true } },
+  //             },
+  //           },
+  //         },
+  //       },
+  //     },
+  //   });
+
+  //   return userMemberships.map((m) => {
+  //     const trip = m.trip;
+  //     const totalExpense = trip.expenses.reduce((sum, e) => sum + e.amount, 0);
+
+  //     let paid = 0;
+  //     let share = 0;
+  //     trip.expenses.forEach((e) => {
+  //       if (e.paidById === userId) paid += e.amount;
+  //       e.participants.forEach((p) => {
+  //         if (p.userId === userId) share += p.shareAmount;
+  //       });
+  //     });
+
+  //     return {
+  //       id: trip.id,
+  //       name: trip.name,
+  //       description: trip.description,
+  //       code: trip.code,
+  //       currency: trip.currency,
+  //       budget: trip.budget || null,
+  //       startDate: trip.startDate ? trip.startDate.toISOString() : null,
+  //       endDate: trip.endDate ? trip.endDate.toISOString() : null,
+  //       createdById: trip.createdById || '',
+  //       isLocked: trip.isLocked,
+  //       approvalMode: trip.approvalMode,
+  //       createdAt: trip.createdAt.toISOString(),
+  //       members: trip.members.map((mem) => ({
+  //         id: mem.id,
+  //         tripId: mem.tripId,
+  //         userId: mem.userId,
+  //         role: mem.role as 'ADMIN' | 'MEMBER',
+  //         joinedAt: mem.joinedAt.toISOString(),
+  //         user: { id: mem.user.id, name: mem.user.name, email: mem.user.email },
+  //       })),
+  //       expenses: [],
+  //       editRequests: [],
+  //       activities: [],
+  //       settlementRecords: [],
+  //       totalExpense,
+  //       userBalance: paid - share,
+  //       userTotalPaid: paid,
+  //       userTotalShare: share,
+  //     };
+  //   });
+  // },
+  
+
+  async getUserTrips(userId: string): Promise<TripSummary[]> {
+  const totalStart = performance.now();
+
+  const seedStart = performance.now();
+  await ensureDatabaseSeeded();
+  const seedEnd = performance.now();
+
+  console.log(
+    `[PERF] ensureDatabaseSeeded: ${(seedEnd - seedStart).toFixed(2)}ms`
+  );
+
+  const queryStart = performance.now();
+
+  const userMemberships = await prisma.tripMember.findMany({
+    where: { userId },
+    include: {
+      trip: {
+        include: {
+          members: {
+            select: {
+              id: true,
+              tripId: true,
+              userId: true,
+              role: true,
+              joinedAt: true,
+              user: { select: { id: true, name: true, email: true } },
             },
-            expenses: {
-              where: { status: 'APPROVED' },
-              select: {
-                amount: true,
-                paidById: true,
-                participants: { select: { userId: true, shareAmount: true } },
+          },
+          expenses: {
+            where: { status: 'APPROVED' },
+            select: {
+              amount: true,
+              paidById: true,
+              participants: {
+                select: {
+                  userId: true,
+                  shareAmount: true,
+                },
               },
             },
           },
         },
       },
-    });
+    },
+  });
 
-    return userMemberships.map((m) => {
-      const trip = m.trip;
-      const totalExpense = trip.expenses.reduce((sum, e) => sum + e.amount, 0);
+  const queryEnd = performance.now();
 
-      let paid = 0;
-      let share = 0;
-      trip.expenses.forEach((e) => {
-        if (e.paidById === userId) paid += e.amount;
-        e.participants.forEach((p) => {
-          if (p.userId === userId) share += p.shareAmount;
-        });
+  console.log(
+    `[PERF] prisma query: ${(queryEnd - queryStart).toFixed(2)}ms`
+  );
+
+  const processingStart = performance.now();
+
+  const result = userMemberships.map((m) => {
+    const trip = m.trip;
+    const totalExpense = trip.expenses.reduce(
+      (sum, e) => sum + e.amount,
+      0
+    );
+
+    let paid = 0;
+    let share = 0;
+
+    trip.expenses.forEach((e) => {
+      if (e.paidById === userId) {
+        paid += e.amount;
+      }
+
+      e.participants.forEach((p) => {
+        if (p.userId === userId) {
+          share += p.shareAmount;
+        }
       });
-
-      return {
-        id: trip.id,
-        name: trip.name,
-        description: trip.description,
-        code: trip.code,
-        currency: trip.currency,
-        budget: trip.budget || null,
-        startDate: trip.startDate ? trip.startDate.toISOString() : null,
-        endDate: trip.endDate ? trip.endDate.toISOString() : null,
-        createdById: trip.createdById || '',
-        isLocked: trip.isLocked,
-        approvalMode: trip.approvalMode,
-        createdAt: trip.createdAt.toISOString(),
-        members: trip.members.map((mem) => ({
-          id: mem.id,
-          tripId: mem.tripId,
-          userId: mem.userId,
-          role: mem.role as 'ADMIN' | 'MEMBER',
-          joinedAt: mem.joinedAt.toISOString(),
-          user: { id: mem.user.id, name: mem.user.name, email: mem.user.email },
-        })),
-        expenses: [],
-        editRequests: [],
-        activities: [],
-        settlementRecords: [],
-        totalExpense,
-        userBalance: paid - share,
-        userTotalPaid: paid,
-        userTotalShare: share,
-      };
     });
-  },
+
+    return {
+      id: trip.id,
+      name: trip.name,
+      description: trip.description,
+      code: trip.code,
+      currency: trip.currency,
+      budget: trip.budget || null,
+      startDate: trip.startDate
+        ? trip.startDate.toISOString()
+        : null,
+      endDate: trip.endDate
+        ? trip.endDate.toISOString()
+        : null,
+      createdById: trip.createdById || '',
+      isLocked: trip.isLocked,
+      approvalMode: trip.approvalMode,
+      createdAt: trip.createdAt.toISOString(),
+
+      members: trip.members.map((mem) => ({
+        id: mem.id,
+        tripId: mem.tripId,
+        userId: mem.userId,
+        role: mem.role as 'ADMIN' | 'MEMBER',
+        joinedAt: mem.joinedAt.toISOString(),
+        user: {
+          id: mem.user.id,
+          name: mem.user.name,
+          email: mem.user.email,
+        },
+      })),
+
+      expenses: [],
+      editRequests: [],
+      activities: [],
+      settlementRecords: [],
+
+      totalExpense,
+      userBalance: paid - share,
+      userTotalPaid: paid,
+      userTotalShare: share,
+    };
+  });
+
+  const processingEnd = performance.now();
+
+  console.log(
+    `[PERF] JS processing: ${(processingEnd - processingStart).toFixed(2)}ms`
+  );
+
+  console.log(
+    `[PERF] getUserTrips TOTAL: ${(performance.now() - totalStart).toFixed(2)}ms`
+  );
+
+  return result;
+},
 
   async getTripById(tripId: string, userId: string): Promise<TripSummary | null> {
     await ensureDatabaseSeeded();
