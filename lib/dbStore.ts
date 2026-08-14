@@ -105,9 +105,22 @@ let isSeedingCompleted = false;
 
 async function ensureDatabaseSeeded() {
   if (isSeedingCompleted) return;
+
+  const totalStart = performance.now();
+
   try {
+    const countStart = performance.now();
+
     const userCount = await prisma.user.count();
+
+    console.log(
+      `[PERF] seed user.count: ${(performance.now() - countStart).toFixed(2)}ms`
+    );
+
     if (userCount === 0) {
+
+      const usersStart = performance.now();
+
       for (const u of SEED_USERS) {
         await prisma.user.upsert({
           where: { email: u.email },
@@ -115,14 +128,40 @@ async function ensureDatabaseSeeded() {
           create: u,
         });
       }
+
+      console.log(
+        `[PERF] seed users: ${(performance.now() - usersStart).toFixed(2)}ms`
+      );
+
+
+      const tripsStart = performance.now();
+
       for (const t of SEED_TRIPS) {
         await prisma.trip.create({ data: t });
       }
+
+      console.log(
+        `[PERF] seed trips: ${(performance.now() - tripsStart).toFixed(2)}ms`
+      );
+
+
+      const membersStart = performance.now();
+
       for (const m of SEED_MEMBERS) {
         await prisma.tripMember.create({ data: m });
       }
+
+      console.log(
+        `[PERF] seed members: ${(performance.now() - membersStart).toFixed(2)}ms`
+      );
+
+
+      const expensesStart = performance.now();
+
       for (const e of SEED_EXPENSES) {
-        const shareAmount = e.amount / e.participantUserIds.length;
+        const shareAmount =
+          e.amount / e.participantUserIds.length;
+
         await prisma.expense.create({
           data: {
             id: e.id,
@@ -143,7 +182,14 @@ async function ensureDatabaseSeeded() {
           },
         });
       }
-      // Seed initial activity
+
+      console.log(
+        `[PERF] seed expenses: ${(performance.now() - expensesStart).toFixed(2)}ms`
+      );
+
+
+      const activityStart = performance.now();
+
       await prisma.activity.create({
         data: {
           id: generateObjectId(),
@@ -153,10 +199,23 @@ async function ensureDatabaseSeeded() {
           details: 'Parikshit created Goa Trip 2026',
         },
       });
+
+      console.log(
+        `[PERF] seed activity: ${(performance.now() - activityStart).toFixed(2)}ms`
+      );
     }
+
     isSeedingCompleted = true;
+
+    console.log(
+      `[PERF] seed TOTAL: ${(performance.now() - totalStart).toFixed(2)}ms`
+    );
+
   } catch (err) {
-    console.error('[Database Seeder] Failed to seed initial database:', err);
+    console.error(
+      '[Database Seeder] Failed to seed initial database:',
+      err
+    );
   }
 }
 
