@@ -2,7 +2,7 @@ import { prisma } from './prisma';
 import { hashPassword, comparePassword } from './auth';
 import { generateTripCode, generateObjectId } from './utils';
 import { calculateMemberBalances, computeSettlements } from './settlement';
-import { CategoryType, ExpenseDetail, TripSummary, UserSummary, ActivityDetail, SettlementRecordDetail, MemberBalance, MemberAnalytics, DocumentType, UserDocumentDetail, ItineraryItemDetail, StayDetail, PollDetail, PollOptionDetail, PollVoteDetail, MemberLocationDetail } from '@/types';
+import { CategoryType, ExpenseDetail, TripSummary, UserSummary, ActivityDetail, SettlementRecordDetail, MemberBalance, MemberAnalytics, DocumentType, UserDocumentDetail, ItineraryItemDetail, StayDetail, PollDetail, PollOptionDetail, PollVoteDetail, MemberLocationDetail, WalletDetail, WalletContributionDetail, WalletTransactionDetail } from '@/types';
 
 const SEED_USERS = [
   {
@@ -501,6 +501,12 @@ export const dbStore = {
         settlements: { include: { fromUser: userSelect, toUser: userSelect }, orderBy: { updatedAt: 'desc' } },
         itinerary: { orderBy: [{ dayNumber: 'asc' }, { order: 'asc' }, { createdAt: 'asc' }] },
         stays: { orderBy: { createdAt: 'desc' } },
+        wallet: {
+          include: {
+            contributions: { include: { user: userSelect, approvedBy: userSelect }, orderBy: { createdAt: 'desc' } },
+            transactions: { include: { createdBy: userSelect }, orderBy: { createdAt: 'desc' } },
+          },
+        },
       },
     });
 
@@ -509,14 +515,112 @@ export const dbStore = {
     const approvedExpenses = directTrip.expenses.filter((e) => e.status === 'APPROVED');
     const totalExpense = approvedExpenses.reduce((sum, e) => sum + e.amount, 0);
 
-    let paid = 0;
-    let share = 0;
-    approvedExpenses.forEach((e) => {
-      if (e.paidById === userId) paid += e.amount;
-      e.participants.forEach((p) => {
-        if (p.userId === userId) share += p.shareAmount;
-      });
-    });
+    const formattedWallet: WalletDetail | null = directTrip.wallet
+      ? {
+          id: directTrip.wallet.id,
+          tripId: directTrip.wallet.tripId,
+          balance: directTrip.wallet.balance,
+          totalAdded: directTrip.wallet.totalAdded,
+          totalSpent: directTrip.wallet.totalSpent,
+          createdAt: directTrip.wallet.createdAt.toISOString(),
+          updatedAt: directTrip.wallet.updatedAt.toISOString(),
+          contributions: directTrip.wallet.contributions.map((c) => ({
+            id: c.id,
+            walletId: c.walletId,
+            userId: c.userId,
+            user: { id: c.user.id, name: c.user.name, email: c.user.email },
+            amount: c.amount,
+            status: c.status as WalletContributionDetail['status'],
+            note: c.note,
+            approvedById: c.approvedById,
+            approvedBy: c.approvedBy ? { id: c.approvedBy.id, name: c.approvedBy.name, email: c.approvedBy.email } : null,
+            approvedAt: c.approvedAt ? c.approvedAt.toISOString() : null,
+            createdAt: c.createdAt.toISOString(),
+            updatedAt: c.updatedAt.toISOString(),
+          })),
+          transactions: directTrip.wallet.transactions.map((t) => ({
+            id: t.id,
+            walletId: t.walletId,
+            type: t.type as WalletTransactionDetail['type'],
+            amount: t.amount,
+            description: t.description,
+            expenseId: t.expenseId,
+            contributionId: t.contributionId,
+            createdById: t.createdById,
+            createdBy: { id: t.createdBy.id, name: t.createdBy.name, email: t.createdBy.email },
+            createdAt: t.createdAt.toISOString(),
+          })),
+        }
+      : null;
+
+    const formattedExpenses: ExpenseDetail[] = directTrip.expenses.map((e) => ({
+      id: e.id,
+      tripId: e.tripId,
+      title: e.title,
+      amount: e.amount,
+      category: e.category as CategoryType,
+      paidById: e.paidById,
+      paidBy: { id: e.paidBy.id, name: e.paidBy.name, email: e.paidBy.email },
+      createdById: e.createdById || e.paidById,
+      createdBy: e.createdBy ? { id: e.createdBy.id, name: e.createdBy.name, email: e.createdBy.email } : undefined,
+      lastUpdatedById: e.lastUpdatedById,
+      status: e.status as 'APPROVED' | 'PENDING_APPROVAL' | 'REJECTED',
+      paymentMode: (e.paymentMode as 'PERSONALLY' | 'WALLET') || 'PERSONALLY',
+      walletTransactionId: e.walletTransactionId,
+      rejectionReason: e.rejectionReason,
+      date: e.date.toISOString(),
+      createdAt: e.createdAt.toISOString(),
+      updatedAt: e.updatedAt.toISOString(),
+      receiptUrl: e.receiptUrl,
+      participants: e.participants.map((p) => ({
+        id: p.id,
+        expenseId: p.expenseId,
+        userId: p.userId,
+        shareAmount: p.shareAmount,
+        user: { id: p.user.id, name: p.user.name, email: p.user.email },
+      })),
+      editRequests: e.editRequests?.map((req) => ({
+        id: req.id,
+        expenseId: req.expenseId,
+        requestedById: req.requestedById,
+        requestedBy: { id: req.requestedBy.id, name: req.requestedBy.name, email: req.requestedBy.email },
+        requestType: req.requestType as 'EDIT' | 'DELETE',
+        proposedData: req.proposedData,
+        reason: req.reason,
+        status: req.status as 'PENDING' | 'APPROVED' | 'REJECTED',
+        createdAt: req.createdAt.toISOString(),
+        updatedAt: req.updatedAt.toISOString(),
+      })),
+    }));
+
+    const formattedMembers = directTrip.members.map((mem) => ({
+      id: mem.id,
+      tripId: mem.tripId,
+      userId: mem.userId,
+      role: mem.role as 'ADMIN' | 'MEMBER',
+      joinedAt: mem.joinedAt.toISOString(),
+      user: { id: mem.user.id, name: mem.user.name, email: mem.user.email },
+    }));
+
+    const formattedSettlements: SettlementRecordDetail[] = directTrip.settlements.map((s) => ({
+      id: s.id,
+      tripId: s.tripId,
+      fromUserId: s.fromUserId,
+      fromUser: { id: s.fromUser.id, name: s.fromUser.name, email: s.fromUser.email },
+      toUserId: s.toUserId,
+      toUser: { id: s.toUser.id, name: s.toUser.name, email: s.toUser.email },
+      amount: s.amount,
+      status: s.status as SettlementRecordDetail['status'],
+      note: s.note,
+      createdAt: s.createdAt.toISOString(),
+      updatedAt: s.updatedAt.toISOString(),
+    }));
+
+    const memberBalances = calculateMemberBalances(formattedMembers, formattedExpenses, formattedSettlements, formattedWallet);
+    const userBalanceRec = memberBalances.find((b) => b.user.id === userId);
+    const paid = userBalanceRec?.paid || 0;
+    const share = userBalanceRec?.share || 0;
+    const userBalance = userBalanceRec?.netBalance || 0;
 
     const allEditRequests = directTrip.expenses.flatMap((e) =>
       (e.editRequests || []).map((req) => ({
@@ -546,51 +650,8 @@ export const dbStore = {
       isLocked: directTrip.isLocked,
       approvalMode: directTrip.approvalMode,
       createdAt: directTrip.createdAt.toISOString(),
-      members: directTrip.members.map((mem) => ({
-        id: mem.id,
-        tripId: mem.tripId,
-        userId: mem.userId,
-        role: mem.role as 'ADMIN' | 'MEMBER',
-        joinedAt: mem.joinedAt.toISOString(),
-        user: { id: mem.user.id, name: mem.user.name, email: mem.user.email },
-      })),
-      expenses: directTrip.expenses.map((e) => ({
-        id: e.id,
-        tripId: e.tripId,
-        title: e.title,
-        amount: e.amount,
-        category: e.category as CategoryType,
-        paidById: e.paidById,
-        paidBy: { id: e.paidBy.id, name: e.paidBy.name, email: e.paidBy.email },
-        createdById: e.createdById || e.paidById,
-        createdBy: e.createdBy ? { id: e.createdBy.id, name: e.createdBy.name, email: e.createdBy.email } : undefined,
-        lastUpdatedById: e.lastUpdatedById,
-        status: e.status as 'APPROVED' | 'PENDING_APPROVAL' | 'REJECTED',
-        rejectionReason: e.rejectionReason,
-        date: e.date.toISOString(),
-        createdAt: e.createdAt.toISOString(),
-        updatedAt: e.updatedAt.toISOString(),
-        receiptUrl: e.receiptUrl,
-        participants: e.participants.map((p) => ({
-          id: p.id,
-          expenseId: p.expenseId,
-          userId: p.userId,
-          shareAmount: p.shareAmount,
-          user: { id: p.user.id, name: p.user.name, email: p.user.email },
-        })),
-        editRequests: e.editRequests?.map((req) => ({
-          id: req.id,
-          expenseId: req.expenseId,
-          requestedById: req.requestedById,
-          requestedBy: { id: req.requestedBy.id, name: req.requestedBy.name, email: req.requestedBy.email },
-          requestType: req.requestType as 'EDIT' | 'DELETE',
-          proposedData: req.proposedData,
-          reason: req.reason,
-          status: req.status as 'PENDING' | 'APPROVED' | 'REJECTED',
-          createdAt: req.createdAt.toISOString(),
-          updatedAt: req.updatedAt.toISOString(),
-        })),
-      })),
+      members: formattedMembers,
+      expenses: formattedExpenses,
       editRequests: allEditRequests,
       activities: directTrip.activities?.map((a) => ({
         id: a.id,
@@ -603,20 +664,8 @@ export const dbStore = {
         category: a.category,
         createdAt: a.createdAt.toISOString(),
       })),
-      settlementRecords: directTrip.settlements?.map((s) => ({
-        id: s.id,
-        tripId: s.tripId,
-        fromUserId: s.fromUserId,
-        fromUser: { id: s.fromUser.id, name: s.fromUser.name, email: s.fromUser.email },
-        toUserId: s.toUserId,
-        toUser: { id: s.toUser.id, name: s.toUser.name, email: s.toUser.email },
-        amount: s.amount,
-        status: s.status as SettlementRecordDetail['status'],
-        isAdvance: (s as any).isAdvance ?? false,
-        note: s.note,
-        createdAt: s.createdAt.toISOString(),
-        updatedAt: s.updatedAt.toISOString(),
-      })),
+      settlementRecords: formattedSettlements,
+      wallet: formattedWallet,
       itinerary: directTrip.itinerary?.map((item) => ({
         id: item.id,
         tripId: item.tripId,
@@ -649,7 +698,7 @@ export const dbStore = {
         updatedAt: stay.updatedAt.toISOString(),
       })),
       totalExpense,
-      userBalance: paid - share,
+      userBalance,
       userTotalPaid: paid,
       userTotalShare: share,
     };
@@ -744,6 +793,359 @@ export const dbStore = {
     return fetchedTrip;
   },
 
+  async getOrCreateWallet(tripId: string): Promise<WalletDetail> {
+    await ensureDatabaseSeeded();
+
+    const userSelect = { select: { id: true, name: true, email: true } };
+
+    let wallet = await prisma.wallet.findUnique({
+      where: { tripId },
+      include: {
+        contributions: { include: { user: userSelect, approvedBy: userSelect }, orderBy: { createdAt: 'desc' } },
+        transactions: { include: { createdBy: userSelect }, orderBy: { createdAt: 'desc' } },
+      },
+    });
+
+    if (!wallet) {
+      wallet = await prisma.wallet.create({
+        data: {
+          id: generateObjectId(),
+          tripId,
+          balance: 0,
+          totalAdded: 0,
+          totalSpent: 0,
+        },
+        include: {
+          contributions: { include: { user: userSelect, approvedBy: userSelect }, orderBy: { createdAt: 'desc' } },
+          transactions: { include: { createdBy: userSelect }, orderBy: { createdAt: 'desc' } },
+        },
+      });
+    }
+
+    return {
+      id: wallet.id,
+      tripId: wallet.tripId,
+      balance: wallet.balance,
+      totalAdded: wallet.totalAdded,
+      totalSpent: wallet.totalSpent,
+      createdAt: wallet.createdAt.toISOString(),
+      updatedAt: wallet.updatedAt.toISOString(),
+      contributions: wallet.contributions.map((c) => ({
+        id: c.id,
+        walletId: c.walletId,
+        userId: c.userId,
+        user: { id: c.user.id, name: c.user.name, email: c.user.email },
+        amount: c.amount,
+        status: c.status as WalletContributionDetail['status'],
+        note: c.note,
+        approvedById: c.approvedById,
+        approvedBy: c.approvedBy ? { id: c.approvedBy.id, name: c.approvedBy.name, email: c.approvedBy.email } : null,
+        approvedAt: c.approvedAt ? c.approvedAt.toISOString() : null,
+        createdAt: c.createdAt.toISOString(),
+        updatedAt: c.updatedAt.toISOString(),
+      })),
+      transactions: wallet.transactions.map((t) => ({
+        id: t.id,
+        walletId: t.walletId,
+        type: t.type as WalletTransactionDetail['type'],
+        amount: t.amount,
+        description: t.description,
+        expenseId: t.expenseId,
+        contributionId: t.contributionId,
+        createdById: t.createdById,
+        createdBy: { id: t.createdBy.id, name: t.createdBy.name, email: t.createdBy.email },
+        createdAt: t.createdAt.toISOString(),
+      })),
+    };
+  },
+
+  async contributeToWallet(
+    tripId: string,
+    userId: string,
+    amount: number,
+    note?: string
+  ): Promise<WalletContributionDetail> {
+    await ensureDatabaseSeeded();
+
+    if (!amount || isNaN(amount) || amount <= 0) {
+      throw new Error('Contribution amount must be greater than zero.');
+    }
+
+    const userSelect = { select: { id: true, name: true, email: true } };
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new Error('User not found');
+
+    const wallet = await this.getOrCreateWallet(tripId);
+
+    const contribution = await prisma.walletContribution.create({
+      data: {
+        id: generateObjectId(),
+        walletId: wallet.id,
+        userId,
+        amount: Math.round(amount * 100) / 100,
+        status: 'PENDING',
+        note: note ? note.trim() : null,
+      },
+      include: { user: userSelect, approvedBy: userSelect },
+    });
+
+    const trip = await prisma.trip.findUnique({ where: { id: tripId } });
+    await logActivity(
+      tripId,
+      userId,
+      'WALLET_CONTRIBUTION_SUBMITTED',
+      `${user.name} submitted a wallet contribution of ${trip?.currency || '₹'}${contribution.amount} (Pending Host approval)`,
+      contribution.amount
+    );
+
+    return {
+      id: contribution.id,
+      walletId: contribution.walletId,
+      userId: contribution.userId,
+      user: { id: contribution.user.id, name: contribution.user.name, email: contribution.user.email },
+      amount: contribution.amount,
+      status: contribution.status as WalletContributionDetail['status'],
+      note: contribution.note,
+      approvedById: contribution.approvedById,
+      approvedBy: contribution.approvedBy ? { id: contribution.approvedBy.id, name: contribution.approvedBy.name, email: contribution.approvedBy.email } : null,
+      approvedAt: contribution.approvedAt ? contribution.approvedAt.toISOString() : null,
+      createdAt: contribution.createdAt.toISOString(),
+      updatedAt: contribution.updatedAt.toISOString(),
+    };
+  },
+
+  async processWalletContribution(
+    tripId: string,
+    contributionId: string,
+    hostUserId: string,
+    action: 'APPROVE' | 'REJECT'
+  ): Promise<WalletContributionDetail> {
+    await ensureDatabaseSeeded();
+
+    const userSelect = { select: { id: true, name: true, email: true } };
+    const hostUser = await prisma.user.findUnique({ where: { id: hostUserId } });
+    if (!hostUser) throw new Error('User not found');
+
+    const trip = await prisma.trip.findUnique({
+      where: { id: tripId },
+      include: { members: true },
+    });
+    if (!trip) throw new Error('Trip not found');
+
+    const hostMember = trip.members.find((m) => m.userId === hostUserId);
+    const isHost = hostMember?.role === 'ADMIN' || trip.createdById === hostUserId;
+    if (!isHost) {
+      throw new Error('Forbidden: Only the Trip Host/Admin can approve or reject wallet contributions.');
+    }
+
+    const contribution = await prisma.walletContribution.findUnique({
+      where: { id: contributionId },
+      include: { user: userSelect, wallet: true },
+    });
+    if (!contribution || contribution.wallet.tripId !== tripId) {
+      throw new Error('Wallet contribution not found.');
+    }
+
+    if (contribution.status !== 'PENDING') {
+      throw new Error(`Contribution has already been ${contribution.status.toLowerCase()}.`);
+    }
+
+    if (action === 'REJECT') {
+      const updated = await prisma.walletContribution.update({
+        where: { id: contributionId },
+        data: { status: 'REJECTED', approvedById: hostUserId, approvedAt: new Date() },
+        include: { user: userSelect, approvedBy: userSelect },
+      });
+
+      await logActivity(
+        tripId,
+        hostUserId,
+        'WALLET_CONTRIBUTION_REJECTED',
+        `${hostUser.name} rejected ${contribution.user.name}'s wallet contribution of ${trip.currency}${contribution.amount}`
+      );
+
+      return {
+        id: updated.id,
+        walletId: updated.walletId,
+        userId: updated.userId,
+        user: { id: updated.user.id, name: updated.user.name, email: updated.user.email },
+        amount: updated.amount,
+        status: updated.status as WalletContributionDetail['status'],
+        note: updated.note,
+        approvedById: updated.approvedById,
+        approvedBy: updated.approvedBy ? { id: updated.approvedBy.id, name: updated.approvedBy.name, email: updated.approvedBy.email } : null,
+        approvedAt: updated.approvedAt ? updated.approvedAt.toISOString() : null,
+        createdAt: updated.createdAt.toISOString(),
+        updatedAt: updated.updatedAt.toISOString(),
+      };
+    }
+
+    // APPROVE action with Prisma transaction for consistency and concurrency protection
+    const result = await prisma.$transaction(async (tx) => {
+      const freshContrib = await tx.walletContribution.findUnique({ where: { id: contributionId } });
+      if (!freshContrib || freshContrib.status !== 'PENDING') {
+        throw new Error('Contribution has already been processed.');
+      }
+
+      const updatedContrib = await tx.walletContribution.update({
+        where: { id: contributionId },
+        data: { status: 'APPROVED', approvedById: hostUserId, approvedAt: new Date() },
+        include: { user: userSelect, approvedBy: userSelect },
+      });
+
+      await tx.wallet.update({
+        where: { id: contribution.walletId },
+        data: {
+          balance: { increment: contribution.amount },
+          totalAdded: { increment: contribution.amount },
+        },
+      });
+
+      await tx.walletTransaction.create({
+        data: {
+          id: generateObjectId(),
+          walletId: contribution.walletId,
+          type: 'DEPOSIT',
+          amount: contribution.amount,
+          description: `${contribution.user.name} wallet contribution`,
+          contributionId: contribution.id,
+          createdById: hostUserId,
+        },
+      });
+
+      return updatedContrib;
+    });
+
+    await logActivity(
+      tripId,
+      hostUserId,
+      'WALLET_CONTRIBUTION_APPROVED',
+      `${hostUser.name} approved ${contribution.user.name}'s wallet contribution of ${trip.currency}${contribution.amount}`,
+      contribution.amount
+    );
+
+    return {
+      id: result.id,
+      walletId: result.walletId,
+      userId: result.userId,
+      user: { id: result.user.id, name: result.user.name, email: result.user.email },
+      amount: result.amount,
+      status: result.status as WalletContributionDetail['status'],
+      note: result.note,
+      approvedById: result.approvedById,
+      approvedBy: result.approvedBy ? { id: result.approvedBy.id, name: result.approvedBy.name, email: result.approvedBy.email } : null,
+      approvedAt: result.approvedAt ? result.approvedAt.toISOString() : null,
+      createdAt: result.createdAt.toISOString(),
+      updatedAt: result.updatedAt.toISOString(),
+    };
+  },
+
+  async refundWalletBalance(tripId: string, currentUserId: string): Promise<WalletDetail> {
+    await ensureDatabaseSeeded();
+
+    const userSelect = { select: { id: true, name: true, email: true } };
+    const currentUser = await prisma.user.findUnique({ where: { id: currentUserId } });
+    if (!currentUser) throw new Error('User not found');
+
+    const trip = await prisma.trip.findUnique({
+      where: { id: tripId },
+      include: { members: true },
+    });
+    if (!trip) throw new Error('Trip not found');
+
+    const memberRole = trip.members.find((m) => m.userId === currentUserId)?.role;
+    const isHost = memberRole === 'ADMIN' || trip.createdById === currentUserId;
+    if (!isHost) {
+      throw new Error('Forbidden: Only the Trip Host/Admin can trigger a wallet balance refund.');
+    }
+
+    const walletDetail = await this.getOrCreateWallet(tripId);
+    if (walletDetail.balance <= 0.01) {
+      throw new Error('Wallet balance is zero. Nothing to refund.');
+    }
+
+    const dbWallet = await prisma.wallet.findUnique({
+      where: { tripId },
+      include: {
+        contributions: {
+          where: { status: 'APPROVED' },
+          include: { user: userSelect },
+        },
+      },
+    });
+
+    if (!dbWallet || dbWallet.contributions.length === 0) {
+      throw new Error('No approved wallet contributions found to calculate refunds.');
+    }
+
+    const userContribMap = new Map<string, { user: UserSummary; totalContrib: number }>();
+    let grandTotalContrib = 0;
+
+    dbWallet.contributions.forEach((c) => {
+      grandTotalContrib += c.amount;
+      if (userContribMap.has(c.userId)) {
+        userContribMap.get(c.userId)!.totalContrib += c.amount;
+      } else {
+        userContribMap.set(c.userId, { user: { id: c.user.id, name: c.user.name, email: c.user.email }, totalContrib: c.amount });
+      }
+    });
+
+    if (grandTotalContrib <= 0) {
+      throw new Error('Total approved contributions is zero.');
+    }
+
+    const remainingBalance = dbWallet.balance;
+    const refunds: { user: UserSummary; amount: number }[] = [];
+    let allocatedRefund = 0;
+
+    const entries = Array.from(userContribMap.entries());
+    entries.forEach(([uid, entry], idx) => {
+      let refundAmount = 0;
+      if (idx === entries.length - 1) {
+        refundAmount = Math.round((remainingBalance - allocatedRefund) * 100) / 100;
+      } else {
+        refundAmount = Math.round((remainingBalance * (entry.totalContrib / grandTotalContrib)) * 100) / 100;
+        allocatedRefund += refundAmount;
+      }
+
+      if (refundAmount > 0) {
+        refunds.push({ user: entry.user, amount: refundAmount });
+      }
+    });
+
+    await prisma.$transaction(async (tx) => {
+      for (const r of refunds) {
+        await tx.walletTransaction.create({
+          data: {
+            id: generateObjectId(),
+            walletId: dbWallet.id,
+            type: 'REFUND',
+            amount: r.amount,
+            description: `Wallet refund to ${r.user.name}`,
+            createdById: currentUserId,
+          },
+        });
+      }
+
+      await tx.wallet.update({
+        where: { id: dbWallet.id },
+        data: {
+          balance: 0,
+        },
+      });
+    });
+
+    await logActivity(
+      tripId,
+      currentUserId,
+      'WALLET_REFUND_ISSUED',
+      `${currentUser.name} refunded remaining wallet balance (${trip.currency}${remainingBalance}) to contributors`,
+      remainingBalance
+    );
+
+    return await this.getOrCreateWallet(tripId);
+  },
+
   async addExpense(
     tripId: string,
     title: string,
@@ -752,7 +1154,8 @@ export const dbStore = {
     paidById: string,
     createdById: string,
     participantUserIds: string[],
-    receiptUrl?: string | null
+    receiptUrl?: string | null,
+    paymentMode: 'PERSONALLY' | 'WALLET' = 'PERSONALLY'
   ): Promise<ExpenseDetail> {
     await ensureDatabaseSeeded();
 
@@ -766,72 +1169,113 @@ export const dbStore = {
       throw new Error('Trip is locked by the organizer. New expenses cannot be added.');
     }
 
+    if (paymentMode === 'WALLET') {
+      const wallet = await prisma.wallet.findUnique({ where: { tripId } });
+      if (!wallet || wallet.balance < amount - 0.01) {
+        const avail = wallet ? wallet.balance : 0;
+        throw new Error(`Insufficient group wallet balance. Available: ${trip.currency}${avail}, Expense amount: ${trip.currency}${amount}.`);
+      }
+    }
+
     const shareAmount = participantUserIds.length > 0 ? amount / participantUserIds.length : 0;
     const expenseObjectId = generateObjectId();
 
-    // Check expense approval mode & creator role
     const creatorMember = await prisma.tripMember.findFirst({
       where: { tripId, userId: createdById },
     });
     const isCreatorAdmin = creatorMember?.role === 'ADMIN' || trip.createdById === createdById;
-
-    // Enabled: Every expense added by a member remains Pending until verified by Super Host/Admin.
-    // Super Host/Admin expenses are auto-approved. Disabled: All expenses are auto-approved.
     const status = trip.approvalMode && !isCreatorAdmin ? 'PENDING_APPROVAL' : 'APPROVED';
 
-    const expense = await prisma.expense.create({
-      data: {
-        id: expenseObjectId,
-        tripId,
-        title,
-        amount,
-        category,
-        paidById,
-        createdById,
-        status,
-        receiptUrl: receiptUrl || null,
-        date: new Date(),
-        participants: {
-          create: participantUserIds.map((uid) => ({
+    const result = await prisma.$transaction(async (tx) => {
+      let walletTxId: string | null = null;
+      if (paymentMode === 'WALLET') {
+        const freshWallet = await tx.wallet.findUnique({ where: { tripId } });
+        if (!freshWallet || freshWallet.balance < amount - 0.01) {
+          throw new Error(`Insufficient wallet balance.`);
+        }
+
+        const walletTx = await tx.walletTransaction.create({
+          data: {
             id: generateObjectId(),
-            userId: uid,
-            shareAmount,
-          })),
+            walletId: freshWallet.id,
+            type: 'EXPENSE',
+            amount,
+            description: `Expense: ${title}`,
+            expenseId: expenseObjectId,
+            createdById,
+          },
+        });
+        walletTxId = walletTx.id;
+
+        await tx.wallet.update({
+          where: { id: freshWallet.id },
+          data: {
+            balance: { decrement: amount },
+            totalSpent: { increment: amount },
+          },
+        });
+      }
+
+      const expense = await tx.expense.create({
+        data: {
+          id: expenseObjectId,
+          tripId,
+          title,
+          amount,
+          category,
+          paidById,
+          createdById,
+          status,
+          paymentMode,
+          walletTransactionId: walletTxId,
+          receiptUrl: receiptUrl || null,
+          date: new Date(),
+          participants: {
+            create: participantUserIds.map((uid) => ({
+              id: generateObjectId(),
+              userId: uid,
+              shareAmount,
+            })),
+          },
         },
-      },
-      include: {
-        paidBy: true,
-        createdBy: true,
-        participants: { include: { user: true } },
-      },
+        include: {
+          paidBy: true,
+          createdBy: true,
+          participants: { include: { user: true } },
+        },
+      });
+
+      return expense;
     });
 
     await logActivity(
       tripId,
       createdById,
       'EXPENSE_ADDED',
-      `${creatorUser.name} added expense "${title}" (${trip.currency}${amount})`,
+      `${creatorUser.name} added expense "${title}" (${trip.currency}${amount})${paymentMode === 'WALLET' ? ' [Paid from Wallet]' : ''}`,
       amount,
       category
     );
 
     return {
-      id: expense.id,
-      tripId: expense.tripId,
-      title: expense.title,
-      amount: expense.amount,
-      category: expense.category as CategoryType,
-      paidById: expense.paidById,
-      paidBy: { id: expense.paidBy.id, name: expense.paidBy.name, email: expense.paidBy.email },
-      createdById: expense.createdById,
+      id: result.id,
+      tripId: result.tripId,
+      title: result.title,
+      amount: result.amount,
+      category: result.category as CategoryType,
+      paidById: result.paidById,
+      paidBy: { id: result.paidBy.id, name: result.paidBy.name, email: result.paidBy.email },
+      createdById: result.createdById,
       createdBy: { id: creatorUser.id, name: creatorUser.name, email: creatorUser.email },
-      lastUpdatedById: expense.lastUpdatedById,
-      status: expense.status as 'APPROVED' | 'PENDING_APPROVAL',
-      date: expense.date.toISOString(),
-      createdAt: expense.createdAt.toISOString(),
-      updatedAt: expense.updatedAt.toISOString(),
-      receiptUrl: expense.receiptUrl,
-      participants: expense.participants.map((p) => ({
+      lastUpdatedById: result.lastUpdatedById,
+      status: result.status as 'APPROVED' | 'PENDING_APPROVAL',
+      paymentMode: (result.paymentMode as 'PERSONALLY' | 'WALLET') || 'PERSONALLY',
+      walletTransactionId: result.walletTransactionId,
+      date: result.date.toISOString(),
+      createdAt: result.createdAt.toISOString(),
+      updatedAt: result.updatedAt.toISOString(),
+      receiptUrl: result.receiptUrl,
+      participants: result.participants.map((p) => ({
         id: p.id,
         expenseId: p.expenseId,
         userId: p.userId,
@@ -849,7 +1293,8 @@ export const dbStore = {
     category: CategoryType,
     paidById: string,
     participantUserIds: string[],
-    receiptUrl?: string | null
+    receiptUrl?: string | null,
+    paymentMode: 'PERSONALLY' | 'WALLET' = 'PERSONALLY'
   ): Promise<ExpenseDetail> {
     await ensureDatabaseSeeded();
 
@@ -862,7 +1307,6 @@ export const dbStore = {
     const currentUser = await prisma.user.findUnique({ where: { id: currentUserId } });
     if (!currentUser) throw new Error('User not found');
 
-    // Security Rule: Only expense creator or Trip Admin can edit!
     const memberRole = existingExpense.trip.members.find((m) => m.userId === currentUserId)?.role;
     const isCreator = existingExpense.createdById === currentUserId;
     const isAdmin = memberRole === 'ADMIN';
@@ -875,33 +1319,120 @@ export const dbStore = {
       throw new Error('Trip is locked by the organizer. Expenses cannot be updated.');
     }
 
-    const shareAmount = participantUserIds.length > 0 ? amount / participantUserIds.length : 0;
+    const oldMode = (existingExpense.paymentMode as 'PERSONALLY' | 'WALLET') || 'PERSONALLY';
     const oldAmount = existingExpense.amount;
+    const shareAmount = participantUserIds.length > 0 ? amount / participantUserIds.length : 0;
 
-    await prisma.expenseParticipant.deleteMany({ where: { expenseId } });
+    const updated = await prisma.$transaction(async (tx) => {
+      let walletTxId = existingExpense.walletTransactionId;
 
-    const updated = await prisma.expense.update({
-      where: { id: expenseId },
-      data: {
-        title,
-        amount,
-        category,
-        paidById,
-        lastUpdatedById: currentUserId,
-        receiptUrl: receiptUrl !== undefined ? receiptUrl : existingExpense.receiptUrl,
-        participants: {
-          create: participantUserIds.map((uid) => ({
+      if (oldMode === 'WALLET' && paymentMode === 'WALLET') {
+        const diff = amount - oldAmount;
+        if (diff !== 0) {
+          const wallet = await tx.wallet.findUnique({ where: { tripId: existingExpense.tripId } });
+          if (diff > 0 && (!wallet || wallet.balance < diff - 0.01)) {
+            throw new Error(`Insufficient wallet balance for updated amount.`);
+          }
+          if (wallet) {
+            await tx.wallet.update({
+              where: { id: wallet.id },
+              data: {
+                balance: { decrement: diff },
+                totalSpent: { increment: diff },
+              },
+            });
+            const adjTx = await tx.walletTransaction.create({
+              data: {
+                id: generateObjectId(),
+                walletId: wallet.id,
+                type: 'ADJUSTMENT',
+                amount: Math.abs(diff),
+                description: `Adjustment for expense: ${title} (${diff > 0 ? '+' : '-'}${existingExpense.trip.currency}${Math.abs(diff)})`,
+                expenseId,
+                createdById: currentUserId,
+              },
+            });
+            walletTxId = adjTx.id;
+          }
+        }
+      } else if (oldMode === 'PERSONALLY' && paymentMode === 'WALLET') {
+        const wallet = await tx.wallet.findUnique({ where: { tripId: existingExpense.tripId } });
+        if (!wallet || wallet.balance < amount - 0.01) {
+          throw new Error(`Insufficient wallet balance to switch payment mode to Wallet.`);
+        }
+        await tx.wallet.update({
+          where: { id: wallet.id },
+          data: {
+            balance: { decrement: amount },
+            totalSpent: { increment: amount },
+          },
+        });
+        const wTx = await tx.walletTransaction.create({
+          data: {
             id: generateObjectId(),
-            userId: uid,
-            shareAmount,
-          })),
+            walletId: wallet.id,
+            type: 'EXPENSE',
+            amount,
+            description: `Expense: ${title}`,
+            expenseId,
+            createdById: currentUserId,
+          },
+        });
+        walletTxId = wTx.id;
+      } else if (oldMode === 'WALLET' && paymentMode === 'PERSONALLY') {
+        const wallet = await tx.wallet.findUnique({ where: { tripId: existingExpense.tripId } });
+        if (wallet) {
+          await tx.wallet.update({
+            where: { id: wallet.id },
+            data: {
+              balance: { increment: oldAmount },
+              totalSpent: { decrement: oldAmount },
+            },
+          });
+          await tx.walletTransaction.create({
+            data: {
+              id: generateObjectId(),
+              walletId: wallet.id,
+              type: 'REFUND',
+              amount: oldAmount,
+              description: `Reversal for expense switched to personally paid: ${title}`,
+              expenseId,
+              createdById: currentUserId,
+            },
+          });
+        }
+        walletTxId = null;
+      }
+
+      await tx.expenseParticipant.deleteMany({ where: { expenseId } });
+
+      const updatedExp = await tx.expense.update({
+        where: { id: expenseId },
+        data: {
+          title,
+          amount,
+          category,
+          paidById,
+          paymentMode,
+          walletTransactionId: walletTxId,
+          lastUpdatedById: currentUserId,
+          receiptUrl: receiptUrl !== undefined ? receiptUrl : existingExpense.receiptUrl,
+          participants: {
+            create: participantUserIds.map((uid) => ({
+              id: generateObjectId(),
+              userId: uid,
+              shareAmount,
+            })),
+          },
         },
-      },
-      include: {
-        paidBy: true,
-        createdBy: true,
-        participants: { include: { user: true } },
-      },
+        include: {
+          paidBy: true,
+          createdBy: true,
+          participants: { include: { user: true } },
+        },
+      });
+
+      return updatedExp;
     });
 
     await logActivity(
@@ -925,6 +1456,8 @@ export const dbStore = {
       createdBy: updated.createdBy ? { id: updated.createdBy.id, name: updated.createdBy.name, email: updated.createdBy.email } : undefined,
       lastUpdatedById: updated.lastUpdatedById,
       status: updated.status as 'APPROVED' | 'PENDING_APPROVAL',
+      paymentMode: (updated.paymentMode as 'PERSONALLY' | 'WALLET') || 'PERSONALLY',
+      walletTransactionId: updated.walletTransactionId,
       date: updated.date.toISOString(),
       createdAt: updated.createdAt.toISOString(),
       updatedAt: updated.updatedAt.toISOString(),
@@ -963,7 +1496,33 @@ export const dbStore = {
       throw new Error('Trip is locked by the organizer.');
     }
 
-    await prisma.expense.delete({ where: { id: expenseId } });
+    await prisma.$transaction(async (tx) => {
+      if (existingExpense.paymentMode === 'WALLET') {
+        const wallet = await tx.wallet.findUnique({ where: { tripId: existingExpense.tripId } });
+        if (wallet) {
+          await tx.wallet.update({
+            where: { id: wallet.id },
+            data: {
+              balance: { increment: existingExpense.amount },
+              totalSpent: { decrement: existingExpense.amount },
+            },
+          });
+          await tx.walletTransaction.create({
+            data: {
+              id: generateObjectId(),
+              walletId: wallet.id,
+              type: 'REFUND',
+              amount: existingExpense.amount,
+              description: `Refund for deleted wallet expense: ${existingExpense.title}`,
+              expenseId,
+              createdById: currentUserId,
+            },
+          });
+        }
+      }
+
+      await tx.expense.delete({ where: { id: expenseId } });
+    });
 
     await logActivity(
       existingExpense.tripId,
@@ -983,8 +1542,7 @@ export const dbStore = {
     toUserId: string,
     amount: number,
     status: SettlementRecordDetail['status'] = 'PENDING',
-    note?: string,
-    isAdvance: boolean = false
+    note?: string
   ): Promise<SettlementRecordDetail> {
     await ensureDatabaseSeeded();
 
@@ -993,6 +1551,7 @@ export const dbStore = {
     }
 
     const roundedAmount = Math.round(amount * 100) / 100;
+    const userSelect = { select: { id: true, name: true, email: true } };
 
     const fromUser = await prisma.user.findUnique({ where: { id: fromUserId } });
     const toUser = await prisma.user.findUnique({ where: { id: toUserId } });
@@ -1010,16 +1569,22 @@ export const dbStore = {
           },
         },
         settlements: { include: { fromUser: userSelect, toUser: userSelect } },
+        wallet: {
+          include: {
+            contributions: { include: { user: userSelect, approvedBy: userSelect } },
+            transactions: { include: { createdBy: userSelect } },
+          },
+        },
       },
     });
     if (!trip) throw new Error('Trip not found');
 
-    // Calculate current live outstanding debt from fromUser to toUser
-    const approvedExpenses = trip.expenses
+    const approvedExpenses: ExpenseDetail[] = trip.expenses
       .filter((e) => e.status === 'APPROVED')
       .map((e) => ({
         ...e,
         category: e.category as CategoryType,
+        paymentMode: (e.paymentMode as 'PERSONALLY' | 'WALLET') || 'PERSONALLY',
         date: e.date.toISOString(),
         createdAt: e.createdAt.toISOString(),
         updatedAt: e.updatedAt.toISOString(),
@@ -1027,7 +1592,7 @@ export const dbStore = {
         participants: e.participants.map((p) => ({ ...p, user: p.user })),
       }));
 
-    const settlementRecords = trip.settlements.map((s) => ({
+    const settlementRecords: SettlementRecordDetail[] = trip.settlements.map((s) => ({
       ...s,
       status: s.status as any,
       createdAt: s.createdAt.toISOString(),
@@ -1038,15 +1603,51 @@ export const dbStore = {
       user: { id: m.user.id, name: m.user.name, email: m.user.email },
     }));
 
-    const computedSettlements = computeSettlements(mappedMembers, approvedExpenses, settlementRecords);
+    const formattedWallet: WalletDetail | null = trip.wallet
+      ? {
+          id: trip.wallet.id,
+          tripId: trip.wallet.tripId,
+          balance: trip.wallet.balance,
+          totalAdded: trip.wallet.totalAdded,
+          totalSpent: trip.wallet.totalSpent,
+          createdAt: trip.wallet.createdAt.toISOString(),
+          updatedAt: trip.wallet.updatedAt.toISOString(),
+          contributions: trip.wallet.contributions.map((c) => ({
+            id: c.id,
+            walletId: c.walletId,
+            userId: c.userId,
+            user: { id: c.user.id, name: c.user.name, email: c.user.email },
+            amount: c.amount,
+            status: c.status as WalletContributionDetail['status'],
+            note: c.note,
+            approvedById: c.approvedById,
+            approvedBy: c.approvedBy ? { id: c.approvedBy.id, name: c.approvedBy.name, email: c.approvedBy.email } : null,
+            approvedAt: c.approvedAt ? c.approvedAt.toISOString() : null,
+            createdAt: c.createdAt.toISOString(),
+            updatedAt: c.updatedAt.toISOString(),
+          })),
+          transactions: trip.wallet.transactions.map((t) => ({
+            id: t.id,
+            walletId: t.walletId,
+            type: t.type as WalletTransactionDetail['type'],
+            amount: t.amount,
+            description: t.description,
+            expenseId: t.expenseId,
+            contributionId: t.contributionId,
+            createdById: t.createdById,
+            createdBy: { id: t.createdBy.id, name: t.createdBy.name, email: t.createdBy.email },
+            createdAt: t.createdAt.toISOString(),
+          })),
+        }
+      : null;
+
+    const computedSettlements = computeSettlements(mappedMembers, approvedExpenses, settlementRecords, formattedWallet);
     const pairTx = computedSettlements.find((tx) => tx.fromUser.id === fromUserId && tx.toUser.id === toUserId);
     const currentOutstanding = pairTx ? pairTx.amount : 0;
 
-    const isExplicitAdvance = isAdvance || roundedAmount > currentOutstanding + 0.01;
-
-    if (!isExplicitAdvance && roundedAmount > currentOutstanding + 0.01) {
+    if (roundedAmount > currentOutstanding + 0.01) {
       throw new Error(
-        `Settlement amount (${trip.currency}${roundedAmount}) cannot exceed current outstanding debt (${trip.currency}${currentOutstanding}) unless marked as Advance Payment.`
+        `Settlement amount (${trip.currency}${roundedAmount}) cannot exceed current outstanding debt (${trip.currency}${currentOutstanding}).`
       );
     }
 
@@ -1064,7 +1665,6 @@ export const dbStore = {
       throw new Error('A settlement rollback request is currently pending for this payment.');
     }
 
-    // Always create a new distinct settlement record for this partial/full payment
     const settlement = await prisma.settlement.create({
       data: {
         id: generateObjectId(),
@@ -1073,7 +1673,6 @@ export const dbStore = {
         toUserId,
         amount: roundedAmount,
         status,
-        isAdvance: isExplicitAdvance,
         note: note ? note.trim() : null,
       },
       include: { fromUser: true, toUser: true },
@@ -1084,7 +1683,7 @@ export const dbStore = {
       tripId,
       fromUserId,
       actionType,
-      `${fromUser.name} ${status === 'CONFIRMED' ? 'confirmed' : 'requested'} ${isExplicitAdvance ? 'Advance Payment' : 'settlement'} of ${trip.currency}${roundedAmount} to ${toUser.name}${status === 'PENDING' ? ' (Pending Host approval)' : ''}`,
+      `${fromUser.name} ${status === 'CONFIRMED' ? 'confirmed' : 'requested'} settlement of ${trip.currency}${roundedAmount} to ${toUser.name}${status === 'PENDING' ? ' (Pending Host approval)' : ''}`,
       roundedAmount
     );
 
@@ -1097,7 +1696,6 @@ export const dbStore = {
       toUser: { id: settlement.toUser.id, name: settlement.toUser.name, email: settlement.toUser.email },
       amount: settlement.amount,
       status: settlement.status as SettlementRecordDetail['status'],
-      isAdvance: (settlement as any).isAdvance ?? false,
       note: settlement.note,
       createdAt: settlement.createdAt.toISOString(),
       updatedAt: settlement.updatedAt.toISOString(),
@@ -1138,14 +1736,21 @@ export const dbStore = {
             },
           },
           settlements: { include: { fromUser: userSelect, toUser: userSelect } },
+          wallet: {
+            include: {
+              contributions: { include: { user: userSelect, approvedBy: userSelect } },
+              transactions: { include: { createdBy: userSelect } },
+            },
+          },
         },
       });
       if (trip) {
-        const approvedExpenses = trip.expenses
+        const approvedExpenses: ExpenseDetail[] = trip.expenses
           .filter((e) => e.status === 'APPROVED')
           .map((e) => ({
             ...e,
             category: e.category as CategoryType,
+            paymentMode: (e.paymentMode as 'PERSONALLY' | 'WALLET') || 'PERSONALLY',
             date: e.date.toISOString(),
             createdAt: e.createdAt.toISOString(),
             updatedAt: e.updatedAt.toISOString(),
@@ -1153,7 +1758,7 @@ export const dbStore = {
             participants: e.participants.map((p) => ({ ...p, user: p.user })),
           }));
 
-        const settlementRecords = trip.settlements.map((s) => ({
+        const settlementRecords: SettlementRecordDetail[] = trip.settlements.map((s) => ({
           ...s,
           status: s.status as any,
           createdAt: s.createdAt.toISOString(),
@@ -1164,7 +1769,45 @@ export const dbStore = {
           user: { id: m.user.id, name: m.user.name, email: m.user.email },
         }));
 
-        const computedSettlements = computeSettlements(mappedMembers, approvedExpenses, settlementRecords);
+        const formattedWallet: WalletDetail | null = trip.wallet
+          ? {
+              id: trip.wallet.id,
+              tripId: trip.wallet.tripId,
+              balance: trip.wallet.balance,
+              totalAdded: trip.wallet.totalAdded,
+              totalSpent: trip.wallet.totalSpent,
+              createdAt: trip.wallet.createdAt.toISOString(),
+              updatedAt: trip.wallet.updatedAt.toISOString(),
+              contributions: trip.wallet.contributions.map((c) => ({
+                id: c.id,
+                walletId: c.walletId,
+                userId: c.userId,
+                user: { id: c.user.id, name: c.user.name, email: c.user.email },
+                amount: c.amount,
+                status: c.status as WalletContributionDetail['status'],
+                note: c.note,
+                approvedById: c.approvedById,
+                approvedBy: c.approvedBy ? { id: c.approvedBy.id, name: c.approvedBy.name, email: c.approvedBy.email } : null,
+                approvedAt: c.approvedAt ? c.approvedAt.toISOString() : null,
+                createdAt: c.createdAt.toISOString(),
+                updatedAt: c.updatedAt.toISOString(),
+              })),
+              transactions: trip.wallet.transactions.map((t) => ({
+                id: t.id,
+                walletId: t.walletId,
+                type: t.type as WalletTransactionDetail['type'],
+                amount: t.amount,
+                description: t.description,
+                expenseId: t.expenseId,
+                contributionId: t.contributionId,
+                createdById: t.createdById,
+                createdBy: { id: t.createdBy.id, name: t.createdBy.name, email: t.createdBy.email },
+                createdAt: t.createdAt.toISOString(),
+              })),
+            }
+          : null;
+
+        const computedSettlements = computeSettlements(mappedMembers, approvedExpenses, settlementRecords, formattedWallet);
         const pairTx = computedSettlements.find(
           (tx) => tx.fromUser.id === settlement.fromUserId && tx.toUser.id === settlement.toUserId
         );
@@ -1181,18 +1824,15 @@ export const dbStore = {
     // Validate state transitions & permissions
     if (targetStatus === 'CONFIRMED' || targetStatus === 'REJECTED') {
       if (settlement.status === 'ROLLBACK_REQUESTED') {
-        // Rejecting rollback: client or admin can reject the rollback, reverting status to CONFIRMED
         if (!isPayer && !isAdmin) {
           throw new Error('Forbidden: Only the client (payer) or Super Host/Admin can reject a rollback request.');
         }
       } else {
-        // Approving or rejecting a pending settlement request
         if (!isReceiver && !isAdmin) {
           throw new Error('Forbidden: Only the payment recipient or Super Host/Admin can approve/reject settlement requests.');
         }
       }
     } else if (targetStatus === 'ROLLBACK_REQUESTED') {
-      // Initiating rollback request on a confirmed settlement
       if (!isReceiver && !isAdmin) {
         throw new Error('Forbidden: Only the Super Host/Admin or recipient can request a settlement rollback.');
       }
@@ -1200,7 +1840,6 @@ export const dbStore = {
         throw new Error('Invalid action: Only confirmed settlements can be requested for rollback.');
       }
     } else if (targetStatus === 'ROLLED_BACK') {
-      // Client approving rollback request
       if (!isPayer && !isAdmin) {
         throw new Error('Forbidden: Only the client (payer) or Super Host/Admin can approve a settlement rollback.');
       }
@@ -1255,7 +1894,6 @@ export const dbStore = {
       toUser: { id: updated.toUser.id, name: updated.toUser.name, email: updated.toUser.email },
       amount: updated.amount,
       status: updated.status as SettlementRecordDetail['status'],
-      isAdvance: (updated as any).isAdvance ?? false,
       note: updated.note,
       createdAt: updated.createdAt.toISOString(),
       updatedAt: updated.updatedAt.toISOString(),
@@ -1741,6 +2379,7 @@ export const dbStore = {
       createdBy: updated.createdBy ? { id: updated.createdBy.id, name: updated.createdBy.name, email: updated.createdBy.email } : undefined,
       lastUpdatedById: updated.lastUpdatedById,
       status: updated.status as 'APPROVED' | 'PENDING_APPROVAL' | 'REJECTED',
+      paymentMode: (updated.paymentMode as 'PERSONALLY' | 'WALLET') || 'PERSONALLY',
       rejectionReason: updated.rejectionReason,
       date: updated.date.toISOString(),
       createdAt: updated.createdAt.toISOString(),

@@ -18,8 +18,8 @@ export async function GET(
     return NextResponse.json({ error: 'Trip not found' }, { status: 404 });
   }
 
-  const balances = calculateMemberBalances(trip.members, trip.expenses, trip.settlementRecords);
-  const settlements = computeSettlements(trip.members, trip.expenses, trip.settlementRecords);
+  const balances = calculateMemberBalances(trip.members, trip.expenses, trip.settlementRecords, trip.wallet);
+  const settlements = computeSettlements(trip.members, trip.expenses, trip.settlementRecords, trip.wallet);
 
   return NextResponse.json({
     tripId: trip.id,
@@ -40,7 +40,7 @@ export async function POST(
   }
 
   try {
-    const { fromUserId, toUserId, amount, status, note, isAdvance } = await request.json();
+    const { fromUserId, toUserId, amount, status, note } = await request.json();
 
     if (!fromUserId || !toUserId || !amount || amount <= 0) {
       return NextResponse.json({ error: 'Invalid settlement payload' }, { status: 400 });
@@ -52,8 +52,7 @@ export async function POST(
       toUserId,
       amount,
       (status as SettlementRecordDetail['status']) || 'PENDING',
-      note,
-      Boolean(isAdvance)
+      note
     );
 
     return NextResponse.json({ record });

@@ -20,6 +20,7 @@ const ItineraryView = dynamic(() => import('@/components/trip/ItineraryView').th
 const StayView = dynamic(() => import('@/components/trip/StayView').then((m) => m.StayView));
 const LivePollsView = dynamic(() => import('@/components/trip/LivePollsView').then((m) => m.LivePollsView));
 const LiveLocationView = dynamic(() => import('@/components/trip/LiveLocationView').then((m) => m.LiveLocationView));
+const WalletView = dynamic(() => import('@/components/wallet/WalletView').then((m) => m.WalletView));
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/Skeleton';
@@ -53,6 +54,7 @@ import {
   Vote,
   Radio,
   MapPin,
+  Wallet,
 } from 'lucide-react';
 
 export default function TripDashboardPage() {
@@ -63,7 +65,7 @@ export default function TripDashboardPage() {
   const [user, setUser] = useState<UserSession | null>(null);
   const [trip, setTrip] = useState<TripSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'overview' | 'polls' | 'location' | 'expenses' | 'itinerary' | 'stay' | 'approvals' | 'settlement' | 'timeline' | 'analytics'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'polls' | 'location' | 'expenses' | 'itinerary' | 'stay' | 'approvals' | 'wallet' | 'settlement' | 'timeline' | 'analytics'>('overview');
   const [copiedCode, setCopiedCode] = useState(false);
 
   // Expense modal state
@@ -396,6 +398,17 @@ export default function TripDashboardPage() {
           )}
 
           <button
+            onClick={() => setActiveTab('wallet')}
+            className={`flex-1 py-2.5 px-3 rounded-xl transition-all flex items-center justify-center gap-1 whitespace-nowrap ${
+              activeTab === 'wallet'
+                ? 'bg-white text-slate-900 shadow-sm'
+                : 'hover:text-slate-900'
+            }`}
+          >
+            <Wallet className="w-3.5 h-3.5 text-emerald-600" /> Wallet
+          </button>
+
+          <button
             onClick={() => setActiveTab('settlement')}
             className={`flex-1 py-2.5 px-3 rounded-xl transition-all flex items-center justify-center gap-1 whitespace-nowrap ${
               activeTab === 'settlement'
@@ -602,6 +615,18 @@ export default function TripDashboardPage() {
           />
         )}
 
+        {/* TAB: GROUP WALLET */}
+        {activeTab === 'wallet' && (
+          <WalletView
+            tripId={trip.id}
+            currency={trip.currency}
+            wallet={trip.wallet}
+            currentUserId={user.id}
+            isAdmin={isAdmin}
+            onRefresh={fetchTripDetails}
+          />
+        )}
+
         {/* TAB 4: SETTLEMENT ENGINE */}
         {activeTab === 'settlement' && (
           <SettlementList
@@ -648,6 +673,7 @@ export default function TripDashboardPage() {
         members={trip.members}
         currentUserId={user.id}
         isAdmin={isAdmin}
+        walletBalance={trip.wallet?.balance || 0}
         existingExpense={editingExpense}
         onSuccess={handleExpenseSuccess}
       />

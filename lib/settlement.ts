@@ -1,9 +1,10 @@
-import { ExpenseDetail, MemberBalance, SettlementRecordDetail, SettlementTransaction, UserSummary } from '@/types';
+import { ExpenseDetail, MemberBalance, SettlementRecordDetail, SettlementTransaction, UserSummary, WalletDetail } from '@/types';
 
 export function calculateMemberBalances(
   members: { user: UserSummary }[],
   expenses: ExpenseDetail[],
-  settlements?: SettlementRecordDetail[]
+  settlements?: SettlementRecordDetail[],
+  wallet?: WalletDetail | null
 ): MemberBalance[] {
   const balanceMap = new Map<string, { user: UserSummary; paid: number; share: number }>();
 
@@ -20,12 +21,15 @@ export function calculateMemberBalances(
   const approvedExpenses = expenses.filter((e) => e.status === 'APPROVED');
 
   approvedExpenses.forEach((expense) => {
-    if (balanceMap.has(expense.paidById)) {
-      const payerRecord = balanceMap.get(expense.paidById)!;
-      payerRecord.paid += expense.amount;
+    // Only credit the payer personally if paymentMode is PERSONALLY (or legacy/undefined)
+    if (expense.paymentMode !== 'WALLET') {
+      if (balanceMap.has(expense.paidById)) {
+        const payerRecord = balanceMap.get(expense.paidById)!;
+        payerRecord.paid += expense.amount;
+      }
     }
 
-    // Add to share amount of each participant
+    // Add to share amount of each participant (participants share cost regardless of payment mode)
     expense.participants?.forEach((p) => {
       if (balanceMap.has(p.userId)) {
         const participantRecord = balanceMap.get(p.userId)!;
@@ -33,6 +37,40 @@ export function calculateMemberBalances(
       }
     });
   });
+
+  // Incorporate Approved Wallet Contributions & Refunds if wallet exists
+  if (wallet) {
+    // 1. Add approved contributions to contributor's paid amount
+    const approvedContributions = wallet.contributions?.filter((c) => c.status === 'APPROVED') || [];
+    approvedContributions.forEach((c) => {
+      if (balanceMap.has(c.userId)) {
+        const contributorRecord = balanceMap.get(c.userId)!;
+        contributorRecord.paid += c.amount;
+      }
+    });
+
+    // 2. Subtract wallet refund transactions from contributor's paid amount
+    const refundTransactions = wallet.transactions?.filter((t) => t.type === 'REFUND') || [];
+    refundTransactions.forEach((t) => {
+      let recipientUserId: string | null = null;
+      if (t.contributionId) {
+        const linkedContrib = wallet.contributions?.find((c) => c.id === t.contributionId);
+        if (linkedContrib) recipientUserId = linkedContrib.userId;
+      }
+      if (!recipientUserId && t.description) {
+        const matchedMember = members.find((m) => t.description?.includes(m.user.name));
+        if (matchedMember) recipientUserId = matchedMember.user.id;
+      }
+      if (!recipientUserId) {
+        recipientUserId = t.createdById;
+      }
+
+      if (recipientUserId && balanceMap.has(recipientUserId)) {
+        const recipientRecord = balanceMap.get(recipientUserId)!;
+        recipientRecord.paid -= t.amount;
+      }
+    });
+  }
 
   // Incorporate CONFIRMED / COMPLETED settlements
   if (settlements && settlements.length > 0) {
@@ -71,9 +109,10 @@ export function calculateMemberBalances(
 export function computeSettlements(
   members: { user: UserSummary }[],
   expenses: ExpenseDetail[],
-  settlements?: SettlementRecordDetail[]
+  settlements?: SettlementRecordDetail[],
+  wallet?: WalletDetail | null
 ): SettlementTransaction[] {
-  const balances = calculateMemberBalances(members, expenses, settlements);
+  const balances = calculateMemberBalances(members, expenses, settlements, wallet);
 
   const debtors: { user: UserSummary; amount: number }[] = [];
   const creditors: { user: UserSummary; amount: number }[] = [];

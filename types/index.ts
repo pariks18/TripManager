@@ -73,6 +73,8 @@ export interface ExpenseDetail {
   createdBy?: UserSummary | null;
   lastUpdatedById?: string | null;
   status: 'APPROVED' | 'PENDING_APPROVAL' | 'REJECTED';
+  paymentMode: 'PERSONALLY' | 'WALLET';
+  walletTransactionId?: string | null;
   rejectionReason?: string | null;
   date: string;
   createdAt: string;
@@ -146,7 +148,11 @@ export interface ActivityDetail {
     | 'LOCATION_SHARED'
     | 'TRIP_LOCKED'
     | 'TRIP_UPDATED'
-    | 'APPROVAL_MODE_UPDATED';
+    | 'APPROVAL_MODE_UPDATED'
+    | 'WALLET_CONTRIBUTION_SUBMITTED'
+    | 'WALLET_CONTRIBUTION_APPROVED'
+    | 'WALLET_CONTRIBUTION_REJECTED'
+    | 'WALLET_REFUND_ISSUED';
   details: string;
   amount?: number | null;
   category?: string | null;
@@ -162,10 +168,49 @@ export interface SettlementRecordDetail {
   toUser: UserSummary;
   amount: number;
   status: 'PENDING' | 'CONFIRMED' | 'REJECTED' | 'COMPLETED' | 'ROLLBACK_REQUESTED' | 'ROLLED_BACK';
-  isAdvance?: boolean;
   note?: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface WalletContributionDetail {
+  id: string;
+  walletId: string;
+  userId: string;
+  user: UserSummary;
+  amount: number;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  note?: string | null;
+  approvedById?: string | null;
+  approvedBy?: UserSummary | null;
+  approvedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WalletTransactionDetail {
+  id: string;
+  walletId: string;
+  type: 'DEPOSIT' | 'EXPENSE' | 'REFUND' | 'ADJUSTMENT';
+  amount: number;
+  description?: string | null;
+  expenseId?: string | null;
+  contributionId?: string | null;
+  createdById: string;
+  createdBy: UserSummary;
+  createdAt: string;
+}
+
+export interface WalletDetail {
+  id: string;
+  tripId: string;
+  balance: number;
+  totalAdded: number;
+  totalSpent: number;
+  createdAt: string;
+  updatedAt: string;
+  contributions: WalletContributionDetail[];
+  transactions: WalletTransactionDetail[];
 }
 
 export interface ItineraryItemDetail {
@@ -219,6 +264,7 @@ export interface TripSummary {
   editRequests?: ExpenseEditRequestDetail[];
   activities?: ActivityDetail[];
   settlementRecords?: SettlementRecordDetail[];
+  wallet?: WalletDetail | null;
   itinerary?: ItineraryItemDetail[];
   stays?: StayDetail[];
   totalExpense: number;

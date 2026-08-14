@@ -33,7 +33,6 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
   onSuccess,
 }) => {
   const [settlementMode, setSettlementMode] = useState<'FULL' | 'CUSTOM'>('FULL');
-  const [paymentType, setPaymentType] = useState<'REGULAR' | 'ADVANCE'>('REGULAR');
   const [customAmount, setCustomAmount] = useState<string>('');
   const [note, setNote] = useState<string>('');
   const [selectedFromUserId, setSelectedFromUserId] = useState<string>('');
@@ -54,7 +53,6 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
   useEffect(() => {
     if (transaction) {
       setSettlementMode('FULL');
-      setPaymentType('REGULAR');
       setCustomAmount(transaction.amount.toString());
       setNote('');
       setError('');
@@ -65,7 +63,6 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
       const firstOther = members.find((m) => m.userId !== currentUserId);
       if (firstOther) setSelectedToUserId(firstOther.userId);
       setSettlementMode('CUSTOM');
-      setPaymentType('ADVANCE');
       setCustomAmount('');
       setNote('');
       setError('');
@@ -76,8 +73,6 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
   const amountToSettle = settlementMode === 'FULL' ? outstandingAmount : isNaN(numCustomAmount) ? 0 : numCustomAmount;
   
   const isOverpaying = outstandingAmount > 0 && amountToSettle > outstandingAmount + 0.01;
-  const extraAdvance = isOverpaying ? Math.round((amountToSettle - outstandingAmount) * 100) / 100 : 0;
-  const remainingAfterApproval = isOverpaying ? 0 : Math.max(0, Math.round((outstandingAmount - amountToSettle) * 100) / 100);
 
   const isDebtor = fromUser?.id === currentUserId;
   const isCreditor = toUser?.id === currentUserId;
@@ -91,11 +86,9 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
       return;
     }
 
-    const isAdvance = paymentType === 'ADVANCE' || isOverpaying;
-
-    if (!isAdvance && amountToSettle > outstandingAmount + 0.01) {
+    if (isOverpaying) {
       setError(
-        `Settlement amount (${formatCurrency(amountToSettle, currency)}) cannot exceed currently outstanding balance (${formatCurrency(outstandingAmount, currency)}) unless marked as Advance Payment.`
+        `Settlement amount (${formatCurrency(amountToSettle, currency)}) cannot exceed currently outstanding debt (${formatCurrency(outstandingAmount, currency)}). To contribute advance funds to the group, please use the Group Wallet tab.`
       );
       return;
     }
@@ -113,7 +106,6 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
     setIsLoading(true);
 
     try {
-      // If Admin/Creditor is recording directly, or standard PENDING request
       const res = await fetch(`/api/trips/${tripId}/settlement`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -123,7 +115,6 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
           amount: amountToSettle,
           status: 'PENDING',
           note: note.trim() || undefined,
-          isAdvance: isAdvance,
         }),
       });
 
@@ -131,7 +122,7 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
       if (!res.ok) throw new Error(data.error || 'Failed to submit settlement request');
 
       alert(
-        `${isAdvance ? 'Advance payment' : 'Settlement'} request of ${formatCurrency(amountToSettle, currency)} sent successfully! Waiting for host/recipient approval.`
+        `Settlement request of ${formatCurrency(amountToSettle, currency)} sent successfully! Waiting for recipient approval.`
       );
 
       onSuccess();
@@ -198,44 +189,6 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
             )}
           </div>
         )}
-
-        {/* Payment Type Selector */}
-        <div>
-          <label className="block text-xs font-semibold text-slate-700 tracking-wide uppercase mb-1.5">
-            Payment Type
-          </label>
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                setPaymentType('REGULAR');
-                setError('');
-              }}
-              className={`p-2.5 rounded-2xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
-                paymentType === 'REGULAR'
-                  ? 'bg-slate-900 border-slate-900 text-white shadow-sm'
-                  : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
-              }`}
-            >
-              <span>Standard Settlement</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setPaymentType('ADVANCE');
-                if (settlementMode === 'FULL') setSettlementMode('CUSTOM');
-                setError('');
-              }}
-              className={`p-2.5 rounded-2xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
-                paymentType === 'ADVANCE'
-                  ? 'bg-amber-500 border-amber-500 text-white shadow-sm font-bold'
-                  : 'bg-amber-50/60 border-amber-200 text-amber-900 hover:bg-amber-100'
-              }`}
-            >
-              <span>⚡ Advance Payment</span>
-            </button>
-          </div>
-        </div>
 
         {/* Settlement Type Selector */}
         {outstandingAmount > 0 && (
@@ -311,37 +264,23 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
               <span className="font-bold text-slate-900">{formatCurrency(outstandingAmount, currency)}</span>
             </div>
             <div className="flex justify-between items-center text-emerald-800">
-              <span className="font-semibold">Advance Paid:</span>
+              <span className="font-semibold">Amount Being Settled:</span>
               <span className="font-extrabold text-emerald-700">
                 {formatCurrency(amountToSettle, currency)}
               </span>
             </div>
-            {isOverpaying ? (
-              <div className="pt-2 border-t border-emerald-200/60 space-y-1">
-                <div className="flex justify-between items-center">
-                  <span className="font-bold text-emerald-950">Extra Advance / Credit (Carried Forward):</span>
-                  <span className="font-mono font-extrabold text-xs px-2.5 py-0.5 rounded-lg bg-emerald-200 text-emerald-950">
-                    +{formatCurrency(extraAdvance, currency)}
-                  </span>
-                </div>
-                <p className="text-[10px] text-emerald-700 font-medium">
-                  ✨ This extra advance credit will automatically reduce future payable balances.
-                </p>
-              </div>
-            ) : (
-              <div className="pt-2 border-t border-emerald-200/60 flex justify-between items-center text-xs">
-                <span className="font-bold text-slate-800">Remaining Balance After Approval:</span>
-                <span
-                  className={`font-mono font-extrabold px-2 py-0.5 rounded-lg ${
-                    remainingAfterApproval === 0
-                      ? 'bg-emerald-200 text-emerald-900'
-                      : 'bg-amber-100 text-amber-900'
-                  }`}
-                >
-                  {formatCurrency(remainingAfterApproval, currency)}
-                </span>
-              </div>
-            )}
+            <div className="pt-2 border-t border-emerald-200/60 flex justify-between items-center text-xs">
+              <span className="font-bold text-slate-800">Remaining Balance After Approval:</span>
+              <span
+                className={`font-mono font-extrabold px-2 py-0.5 rounded-lg ${
+                  Math.max(0, outstandingAmount - amountToSettle) === 0
+                    ? 'bg-emerald-200 text-emerald-900'
+                    : 'bg-amber-100 text-amber-900'
+                }`}
+              >
+                {formatCurrency(Math.max(0, Math.round((outstandingAmount - amountToSettle) * 100) / 100), currency)}
+              </span>
+            </div>
           </div>
         )}
 
@@ -351,27 +290,24 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
             Payment Note / Description (Optional)
           </label>
           <Input
-            placeholder="e.g. Advance paid via GPay, Cash, UPI Ref"
+            placeholder="e.g. Paid via GPay, Cash, UPI Ref"
             value={note}
             onChange={(e) => setNote(e.target.value)}
           />
           <div className="flex flex-wrap gap-1.5 mt-2">
             <button
               type="button"
-              onClick={() => {
-                setPaymentType('ADVANCE');
-                setNote('Advance payment paid directly');
-              }}
-              className="text-[11px] font-semibold bg-amber-100 hover:bg-amber-200 text-amber-900 px-2.5 py-1 rounded-xl transition-colors flex items-center gap-1"
+              onClick={() => setNote('Full settlement paid via GPay')}
+              className="text-[11px] font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 px-2.5 py-1 rounded-xl transition-colors"
             >
-              ⚡ Advance Payment
+              Full Settlement GPay
             </button>
             <button
               type="button"
               onClick={() => setNote('Partial payment via UPI')}
               className="text-[11px] font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 px-2.5 py-1 rounded-xl transition-colors"
             >
-              💳 UPI Settlement
+              Partial payment via UPI
             </button>
           </div>
         </div>

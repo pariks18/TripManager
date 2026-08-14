@@ -16,6 +16,7 @@ interface AddExpenseModalProps {
   members: TripMemberDetail[];
   currentUserId: string;
   isAdmin?: boolean;
+  walletBalance?: number;
   existingExpense?: ExpenseDetail | null;
   onSuccess: (expense: ExpenseDetail) => void;
 }
@@ -38,6 +39,7 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
   members,
   currentUserId,
   isAdmin = false,
+  walletBalance = 0,
   existingExpense,
   onSuccess,
 }) => {
@@ -45,6 +47,7 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
   const [amount, setAmount] = useState('');
   const [category, setCategory] = useState<CategoryType>('Food');
   const [paidById, setPaidById] = useState(currentUserId);
+  const [paymentMode, setPaymentMode] = useState<'PERSONALLY' | 'WALLET'>('PERSONALLY');
   const [splitBetween, setSplitBetween] = useState<string[]>([]);
   const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -63,6 +66,7 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
       setAmount(existingExpense.amount.toString());
       setCategory(existingExpense.category);
       setPaidById(existingExpense.paidById);
+      setPaymentMode(existingExpense.paymentMode || 'PERSONALLY');
       setSplitBetween(existingExpense.participants.map((p) => p.userId));
       setReceiptUrl(existingExpense.receiptUrl || null);
     } else {
@@ -70,6 +74,7 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
       setAmount('');
       setCategory('Food');
       setPaidById(currentUserId);
+      setPaymentMode('PERSONALLY');
       setSplitBetween(members.map((m) => m.userId));
       setReceiptUrl(null);
     }
@@ -102,7 +107,6 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
 
   const toggleSelectAll = () => {
     if (splitBetween.length === members.length) {
-      // Keep current user selected
       setSplitBetween([currentUserId]);
     } else {
       setSplitBetween(members.map((m) => m.userId));
@@ -120,6 +124,10 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
       setError('Please enter a valid amount');
       return;
     }
+    if (paymentMode === 'WALLET' && numAmount > walletBalance + 0.01) {
+      setError(`Insufficient group wallet balance. Available: ${formatCurrency(walletBalance, currency)}, required: ${formatCurrency(numAmount, currency)}.`);
+      return;
+    }
     if (splitBetween.length === 0) {
       setError('Select at least one member to split with');
       return;
@@ -130,7 +138,6 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
 
     try {
       if (isEditRequestRequired && existingExpense) {
-        // Non-admin member editing an approved expense -> Submit Edit Request
         const res = await fetch(`/api/expenses/${existingExpense.id}/edit-request`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -141,6 +148,7 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
               amount: numAmount,
               category,
               paidById,
+              paymentMode,
               splitBetween,
               receiptUrl,
             },
@@ -156,7 +164,6 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
         return;
       }
 
-      // Normal creation, direct admin edit, or member resubmission
       const url = existingExpense ? `/api/expenses/${existingExpense.id}` : '/api/expenses';
       const method = existingExpense ? 'PUT' : 'POST';
 
@@ -169,6 +176,7 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
           amount: numAmount,
           category,
           paidById,
+          paymentMode,
           splitBetween,
           receiptUrl,
         }),
@@ -238,6 +246,45 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
           required
         />
 
+        {/* Payment Mode Selector */}
+        <div>
+          <label className="block text-xs font-semibold text-slate-700 tracking-wide uppercase mb-1.5">
+            Payment Mode
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => setPaymentMode('PERSONALLY')}
+              className={`p-2.5 rounded-2xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+                paymentMode === 'PERSONALLY'
+                  ? 'bg-slate-900 border-slate-900 text-white shadow-sm'
+                  : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              <span>Pay Personally</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setPaymentMode('WALLET')}
+              disabled={walletBalance <= 0}
+              className={`p-2.5 rounded-2xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+                paymentMode === 'WALLET'
+                  ? 'bg-emerald-600 border-emerald-600 text-white shadow-sm font-bold'
+                  : walletBalance <= 0
+                  ? 'bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed opacity-60'
+                  : 'bg-emerald-50/60 border-emerald-200 text-emerald-900 hover:bg-emerald-100'
+              }`}
+            >
+              <span>💳 Pay from Wallet</span>
+            </button>
+          </div>
+          {paymentMode === 'WALLET' && (
+            <p className="text-[11px] text-emerald-700 font-semibold mt-1">
+              Available Group Wallet Balance: {formatCurrency(walletBalance, currency)}
+            </p>
+          )}
+        </div>
+
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="block text-xs font-semibold text-slate-700 tracking-wide uppercase mb-1.5">
@@ -256,12 +303,13 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
 
           <div>
             <label className="block text-xs font-semibold text-slate-700 tracking-wide uppercase mb-1.5">
-              Paid By
+              {paymentMode === 'WALLET' ? 'Recorded By' : 'Paid By'}
             </label>
             <select
               value={paidById}
               onChange={(e) => setPaidById(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 text-slate-900 text-sm rounded-2xl p-3 focus:outline-none focus:border-emerald-500 focus:bg-white"
+              disabled={paymentMode === 'WALLET'}
+              className="w-full bg-slate-50 border border-slate-200 text-slate-900 text-sm rounded-2xl p-3 focus:outline-none focus:border-emerald-500 focus:bg-white disabled:opacity-60"
             >
               {members.map((m) => (
                 <option key={m.userId} value={m.userId}>

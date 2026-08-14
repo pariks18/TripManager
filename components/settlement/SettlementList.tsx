@@ -199,9 +199,7 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
                 (s) => s.fromUser.id === record.fromUserId && s.toUser.id === record.toUserId
               );
               const currentOutstanding = pairTx ? pairTx.amount : 0;
-              const isOverpaying = record.isAdvance || (currentOutstanding > 0 && record.amount > currentOutstanding + 0.01);
-              const extraAdvance = isOverpaying ? Math.round((record.amount - currentOutstanding) * 100) / 100 : 0;
-              const remainingAfterApproval = isOverpaying ? 0 : Math.max(0, Math.round((currentOutstanding - record.amount) * 100) / 100);
+              const remainingAfterApproval = Math.max(0, Math.round((currentOutstanding - record.amount) * 100) / 100);
 
               return (
                 <div
@@ -223,11 +221,6 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
                         <span className="text-xs font-extrabold text-amber-800 bg-amber-100 px-2.5 py-0.5 rounded-full border border-amber-200">
                           {formatCurrency(record.amount, currency)}
                         </span>
-                        {isOverpaying && (
-                          <span className="text-[10px] font-extrabold bg-amber-500 text-white px-2 py-0.5 rounded-full">
-                            ⚡ Advance
-                          </span>
-                        )}
                       </div>
                       <div className="flex items-center text-[10px] text-amber-700 font-medium mt-0.5">
                         pays <ArrowRight className="w-3 h-3 ml-0.5" />
@@ -250,20 +243,13 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
                       <span className="font-bold text-slate-900">{formatCurrency(currentOutstanding, currency)}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-amber-700 font-semibold">{isOverpaying ? 'Advance Paid:' : 'Amount Being Settled:'}</span>
+                      <span className="text-amber-700 font-semibold">Amount Being Settled:</span>
                       <span className="font-extrabold text-amber-800">{formatCurrency(record.amount, currency)}</span>
                     </div>
-                    {isOverpaying ? (
-                      <div className="flex justify-between pt-1 border-t border-slate-200/60 font-bold text-emerald-800">
-                        <span>Extra Advance / Credit (Carried Forward):</span>
-                        <span className="font-mono bg-emerald-100 px-2 py-0.5 rounded-md">+{formatCurrency(extraAdvance, currency)}</span>
-                      </div>
-                    ) : (
-                      <div className="flex justify-between pt-1 border-t border-slate-200/60 font-bold">
-                        <span className="text-slate-700">Remaining After Approval:</span>
-                        <span className="font-mono text-emerald-700">{formatCurrency(remainingAfterApproval, currency)}</span>
-                      </div>
-                    )}
+                    <div className="flex justify-between pt-1 border-t border-slate-200/60 font-bold">
+                      <span className="text-slate-700">Remaining After Approval:</span>
+                      <span className="font-mono text-emerald-700">{formatCurrency(remainingAfterApproval, currency)}</span>
+                    </div>
                     {record.note && (
                       <div className="pt-1 text-slate-700 italic flex items-center gap-1">
                         <FileText className="w-3 h-3 text-slate-400 shrink-0" />
@@ -568,11 +554,6 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
                     <span className="font-extrabold text-emerald-700">
                       {formatCurrency(rec.amount, currency)}
                     </span>
-                    {rec.isAdvance && (
-                      <span className="bg-amber-500 text-white font-extrabold text-[10px] px-2 py-0.5 rounded-full">
-                        ⚡ Advance
-                      </span>
-                    )}
                     <span className="bg-emerald-100 text-emerald-800 font-bold text-[10px] px-2 py-0.5 rounded-full">
                       Settled
                     </span>

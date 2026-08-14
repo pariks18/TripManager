@@ -10,7 +10,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const { tripId, title, amount, category, paidById, splitBetween, receiptUrl } = await request.json();
+    const { tripId, title, amount, category, paidById, splitBetween, receiptUrl, paymentMode } = await request.json();
 
     if (!tripId || !title || !amount || amount <= 0 || !paidById || !splitBetween || splitBetween.length === 0) {
       return NextResponse.json({ error: 'Please fill in all required fields' }, { status: 400 });
@@ -24,7 +24,8 @@ export async function POST(request: Request) {
       paidById,
       user.id, // createdById for security ownership
       splitBetween,
-      receiptUrl
+      receiptUrl,
+      paymentMode === 'WALLET' ? 'WALLET' : 'PERSONALLY'
     );
 
     return NextResponse.json({ expense }, { status: 201 });
