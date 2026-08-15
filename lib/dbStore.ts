@@ -1709,21 +1709,77 @@ export const dbStore = {
         );
       }
 
-      // If paying via WALLET, verify that the debtor has sufficient balance (DO NOT DEDUCT YET)
       if (paymentMethod === 'WALLET') {
         const userWallet = await tx.userWallet.findUnique({
           where: { userId_tripId: { userId: fromUserId, tripId } },
         });
 
-        const availableBalance = userWallet ? userWallet.balance : 0;
-        if (availableBalance < roundedPaymentAmount - 0.01) {
+        if (!userWallet || userWallet.balance < roundedPaymentAmount - 0.01) {
+          const availableBalance = userWallet ? userWallet.balance : 0;
           throw new Error(
             `Insufficient wallet balance. Available: ${trip.currency}${availableBalance}, required: ${trip.currency}${roundedPaymentAmount}. Please add advance money first.`
           );
         }
+
+        const walletUpdateResult = await tx.userWallet.updateMany({
+          where: {
+            id: userWallet.id,
+            balance: { gte: roundedPaymentAmount - 0.01 },
+          },
+          data: {
+            balance: { decrement: roundedPaymentAmount },
+            totalSpent: { increment: roundedPaymentAmount },
+          },
+        });
+
+        if (walletUpdateResult.count === 0) {
+          throw new Error(
+            `Insufficient wallet balance or concurrent wallet payment detected. Transaction aborted.`
+          );
+        }
+
+        await tx.walletTransaction.create({
+          data: {
+            id: generateObjectId(),
+            walletId: userWallet!.id,
+            type: 'SETTLEMENT_PAYMENT',
+            amount: roundedPaymentAmount,
+            description: `Settlement payment to ${toUser.name}`,
+            createdById: fromUserId,
+          },
+        });
+
+        const confirmedSettlement = await tx.settlement.create({
+          data: {
+            id: generateObjectId(),
+            tripId,
+            fromUserId,
+            toUserId,
+            amount: roundedPaymentAmount,
+            settledAmount: roundedPaymentAmount,
+            remainingAmount: 0,
+            paymentMethod: 'WALLET',
+            status: 'CONFIRMED',
+            note: note ? note.trim() : null,
+          },
+          include: { fromUser: true, toUser: true },
+        });
+
+        await tx.activity.create({
+          data: {
+            id: generateObjectId(),
+            tripId,
+            userId: fromUserId,
+            actionType: 'SETTLEMENT_CONFIRMED',
+            details: `${fromUser.name} paid ${trip.currency}${roundedPaymentAmount} to ${toUser.name} via Advance Wallet`,
+            amount: roundedPaymentAmount,
+          },
+        });
+
+        return confirmedSettlement;
       }
 
-      // Create a NEW PENDING settlement request record (allows multiple partial settlement requests)
+      // If paying via PERSONAL money, create a PENDING request requiring Host approval
       const newSettlement = await tx.settlement.create({
         data: {
           id: generateObjectId(),
@@ -1733,7 +1789,7 @@ export const dbStore = {
           amount: roundedPaymentAmount,
           settledAmount: 0,
           remainingAmount: roundedPaymentAmount,
-          paymentMethod,
+          paymentMethod: 'PERSONAL',
           status: 'PENDING',
           note: note ? note.trim() : null,
         },
@@ -1746,7 +1802,7 @@ export const dbStore = {
           tripId,
           userId: fromUserId,
           actionType: 'SETTLEMENT_CONFIRMED',
-          details: `${fromUser.name} submitted a settlement payment request of ${trip.currency}${roundedPaymentAmount} to ${toUser.name} via ${paymentMethod === 'WALLET' ? 'Advance Wallet' : 'Personal Money'} (Pending Host/Recipient Approval)`,
+          details: `${fromUser.name} submitted a settlement payment request of ${trip.currency}${roundedPaymentAmount} to ${toUser.name} via Personal Money (Pending Host Approval)`,
           amount: roundedPaymentAmount,
         },
       });

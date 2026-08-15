@@ -160,8 +160,9 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to process settlement payment');
 
-      const remainingWallet = payerWalletBalance;
-      const statusLabel = 'Pending Host Approval';
+      const isWallet = paymentMethod === 'WALLET';
+      const remainingWallet = isWallet ? Math.max(0, payerWalletBalance - amountToSettle) : payerWalletBalance;
+      const statusLabel = isWallet ? 'Completed' : 'Pending Host Approval';
 
       setSuccessResult({
         paidAmount: amountToSettle,
@@ -172,11 +173,19 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
         fromUserName: fromUser.id === currentUserId ? 'You' : fromUser.name,
       });
 
-      showToast(
-        `✓ Settlement Request Sent: ${formatCurrency(amountToSettle, currency)} sent to ${toUser.name} for Host approval`,
-        'info',
-        'Request Sent'
-      );
+      if (isWallet) {
+        showToast(
+          `✓ Settlement Completed: ${formatCurrency(amountToSettle, currency)} paid to ${toUser.name} from your Advance Wallet`,
+          'success',
+          'Settlement Completed'
+        );
+      } else {
+        showToast(
+          `✓ Settlement Request Sent: ${formatCurrency(amountToSettle, currency)} sent to ${toUser.name} for Host approval`,
+          'info',
+          'Request Sent'
+        );
+      }
 
       onSuccess();
     } catch (err: any) {
@@ -192,21 +201,29 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
     onClose();
   };
 
+  const isWalletSuccess = successResult?.method === 'WALLET';
+
   return (
-    <Modal isOpen={isOpen} onClose={handleDoneSuccess} title={successResult ? 'Settlement Request Sent' : 'Settle Up Debt'}>
+    <Modal isOpen={isOpen} onClose={handleDoneSuccess} title={successResult ? (isWalletSuccess ? 'Settlement Completed' : 'Settlement Request Sent') : 'Settle Up Debt'}>
       {successResult ? (
         <div className="space-y-4 py-2 text-center animate-fade-in">
-          <div className="w-16 h-16 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center mx-auto shadow-md">
+          <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto shadow-md ${isWalletSuccess ? 'bg-emerald-100 text-emerald-600' : 'bg-amber-100 text-amber-600'}`}>
             <CheckCircle2 className="w-10 h-10" />
           </div>
 
           <div>
-            <span className="text-xs font-bold uppercase tracking-wider text-amber-700">✓ Request Sent</span>
+            <span className={`text-xs font-bold uppercase tracking-wider ${isWalletSuccess ? 'text-emerald-700' : 'text-amber-700'}`}>
+              {isWalletSuccess ? '✓ Settlement Completed' : '✓ Request Sent'}
+            </span>
             <h3 className="text-3xl font-black text-slate-900 mt-1">
               {formatCurrency(successResult.paidAmount, currency)}
             </h3>
             <p className="text-xs font-semibold text-slate-600 mt-1">
-              Sent to <span className="text-slate-900 font-bold">{successResult.toUserName}</span> for Host approval
+              {isWalletSuccess ? (
+                <>Paid to <span className="text-slate-900 font-bold">{successResult.toUserName}</span> from your Advance Wallet</>
+              ) : (
+                <>Sent to <span className="text-slate-900 font-bold">{successResult.toUserName}</span> for Host approval</>
+              )}
             </p>
           </div>
 
@@ -214,15 +231,15 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
             <div className="flex justify-between items-center text-slate-600">
               <span>Payment Source:</span>
               <span className="font-bold text-slate-900">
-                {successResult.method === 'WALLET'
+                {isWalletSuccess
                   ? `${successResult.fromUserName}'s Advance Wallet`
                   : 'Personal Money'}
               </span>
             </div>
 
-            {successResult.method === 'WALLET' && (
+            {isWalletSuccess && (
               <div className="flex justify-between items-center text-slate-600">
-                <span>Current Wallet Balance:</span>
+                <span>Wallet Remaining Balance:</span>
                 <span className="font-extrabold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-200">
                   {formatCurrency(successResult.remainingWallet, currency)}
                 </span>
@@ -231,12 +248,14 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
 
             <div className="flex justify-between items-center text-slate-600 pt-2 border-t border-slate-200/60">
               <span>Status:</span>
-              <span className="font-extrabold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900">
-                Pending Approval
+              <span className={`font-extrabold px-2.5 py-0.5 rounded-full ${isWalletSuccess ? 'bg-emerald-100 text-emerald-900' : 'bg-amber-100 text-amber-900'}`}>
+                {isWalletSuccess ? 'Completed' : 'Pending Host Approval'}
               </span>
             </div>
             <p className="text-[11px] text-slate-500 italic pt-1">
-              * Your request was sent — wallet balance will be deducted only after the Host approves.
+              {isWalletSuccess
+                ? '* Settlement completed instantly using your pre-approved Advance Wallet funds.'
+                : '* Your request was sent — payment will complete once the Host approves.'}
             </p>
           </div>
 
