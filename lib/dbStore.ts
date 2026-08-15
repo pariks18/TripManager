@@ -1690,13 +1690,22 @@ export const dbStore = {
       const pairTx = computedSettlements.find((txItem) => txItem.fromUser.id === fromUserId && txItem.toUser.id === toUserId);
       const currentOutstanding = pairTx ? pairTx.amount : 0;
 
-      if (currentOutstanding <= 0.01) {
-        throw new Error(`Debt between ${fromUser.name} and ${toUser.name} has already been settled or does not exist.`);
+      // Calculate total pending requests for this pair
+      const existingPendingRecords = trip.settlements.filter(
+        (s) => s.fromUserId === fromUserId && s.toUserId === toUserId && s.status === 'PENDING'
+      );
+      const totalPendingAmount = existingPendingRecords.reduce((sum, s) => sum + s.amount, 0);
+      const remainingPayable = Math.max(0, Math.round((currentOutstanding - totalPendingAmount) * 100) / 100);
+
+      if (remainingPayable <= 0.01) {
+        throw new Error(
+          `You cannot initiate a new settlement request. All remaining debt between ${fromUser.name} and ${toUser.name} (${trip.currency}${currentOutstanding}) is already covered by pending approval requests.`
+        );
       }
 
-      if (roundedPaymentAmount > currentOutstanding + 0.01) {
+      if (roundedPaymentAmount > remainingPayable + 0.01) {
         throw new Error(
-          `Payment amount (${trip.currency}${roundedPaymentAmount}) exceeds current remaining debt (${trip.currency}${currentOutstanding}).`
+          `Payment amount (${trip.currency}${roundedPaymentAmount}) exceeds your maximum available payable debt (${trip.currency}${remainingPayable}). Pending requests: ${trip.currency}${totalPendingAmount}, Total debt: ${trip.currency}${currentOutstanding}.`
         );
       }
 
@@ -1714,44 +1723,22 @@ export const dbStore = {
         }
       }
 
-      // Find or create existing PENDING settlement record
-      let existingSettlement = await tx.settlement.findFirst({
-        where: {
+      // Create a NEW PENDING settlement request record (allows multiple partial settlement requests)
+      const newSettlement = await tx.settlement.create({
+        data: {
+          id: generateObjectId(),
           tripId,
           fromUserId,
           toUserId,
+          amount: roundedPaymentAmount,
+          settledAmount: 0,
+          remainingAmount: roundedPaymentAmount,
+          paymentMethod,
           status: 'PENDING',
+          note: note ? note.trim() : null,
         },
+        include: { fromUser: true, toUser: true },
       });
-
-      if (!existingSettlement) {
-        existingSettlement = await tx.settlement.create({
-          data: {
-            id: generateObjectId(),
-            tripId,
-            fromUserId,
-            toUserId,
-            amount: roundedPaymentAmount,
-            settledAmount: 0,
-            remainingAmount: roundedPaymentAmount,
-            paymentMethod,
-            status: 'PENDING',
-            note: note ? note.trim() : null,
-          },
-          include: { fromUser: true, toUser: true },
-        });
-      } else {
-        existingSettlement = await tx.settlement.update({
-          where: { id: existingSettlement.id },
-          data: {
-            amount: roundedPaymentAmount,
-            paymentMethod,
-            note: note ? note.trim() : existingSettlement.note,
-            updatedAt: new Date(),
-          },
-          include: { fromUser: true, toUser: true },
-        });
-      }
 
       await tx.activity.create({
         data: {
@@ -1764,7 +1751,7 @@ export const dbStore = {
         },
       });
 
-      return existingSettlement;
+      return newSettlement;
     });
 
     return {

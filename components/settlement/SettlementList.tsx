@@ -57,10 +57,16 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
   const [isSettleModalOpen, setIsSettleModalOpen] = useState(false);
   const [settleModalTx, setSettleModalTx] = useState<SettlementTransaction | null>(null);
 
-  const pendingRecords = React.useMemo(() => settlementRecords.filter((r) => r.status === 'PENDING'), [settlementRecords]);
-  const rollbackRecords = React.useMemo(() => settlementRecords.filter((r) => r.status === 'ROLLBACK_REQUESTED'), [settlementRecords]);
-  const confirmedRecords = React.useMemo(() => settlementRecords.filter((r) => r.status === 'CONFIRMED' || r.status === 'SETTLED' || r.status === 'PARTIALLY_SETTLED' || r.status === 'COMPLETED'), [settlementRecords]);
-  const historyRecords = React.useMemo(() => settlementRecords.filter((r) => r.status === 'REJECTED' || r.status === 'ROLLED_BACK'), [settlementRecords]);
+  const userSettlementRecords = React.useMemo(() => {
+    return settlementRecords.filter(
+      (r) => r.fromUserId === currentUserId || r.toUserId === currentUserId || isAdmin
+    );
+  }, [settlementRecords, currentUserId, isAdmin]);
+
+  const pendingRecords = React.useMemo(() => userSettlementRecords.filter((r) => r.status === 'PENDING'), [userSettlementRecords]);
+  const rollbackRecords = React.useMemo(() => userSettlementRecords.filter((r) => r.status === 'ROLLBACK_REQUESTED'), [userSettlementRecords]);
+  const confirmedRecords = React.useMemo(() => userSettlementRecords.filter((r) => r.status === 'CONFIRMED' || r.status === 'SETTLED' || r.status === 'PARTIALLY_SETTLED' || r.status === 'COMPLETED'), [userSettlementRecords]);
+  const historyRecords = React.useMemo(() => userSettlementRecords.filter((r) => r.status !== 'PENDING' && r.status !== 'ROLLBACK_REQUESTED'), [userSettlementRecords]);
 
   const handleCopyUPI = (fromName: string, toName: string, amount: number, id: string) => {
     const text = `Hey ${fromName}, please pay ${formatCurrency(amount, currency)} to ${toName} for the trip settlement.`;
@@ -185,32 +191,20 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
       {pendingRecords.length > 0 && (
         <div className="bg-amber-50/70 border border-amber-200/80 rounded-3xl p-5 space-y-3 apple-shadow">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="p-2 bg-amber-500 text-white rounded-xl shadow-sm">
-                <Clock className="w-4 h-4" />
-              </div>
-              <div>
-                <h4 className="text-sm font-bold text-amber-950">Pending Settlement Approvals</h4>
-                <p className="text-[11px] text-amber-700">Waiting for receiver or host confirmation</p>
-              </div>
-            </div>
-            <span className="bg-amber-200 text-amber-900 text-xs font-extrabold px-2.5 py-0.5 rounded-full">
-              {pendingRecords.length} Pending
+            <h4 className="text-xs font-extrabold uppercase tracking-wider text-amber-900 flex items-center gap-1.5">
+              <Clock className="w-4 h-4 text-amber-600 animate-pulse" />
+              Pending Settlement Requests ({pendingRecords.length})
+            </h4>
+            <span className="text-[10px] font-bold text-amber-700 bg-amber-100 px-2.5 py-0.5 rounded-full">
+              Requires Approval
             </span>
           </div>
 
-          <div className="space-y-3 pt-1">
+          <div className="space-y-2.5">
             {pendingRecords.map((record) => {
               const isPayer = record.fromUserId === currentUserId;
               const isReceiver = record.toUserId === currentUserId;
               const canApprove = isReceiver || isAdmin;
-
-              // Find live outstanding balance between this pair
-              const pairTx = settlements.find(
-                (s) => s.fromUser.id === record.fromUserId && s.toUser.id === record.toUserId
-              );
-              const currentOutstanding = pairTx ? pairTx.amount : 0;
-              const remainingAfterApproval = Math.max(0, Math.round((currentOutstanding - record.amount) * 100) / 100);
 
               return (
                 <div
@@ -218,7 +212,6 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
                   className="bg-white rounded-2xl p-4 border border-amber-200/80 space-y-3 shadow-sm"
                 >
                   <div className="flex items-center justify-between">
-                    {/* From User */}
                     <div className="flex items-center gap-2">
                       <Avatar name={record.fromUser.name} size="sm" />
                       <span className="text-xs font-bold text-slate-900">
@@ -226,19 +219,13 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
                       </span>
                     </div>
 
-                    {/* Amount & Arrow */}
                     <div className="flex flex-col items-center px-2">
-                      <div className="flex items-center gap-1">
-                        <span className="text-xs font-extrabold text-amber-800 bg-amber-100 px-2.5 py-0.5 rounded-full border border-amber-200">
-                          {formatCurrency(record.amount, currency)}
-                        </span>
-                      </div>
-                      <div className="flex items-center text-[10px] text-amber-700 font-medium mt-0.5">
-                        pays <ArrowRight className="w-3 h-3 ml-0.5" />
-                      </div>
+                      <span className="text-xs font-extrabold text-amber-800 bg-amber-100 px-2.5 py-0.5 rounded-full border border-amber-200">
+                        {formatCurrency(record.amount, currency)}
+                      </span>
+                      <span className="text-[10px] text-amber-700 font-medium mt-0.5">pays</span>
                     </div>
 
-                    {/* To User */}
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-bold text-slate-900">
                         {isReceiver ? 'You' : record.toUser.name}
@@ -247,37 +234,10 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
                     </div>
                   </div>
 
-                  {/* Calculation Breakdown Preview */}
-                  <div className="bg-slate-50 border border-slate-100 rounded-xl p-2.5 space-y-1 text-[11px] text-slate-600">
-                    <div className="flex justify-between">
-                      <span className="text-slate-400">Current Outstanding:</span>
-                      <span className="font-bold text-slate-900">{formatCurrency(currentOutstanding, currency)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-amber-700 font-semibold">Amount Being Settled:</span>
-                      <span className="font-extrabold text-amber-800">{formatCurrency(record.amount, currency)}</span>
-                    </div>
-                    <div className="flex justify-between pt-1 border-t border-slate-200/60 font-bold">
-                      <span className="text-slate-700">Remaining After Approval:</span>
-                      <span className="font-mono text-emerald-700">{formatCurrency(remainingAfterApproval, currency)}</span>
-                    </div>
-                    {record.note && (
-                      <div className="pt-1 text-slate-700 italic flex items-center gap-1">
-                        <FileText className="w-3 h-3 text-slate-400 shrink-0" />
-                        <span>Note: "{record.note}"</span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Actions & Status */}
                   <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
                     <span className="text-[11px] font-semibold text-slate-500 flex items-center gap-1">
                       <Clock className="w-3.5 h-3.5 text-amber-600 animate-pulse" />
-                      {isPayer
-                        ? 'Request sent — waiting for Host'
-                        : isReceiver
-                        ? 'Confirm payment received'
-                        : 'Host Override Authority Active'}
+                      {isPayer ? 'Request sent — waiting for Host' : isReceiver ? 'Confirm payment received' : 'Host Approval Active'}
                     </span>
 
                     {canApprove ? (
@@ -433,21 +393,24 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
             const isReceiver = tx.toUser.id === currentUserId;
 
             // Check if there is already a pending settlement or rollback request for this pair
-            const existingPending = pendingRecords.find(
+            // Calculate sum of pending settlement requests for this pair
+            const pairPendingRecords = pendingRecords.filter(
               (r) => r.fromUserId === tx.fromUser.id && r.toUserId === tx.toUser.id
             );
-            const existingRollback = rollbackRecords.find(
-              (r) => r.fromUserId === tx.fromUser.id && r.toUserId === tx.toUser.id
-            );
+            const pendingSum = pairPendingRecords.reduce((sum, r) => sum + r.amount, 0);
+            const remainingUnsettled = Math.max(0, Math.round((tx.amount - pendingSum) * 100) / 100);
+
+            const partialTx: SettlementTransaction = {
+              ...tx,
+              amount: remainingUnsettled > 0 ? remainingUnsettled : tx.amount,
+            };
 
             return (
               <div
                 key={tx.id}
                 className={`bg-white rounded-3xl p-4 border transition-all duration-200 apple-shadow space-y-3 ${
-                  existingPending
-                    ? 'border-amber-200 bg-amber-50/30'
-                    : existingRollback
-                    ? 'border-purple-200 bg-purple-50/30'
+                  pendingSum > 0
+                    ? 'border-amber-200 bg-amber-50/20'
                     : isPayer
                     ? 'border-rose-200 ring-1 ring-rose-100'
                     : isReceiver
@@ -456,7 +419,6 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
                 }`}
               >
                 <div className="flex items-center justify-between">
-                  {/* From User */}
                   <div className="flex items-center gap-2">
                     <Avatar name={tx.fromUser.name} size="sm" />
                     <span className="text-sm font-bold text-slate-900">
@@ -464,7 +426,6 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
                     </span>
                   </div>
 
-                  {/* Transfer Arrow & Amount */}
                   <div className="flex flex-col items-center px-3">
                     <span className="text-xs font-extrabold text-slate-900 bg-slate-100 px-3 py-1 rounded-full border border-slate-200">
                       {formatCurrency(tx.amount, currency)}
@@ -474,7 +435,6 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
                     </div>
                   </div>
 
-                  {/* To User */}
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-bold text-slate-900">
                       {isReceiver ? 'You' : tx.toUser.name}
@@ -483,33 +443,51 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
                   </div>
                 </div>
 
+                {/* Sub-breakdown of pending and remaining amounts */}
+                {pendingSum > 0 && (
+                  <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-2.5 text-xs space-y-1">
+                    <div className="flex justify-between items-center text-slate-600">
+                      <span>Total Debt Owed:</span>
+                      <span className="font-bold text-slate-900">{formatCurrency(tx.amount, currency)}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-amber-800">
+                      <span className="font-semibold">Pending Host Approval:</span>
+                      <span className="font-extrabold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-lg border border-amber-200">
+                        {formatCurrency(pendingSum, currency)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center text-slate-700 pt-1 border-t border-slate-200/60 font-bold">
+                      <span>Remaining Available to Settle:</span>
+                      <span className="font-mono text-emerald-700">{formatCurrency(remainingUnsettled, currency)}</span>
+                    </div>
+                  </div>
+                )}
+
                 {/* Action Buttons */}
                 <div className="flex items-center justify-between pt-2 border-t border-slate-100">
                   <button
-                    onClick={() => handleCopyUPI(tx.fromUser.name, tx.toUser.name, tx.amount, tx.id)}
+                    onClick={() => handleCopyUPI(tx.fromUser.name, tx.toUser.name, remainingUnsettled > 0 ? remainingUnsettled : tx.amount, tx.id)}
                     className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-700 font-semibold px-2.5 py-1 rounded-xl hover:bg-slate-100 transition-colors"
                   >
                     <Copy className="w-3.5 h-3.5" />
                     {copiedId === tx.id ? 'Copied Details!' : 'Copy Payment Info'}
                   </button>
 
-                  {existingPending ? (
-                    <span className="inline-flex items-center gap-1 text-xs font-bold text-amber-700 bg-amber-100 px-3 py-1.5 rounded-2xl">
-                      <Clock className="w-3.5 h-3.5 text-amber-600" /> Pending Approval
-                    </span>
-                  ) : existingRollback ? (
-                    <span className="inline-flex items-center gap-1 text-xs font-bold text-purple-800 bg-purple-100 px-3 py-1.5 rounded-2xl">
-                      <RotateCcw className="w-3.5 h-3.5 text-purple-600" /> Rollback Requested
-                    </span>
-                  ) : isPayer ? (
-                    <button
-                      onClick={() => handleOpenSettleModal(tx)}
-                      disabled={submittingId === tx.id}
-                      className="flex items-center gap-1.5 text-xs font-bold px-3.5 py-1.5 rounded-2xl bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm transition-all"
-                    >
-                      <CheckCircle2 className="w-4 h-4" />
-                      Settle Up
-                    </button>
+                  {isPayer ? (
+                    remainingUnsettled > 0.01 ? (
+                      <button
+                        onClick={() => handleOpenSettleModal(partialTx)}
+                        disabled={submittingId === tx.id}
+                        className="flex items-center gap-1.5 text-xs font-bold px-3.5 py-1.5 rounded-2xl bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm transition-all"
+                      >
+                        <CheckCircle2 className="w-4 h-4" />
+                        Settle {pendingSum > 0 ? formatCurrency(remainingUnsettled, currency) : 'Up'}
+                      </button>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-xs font-bold text-amber-800 bg-amber-100 px-3 py-1.5 rounded-2xl">
+                        <Clock className="w-3.5 h-3.5 text-amber-600" /> Pending Approval
+                      </span>
+                    )
                   ) : (
                     <span className="text-[11px] font-semibold text-slate-500 bg-slate-100 border border-slate-200/80 px-3 py-1.5 rounded-2xl">
                       {isReceiver ? 'Awaiting payment to you' : `Awaiting ${tx.fromUser.name}'s payment`}

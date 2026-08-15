@@ -193,7 +193,7 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Settle Up Debt">
+    <Modal isOpen={isOpen} onClose={handleDoneSuccess} title={successResult ? 'Settlement Request Sent' : 'Settle Up Debt'}>
       {successResult ? (
         <div className="space-y-4 py-2 text-center animate-fade-in">
           <div className="w-16 h-16 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center mx-auto shadow-md">

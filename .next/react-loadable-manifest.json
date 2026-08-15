@@ -8,7 +8,7 @@
   "app/dashboard/trip/[tripId]/page.tsx -> @/components/settlement/SettlementList": {
     "id": 1286,
     "files": [
-      "static/chunks/286.fad48fd7bd53b13b.js"
+      "static/chunks/286.3ebfaf948b87b5fc.js"
     ]
   },
   "app/dashboard/trip/[tripId]/page.tsx -> @/components/trip/AnalyticsView": {
