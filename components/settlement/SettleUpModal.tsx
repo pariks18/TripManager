@@ -160,8 +160,8 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to process settlement payment');
 
-      const remainingWallet = data.userWallet?.balance ?? Math.max(0, payerWalletBalance - (paymentMethod === 'WALLET' ? amountToSettle : 0));
-      const statusLabel = data.record?.status === 'SETTLED' ? 'Settled' : 'Partially Settled';
+      const remainingWallet = payerWalletBalance;
+      const statusLabel = 'Pending Host Approval';
 
       setSuccessResult({
         paidAmount: amountToSettle,
@@ -173,9 +173,9 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
       });
 
       showToast(
-        `✓ ${formatCurrency(amountToSettle, currency)} paid to ${toUser.name} via ${paymentMethod === 'WALLET' ? 'Advance Wallet' : 'Personal Money'}`,
-        'success',
-        'Payment Successful'
+        `✓ Settlement request of ${formatCurrency(amountToSettle, currency)} submitted to ${toUser.name} for Host approval`,
+        'info',
+        'Request Submitted'
       );
 
       onSuccess();
@@ -196,23 +196,23 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
     <Modal isOpen={isOpen} onClose={onClose} title="Settle Up Debt">
       {successResult ? (
         <div className="space-y-4 py-2 text-center animate-fade-in">
-          <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto shadow-md">
+          <div className="w-16 h-16 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center mx-auto shadow-md">
             <CheckCircle2 className="w-10 h-10" />
           </div>
 
           <div>
-            <span className="text-xs font-bold uppercase tracking-wider text-emerald-600">Payment Completed</span>
+            <span className="text-xs font-bold uppercase tracking-wider text-amber-700">Settlement Request Submitted</span>
             <h3 className="text-2xl font-black text-slate-900 mt-0.5">
               {formatCurrency(successResult.paidAmount, currency)}
             </h3>
             <p className="text-xs font-semibold text-slate-600 mt-1">
-              Paid to <span className="text-slate-900 font-bold">{successResult.toUserName}</span>
+              Sent to <span className="text-slate-900 font-bold">{successResult.toUserName}</span> for Host Approval
             </p>
           </div>
 
           <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 text-xs space-y-2.5 text-left">
             <div className="flex justify-between items-center text-slate-600">
-              <span>Paid From:</span>
+              <span>Payment Source:</span>
               <span className="font-bold text-slate-900">
                 {successResult.method === 'WALLET'
                   ? `${successResult.fromUserName}'s Advance Wallet`
@@ -222,7 +222,7 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
 
             {successResult.method === 'WALLET' && (
               <div className="flex justify-between items-center text-slate-600">
-                <span>Wallet Remaining:</span>
+                <span>Current Wallet Balance:</span>
                 <span className="font-extrabold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-200">
                   {formatCurrency(successResult.remainingWallet, currency)}
                 </span>
@@ -230,17 +230,14 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
             )}
 
             <div className="flex justify-between items-center text-slate-600 pt-2 border-t border-slate-200/60">
-              <span>Settlement Status:</span>
-              <span
-                className={`font-extrabold px-2.5 py-0.5 rounded-full ${
-                  successResult.status === 'Settled'
-                    ? 'bg-emerald-100 text-emerald-800'
-                    : 'bg-amber-100 text-amber-900'
-                }`}
-              >
+              <span>Request Status:</span>
+              <span className="font-extrabold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900">
                 {successResult.status}
               </span>
             </div>
+            <p className="text-[11px] text-slate-500 italic pt-1">
+              * Wallet balance will be deducted only after the Host/Recipient approves this request.
+            </p>
           </div>
 
           <Button onClick={handleDoneSuccess} className="w-full font-bold py-3 text-xs mt-2">

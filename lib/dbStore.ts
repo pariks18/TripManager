@@ -1623,7 +1623,7 @@ export const dbStore = {
   ): Promise<SettlementRecordDetail> {
     await ensureDatabaseSeeded();
 
-    // 1. Strict Server Authorization Check
+    // 1. Strict Server Authorization Check: Only the debtor can request a settlement
     if (sessionUserId !== fromUserId) {
       throw new Error('Forbidden: You can only pay settlement debts that belong to you.');
     }
@@ -1635,7 +1635,7 @@ export const dbStore = {
     const roundedPaymentAmount = Math.round(paymentAmount * 100) / 100;
     const userSelect = { select: { id: true, name: true, email: true } };
 
-    // 2. All operations, validations, and decrements execute INSIDE atomic Prisma transaction
+    // 2. All operations, validations, and request creation execute INSIDE atomic Prisma transaction
     const result = await prisma.$transaction(async (tx) => {
       // Re-fetch trip with fresh members, expenses, and settlements inside tx
       const trip = await tx.trip.findUnique({
@@ -1700,58 +1700,27 @@ export const dbStore = {
         );
       }
 
-      // If paying via WALLET, atomically verify and decrement the wallet
-      let userWalletId: string | null = null;
+      // If paying via WALLET, verify that the debtor has sufficient balance (DO NOT DEDUCT YET)
       if (paymentMethod === 'WALLET') {
-        let userWallet = await tx.userWallet.findUnique({
+        const userWallet = await tx.userWallet.findUnique({
           where: { userId_tripId: { userId: fromUserId, tripId } },
         });
 
-        if (!userWallet) {
-          userWallet = await tx.userWallet.create({
-            data: {
-              id: generateObjectId(),
-              userId: fromUserId,
-              tripId,
-              balance: 0,
-              totalAdded: 0,
-              totalSpent: 0,
-            },
-          });
-        }
-
-        if (userWallet.balance < roundedPaymentAmount - 0.01) {
+        const availableBalance = userWallet ? userWallet.balance : 0;
+        if (availableBalance < roundedPaymentAmount - 0.01) {
           throw new Error(
-            `Insufficient wallet balance. Available: ${trip.currency}${userWallet.balance}, required: ${trip.currency}${roundedPaymentAmount}.`
+            `Insufficient wallet balance. Available: ${trip.currency}${availableBalance}, required: ${trip.currency}${roundedPaymentAmount}. Please add advance money first.`
           );
         }
-
-        // Atomic conditional update to prevent race conditions
-        const updateWalletResult = await tx.userWallet.updateMany({
-          where: {
-            id: userWallet.id,
-            balance: { gte: roundedPaymentAmount - 0.01 },
-          },
-          data: {
-            balance: { decrement: roundedPaymentAmount },
-            totalSpent: { increment: roundedPaymentAmount },
-          },
-        });
-
-        if (updateWalletResult.count === 0) {
-          throw new Error('Concurrent wallet update detected or insufficient balance. Transaction aborted.');
-        }
-
-        userWalletId = userWallet.id;
       }
 
-      // Find or create existing open settlement record
+      // Find or create existing PENDING settlement record
       let existingSettlement = await tx.settlement.findFirst({
         where: {
           tripId,
           fromUserId,
           toUserId,
-          status: { in: ['PENDING', 'PARTIALLY_SETTLED'] },
+          status: 'PENDING',
         },
       });
 
@@ -1762,48 +1731,27 @@ export const dbStore = {
             tripId,
             fromUserId,
             toUserId,
-            amount: currentOutstanding,
+            amount: roundedPaymentAmount,
             settledAmount: 0,
-            remainingAmount: currentOutstanding,
+            remainingAmount: roundedPaymentAmount,
             paymentMethod,
             status: 'PENDING',
             note: note ? note.trim() : null,
           },
+          include: { fromUser: true, toUser: true },
         });
-      }
-
-      const prevSettled = existingSettlement.settledAmount || 0;
-      const newSettledAmount = Math.round((prevSettled + roundedPaymentAmount) * 100) / 100;
-      const newRemainingAmount = Math.max(0, Math.round((existingSettlement.amount - newSettledAmount) * 100) / 100);
-
-      const isFullySettled = newRemainingAmount <= 0.01;
-      const newStatus = isFullySettled ? 'SETTLED' : 'PARTIALLY_SETTLED';
-
-      if (paymentMethod === 'WALLET' && userWalletId) {
-        await tx.walletTransaction.create({
+      } else {
+        existingSettlement = await tx.settlement.update({
+          where: { id: existingSettlement.id },
           data: {
-            id: generateObjectId(),
-            walletId: userWalletId,
-            type: 'SETTLEMENT_PAYMENT',
             amount: roundedPaymentAmount,
-            description: `Settlement payment to ${toUser.name}`,
-            settlementId: existingSettlement.id,
-            createdById: fromUserId,
+            paymentMethod,
+            note: note ? note.trim() : existingSettlement.note,
+            updatedAt: new Date(),
           },
+          include: { fromUser: true, toUser: true },
         });
       }
-
-      const updatedSettlement = await tx.settlement.update({
-        where: { id: existingSettlement.id },
-        data: {
-          settledAmount: newSettledAmount,
-          remainingAmount: newRemainingAmount,
-          paymentMethod,
-          status: newStatus,
-          note: note ? note.trim() : existingSettlement.note,
-        },
-        include: { fromUser: true, toUser: true },
-      });
 
       await tx.activity.create({
         data: {
@@ -1811,24 +1759,32 @@ export const dbStore = {
           tripId,
           userId: fromUserId,
           actionType: 'SETTLEMENT_CONFIRMED',
-          details: `${fromUser.name} paid ${trip.currency}${roundedPaymentAmount} to ${toUser.name} via ${paymentMethod === 'WALLET' ? 'Advance Wallet' : 'Personal Money'} (${updatedSettlement.status === 'SETTLED' ? 'Fully Settled' : 'Partially Settled'})`,
+          details: `${fromUser.name} submitted a settlement payment request of ${trip.currency}${roundedPaymentAmount} to ${toUser.name} via ${paymentMethod === 'WALLET' ? 'Advance Wallet' : 'Personal Money'} (Pending Host/Recipient Approval)`,
           amount: roundedPaymentAmount,
         },
       });
 
-      return updatedSettlement;
+      return existingSettlement;
     });
 
     return {
       id: result.id,
       tripId: result.tripId,
       fromUserId: result.fromUserId,
-      fromUser: { id: result.fromUser.id, name: result.fromUser.name, email: result.fromUser.email },
+      fromUser: {
+        id: (result as any).fromUser?.id || fromUserId,
+        name: (result as any).fromUser?.name || 'User',
+        email: (result as any).fromUser?.email || '',
+      },
       toUserId: result.toUserId,
-      toUser: { id: result.toUser.id, name: result.toUser.name, email: result.toUser.email },
+      toUser: {
+        id: (result as any).toUser?.id || toUserId,
+        name: (result as any).toUser?.name || 'User',
+        email: (result as any).toUser?.email || '',
+      },
       amount: result.amount,
-      settledAmount: result.settledAmount,
-      remainingAmount: result.remainingAmount,
+      settledAmount: result.settledAmount || 0,
+      remainingAmount: result.remainingAmount || result.amount,
       paymentMethod: (result.paymentMethod as 'PERSONAL' | 'WALLET') || 'PERSONAL',
       status: result.status as SettlementRecordDetail['status'],
       note: result.note,
@@ -1847,149 +1803,165 @@ export const dbStore = {
     await ensureDatabaseSeeded();
 
     const userSelect = { select: { id: true, name: true, email: true } };
-    const settlement = await prisma.settlement.findUnique({
-      where: { id: settlementId },
-      include: { trip: { include: { members: true } }, fromUser: true, toUser: true },
-    });
-    if (!settlement || settlement.tripId !== tripId) throw new Error('Settlement record not found');
 
-    const currentMember = settlement.trip.members.find((m) => m.userId === currentUserId);
-    const isAdmin = currentMember?.role === 'ADMIN' || settlement.trip.createdById === currentUserId;
-    const isReceiver = settlement.toUserId === currentUserId;
-    const isPayer = settlement.fromUserId === currentUserId;
+    // All approval operations, validations, and wallet deductions run inside atomic Prisma transaction
+    const result = await prisma.$transaction(async (tx) => {
+      const settlement = await tx.settlement.findUnique({
+        where: { id: settlementId },
+        include: { trip: { include: { members: true } }, fromUser: true, toUser: true },
+      });
+      if (!settlement || settlement.tripId !== tripId) throw new Error('Settlement record not found');
 
-    // Re-validate against current outstanding balance on approval
-    if (targetStatus === 'CONFIRMED' && settlement.status === 'PENDING') {
-      const trip = await prisma.trip.findUnique({
-        where: { id: tripId },
-        include: {
-          members: { include: { user: userSelect } },
-          expenses: {
-            include: {
-              paidBy: userSelect,
-              createdBy: userSelect,
-              participants: { include: { user: userSelect } },
+      const currentMember = settlement.trip.members.find((m) => m.userId === currentUserId);
+      const isAdmin = currentMember?.role === 'ADMIN' || settlement.trip.createdById === currentUserId;
+      const isReceiver = settlement.toUserId === currentUserId;
+      const isPayer = settlement.fromUserId === currentUserId;
+
+      // Validate state transitions & permissions
+      if (targetStatus === 'CONFIRMED' || targetStatus === 'REJECTED') {
+        if (settlement.status === 'ROLLBACK_REQUESTED') {
+          if (!isPayer && !isAdmin) {
+            throw new Error('Forbidden: Only the client (payer) or Super Host/Admin can reject a rollback request.');
+          }
+        } else {
+          if (settlement.status !== 'PENDING') {
+            throw new Error('Invalid action: Settlement request is not pending approval or has already been processed.');
+          }
+          if (!isReceiver && !isAdmin) {
+            throw new Error('Forbidden: Only the payment recipient or Super Host/Admin can approve/reject settlement requests.');
+          }
+        }
+      } else if (targetStatus === 'ROLLBACK_REQUESTED') {
+        if (!isReceiver && !isAdmin) {
+          throw new Error('Forbidden: Only the Super Host/Admin or recipient can request a settlement rollback.');
+        }
+        if (settlement.status !== 'CONFIRMED' && settlement.status !== 'COMPLETED') {
+          throw new Error('Invalid action: Only confirmed settlements can be requested for rollback.');
+        }
+      } else if (targetStatus === 'ROLLED_BACK') {
+        if (!isPayer && !isAdmin) {
+          throw new Error('Forbidden: Only the client (payer) or Super Host/Admin can approve a settlement rollback.');
+        }
+        if (settlement.status !== 'ROLLBACK_REQUESTED') {
+          throw new Error('Invalid action: No rollback request is currently pending for this settlement.');
+        }
+      }
+
+      // If APPROVING a PENDING settlement (CONFIRMED)
+      let newSettledAmount = settlement.settledAmount || 0;
+      let newRemainingAmount = settlement.remainingAmount ?? settlement.amount;
+
+      if (targetStatus === 'CONFIRMED' && settlement.status === 'PENDING') {
+        newSettledAmount = settlement.amount;
+        newRemainingAmount = 0;
+
+        // IF payment method is WALLET: Atomically verify and deduct debtor's personal wallet now
+        if (settlement.paymentMethod === 'WALLET') {
+          let userWallet = await tx.userWallet.findUnique({
+            where: { userId_tripId: { userId: settlement.fromUserId, tripId } },
+          });
+
+          if (!userWallet || userWallet.balance < settlement.amount - 0.01) {
+            throw new Error(
+              `Cannot approve settlement: ${settlement.fromUser.name} has insufficient wallet balance (Available: ${settlement.trip.currency || '₹'}${userWallet?.balance || 0}, required: ${settlement.trip.currency || '₹'}${settlement.amount}).`
+            );
+          }
+
+          // Atomic conditional update to prevent double deduction or negative balance
+          const updateWalletResult = await tx.userWallet.updateMany({
+            where: {
+              id: userWallet.id,
+              balance: { gte: settlement.amount - 0.01 },
             },
-          },
-          settlements: { include: { fromUser: userSelect, toUser: userSelect } },
+            data: {
+              balance: { decrement: settlement.amount },
+              totalSpent: { increment: settlement.amount },
+            },
+          });
+
+          if (updateWalletResult.count === 0) {
+            throw new Error('Concurrent wallet update detected or insufficient balance. Approval aborted.');
+          }
+
+          // Create WalletTransaction record
+          await tx.walletTransaction.create({
+            data: {
+              id: generateObjectId(),
+              walletId: userWallet.id,
+              type: 'SETTLEMENT_PAYMENT',
+              amount: settlement.amount,
+              description: `Settlement payment to ${settlement.toUser.name}`,
+              settlementId: settlement.id,
+              createdById: settlement.fromUserId,
+            },
+          });
+        }
+      }
+
+      const updated = await tx.settlement.update({
+        where: { id: settlementId },
+        data: {
+          status: targetStatus,
+          settledAmount: newSettledAmount,
+          remainingAmount: newRemainingAmount,
+          note: note !== undefined ? note : settlement.note,
+          updatedAt: new Date(),
+        },
+        include: { fromUser: true, toUser: true },
+      });
+
+      const currentUser = await tx.user.findUnique({ where: { id: currentUserId } });
+      let actionType: ActivityDetail['actionType'] = 'SETTLEMENT_CONFIRMED';
+      let activityText = '';
+
+      if (targetStatus === 'CONFIRMED') {
+        if (settlement.status === 'ROLLBACK_REQUESTED') {
+          actionType = 'SETTLEMENT_ROLLBACK_REJECTED';
+          activityText = `${currentUser?.name || 'User'} rejected settlement rollback. Settlement of ${settlement.trip.currency || '₹'}${settlement.amount} between ${settlement.fromUser.name} and ${settlement.toUser.name} remains valid.`;
+        } else {
+          actionType = 'SETTLEMENT_CONFIRMED';
+          activityText = `${currentUser?.name || 'User'} approved settlement of ${settlement.trip.currency || '₹'}${settlement.amount} from ${settlement.fromUser.name} to ${settlement.toUser.name} (Paid via ${settlement.paymentMethod === 'WALLET' ? 'Advance Wallet' : 'Personal Money'})`;
+        }
+      } else if (targetStatus === 'REJECTED') {
+        actionType = 'SETTLEMENT_REJECTED';
+        activityText = `${currentUser?.name || 'User'} rejected settlement request of ${settlement.trip.currency || '₹'}${settlement.amount} from ${settlement.fromUser.name} to ${settlement.toUser.name}`;
+      } else if (targetStatus === 'ROLLBACK_REQUESTED') {
+        actionType = 'SETTLEMENT_ROLLBACK_REQUESTED';
+        activityText = `${currentUser?.name || 'User'} requested rollback of settlement (${settlement.trip.currency || '₹'}${settlement.amount}) with ${settlement.fromUser.name} (Pending client approval)`;
+      } else if (targetStatus === 'ROLLED_BACK') {
+        actionType = 'SETTLEMENT_ROLLBACK_APPROVED';
+        activityText = `${currentUser?.name || 'User'} approved rollback of settlement (${settlement.trip.currency || '₹'}${settlement.amount}). Settlement reversed to unsettled.`;
+      }
+
+      await tx.activity.create({
+        data: {
+          id: generateObjectId(),
+          tripId,
+          userId: currentUserId,
+          actionType,
+          details: activityText,
+          amount: settlement.amount,
         },
       });
-      if (trip) {
-        const approvedExpenses: ExpenseDetail[] = trip.expenses
-          .filter((e) => e.status === 'APPROVED')
-          .map((e) => ({
-            ...e,
-            category: e.category as CategoryType,
-            paymentMode: (e.paymentMode as 'PERSONALLY' | 'WALLET') || 'PERSONALLY',
-            date: e.date.toISOString(),
-            createdAt: e.createdAt.toISOString(),
-            updatedAt: e.updatedAt.toISOString(),
-            status: e.status as any,
-            participants: e.participants.map((p) => ({ ...p, user: p.user })),
-          }));
 
-        const settlementRecords: SettlementRecordDetail[] = trip.settlements.map((s) => ({
-          ...s,
-          paymentMethod: (s.paymentMethod as 'PERSONAL' | 'WALLET') || 'PERSONAL',
-          status: s.status as any,
-          createdAt: s.createdAt.toISOString(),
-          updatedAt: s.updatedAt.toISOString(),
-        }));
-
-        const mappedMembers = trip.members.map((m) => ({
-          user: { id: m.user.id, name: m.user.name, email: m.user.email },
-        }));
-
-        const computedSettlements = computeSettlements(mappedMembers, approvedExpenses, settlementRecords);
-        const pairTx = computedSettlements.find(
-          (tx) => tx.fromUser.id === settlement.fromUserId && tx.toUser.id === settlement.toUserId
-        );
-        const currentOutstanding = pairTx ? pairTx.amount : 0;
-
-        if (settlement.amount > currentOutstanding + 0.01) {
-          throw new Error(
-            `Cannot approve settlement: requested amount (${trip.currency}${settlement.amount}) exceeds current outstanding debt (${trip.currency}${currentOutstanding}).`
-          );
-        }
-      }
-    }
-
-    // Validate state transitions & permissions
-    if (targetStatus === 'CONFIRMED' || targetStatus === 'REJECTED') {
-      if (settlement.status === 'ROLLBACK_REQUESTED') {
-        if (!isPayer && !isAdmin) {
-          throw new Error('Forbidden: Only the client (payer) or Super Host/Admin can reject a rollback request.');
-        }
-      } else {
-        if (!isReceiver && !isAdmin) {
-          throw new Error('Forbidden: Only the payment recipient or Super Host/Admin can approve/reject settlement requests.');
-        }
-      }
-    } else if (targetStatus === 'ROLLBACK_REQUESTED') {
-      if (!isReceiver && !isAdmin) {
-        throw new Error('Forbidden: Only the Super Host/Admin or recipient can request a settlement rollback.');
-      }
-      if (settlement.status !== 'CONFIRMED' && settlement.status !== 'COMPLETED') {
-        throw new Error('Invalid action: Only confirmed settlements can be requested for rollback.');
-      }
-    } else if (targetStatus === 'ROLLED_BACK') {
-      if (!isPayer && !isAdmin) {
-        throw new Error('Forbidden: Only the client (payer) or Super Host/Admin can approve a settlement rollback.');
-      }
-      if (settlement.status !== 'ROLLBACK_REQUESTED') {
-        throw new Error('Invalid action: No rollback request is currently pending for this settlement.');
-      }
-    }
-
-    const updated = await prisma.settlement.update({
-      where: { id: settlementId },
-      data: { status: targetStatus, note: note !== undefined ? note : settlement.note, updatedAt: new Date() },
-      include: { fromUser: true, toUser: true },
+      return updated;
     });
 
-    const currentUser = await prisma.user.findUnique({ where: { id: currentUserId } });
-    let actionType: ActivityDetail['actionType'] = 'SETTLEMENT_CONFIRMED';
-    let activityText = '';
-
-    if (targetStatus === 'CONFIRMED') {
-      if (settlement.status === 'ROLLBACK_REQUESTED') {
-        actionType = 'SETTLEMENT_ROLLBACK_REJECTED';
-        activityText = `${currentUser?.name || 'User'} rejected settlement rollback. Settlement of ${settlement.trip.currency || '₹'}${settlement.amount} between ${settlement.fromUser.name} and ${settlement.toUser.name} remains valid.`;
-      } else {
-        actionType = 'SETTLEMENT_CONFIRMED';
-        activityText = `${currentUser?.name || 'User'} approved settlement of ${settlement.trip.currency || '₹'}${settlement.amount} from ${settlement.fromUser.name} to ${settlement.toUser.name}`;
-      }
-    } else if (targetStatus === 'REJECTED') {
-      actionType = 'SETTLEMENT_REJECTED';
-      activityText = `${currentUser?.name || 'User'} rejected settlement request of ${settlement.trip.currency || '₹'}${settlement.amount} from ${settlement.fromUser.name} to ${settlement.toUser.name}`;
-    } else if (targetStatus === 'ROLLBACK_REQUESTED') {
-      actionType = 'SETTLEMENT_ROLLBACK_REQUESTED';
-      activityText = `${currentUser?.name || 'User'} requested rollback of settlement (${settlement.trip.currency || '₹'}${settlement.amount}) with ${settlement.fromUser.name} (Pending client approval)`;
-    } else if (targetStatus === 'ROLLED_BACK') {
-      actionType = 'SETTLEMENT_ROLLBACK_APPROVED';
-      activityText = `${currentUser?.name || 'User'} approved rollback of settlement (${settlement.trip.currency || '₹'}${settlement.amount}). Settlement reversed to unsettled.`;
-    }
-
-    await logActivity(
-      tripId,
-      currentUserId,
-      actionType,
-      activityText,
-      settlement.amount
-    );
-
     return {
-      id: updated.id,
-      tripId: updated.tripId,
-      fromUserId: updated.fromUserId,
-      fromUser: { id: updated.fromUser.id, name: updated.fromUser.name, email: updated.fromUser.email },
-      toUserId: updated.toUserId,
-      toUser: { id: updated.toUser.id, name: updated.toUser.name, email: updated.toUser.email },
-      amount: updated.amount,
-      status: updated.status as SettlementRecordDetail['status'],
-      note: updated.note,
-      createdAt: updated.createdAt.toISOString(),
-      updatedAt: updated.updatedAt.toISOString(),
+      id: result.id,
+      tripId: result.tripId,
+      fromUserId: result.fromUserId,
+      fromUser: { id: result.fromUser.id, name: result.fromUser.name, email: result.fromUser.email },
+      toUserId: result.toUserId,
+      toUser: { id: result.toUser.id, name: result.toUser.name, email: result.toUser.email },
+      amount: result.amount,
+      settledAmount: result.settledAmount || 0,
+      remainingAmount: result.remainingAmount || 0,
+      paymentMethod: (result.paymentMethod as 'PERSONAL' | 'WALLET') || 'PERSONAL',
+      status: result.status as SettlementRecordDetail['status'],
+      note: result.note,
+      createdAt: result.createdAt.toISOString(),
+      updatedAt: result.updatedAt.toISOString(),
     };
   },
 
