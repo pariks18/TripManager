@@ -1603,6 +1603,7 @@ export const dbStore = {
 
   async paySettlement(
     tripId: string,
+    sessionUserId: string,
     fromUserId: string,
     toUserId: string,
     paymentAmount: number,
@@ -1611,83 +1612,127 @@ export const dbStore = {
   ): Promise<SettlementRecordDetail> {
     await ensureDatabaseSeeded();
 
-    if (!paymentAmount || paymentAmount <= 0) {
+    // 1. Strict Server Authorization Check
+    if (sessionUserId !== fromUserId) {
+      throw new Error('Forbidden: You can only pay settlement debts that belong to you.');
+    }
+
+    if (!paymentAmount || isNaN(paymentAmount) || paymentAmount <= 0) {
       throw new Error('Payment amount must be greater than zero.');
     }
 
     const roundedPaymentAmount = Math.round(paymentAmount * 100) / 100;
     const userSelect = { select: { id: true, name: true, email: true } };
 
-    const fromUser = await prisma.user.findUnique({ where: { id: fromUserId } });
-    const toUser = await prisma.user.findUnique({ where: { id: toUserId } });
-    if (!fromUser || !toUser) throw new Error('Users not found');
-
-    const trip = await prisma.trip.findUnique({
-      where: { id: tripId },
-      include: {
-        members: { include: { user: userSelect } },
-        expenses: {
-          include: {
-            paidBy: userSelect,
-            createdBy: userSelect,
-            participants: { include: { user: userSelect } },
+    // 2. All operations, validations, and decrements execute INSIDE atomic Prisma transaction
+    const result = await prisma.$transaction(async (tx) => {
+      // Re-fetch trip with fresh members, expenses, and settlements inside tx
+      const trip = await tx.trip.findUnique({
+        where: { id: tripId },
+        include: {
+          members: { include: { user: userSelect } },
+          expenses: {
+            include: {
+              paidBy: userSelect,
+              createdBy: userSelect,
+              participants: { include: { user: userSelect } },
+            },
           },
+          settlements: { include: { fromUser: userSelect, toUser: userSelect } },
         },
-        settlements: { include: { fromUser: userSelect, toUser: userSelect } },
-      },
-    });
-    if (!trip) throw new Error('Trip not found');
+      });
+      if (!trip) throw new Error('Trip not found.');
 
-    const approvedExpenses: ExpenseDetail[] = trip.expenses
-      .filter((e) => e.status === 'APPROVED')
-      .map((e) => ({
-        ...e,
-        category: e.category as CategoryType,
-        paymentMode: (e.paymentMode as 'PERSONALLY' | 'WALLET') || 'PERSONALLY',
-        date: e.date.toISOString(),
-        createdAt: e.createdAt.toISOString(),
-        updatedAt: e.updatedAt.toISOString(),
-        status: e.status as any,
-        participants: e.participants.map((p) => ({ ...p, user: p.user })),
+      const fromUser = await tx.user.findUnique({ where: { id: fromUserId } });
+      const toUser = await tx.user.findUnique({ where: { id: toUserId } });
+      if (!fromUser || !toUser) throw new Error('Users not found.');
+
+      // Re-calculate live debt inside transaction
+      const approvedExpenses: ExpenseDetail[] = trip.expenses
+        .filter((e) => e.status === 'APPROVED')
+        .map((e) => ({
+          ...e,
+          category: e.category as CategoryType,
+          paymentMode: (e.paymentMode as 'PERSONALLY' | 'WALLET') || 'PERSONALLY',
+          date: e.date.toISOString(),
+          createdAt: e.createdAt.toISOString(),
+          updatedAt: e.updatedAt.toISOString(),
+          status: e.status as any,
+          participants: e.participants.map((p) => ({ ...p, user: p.user })),
+        }));
+
+      const settlementRecords: SettlementRecordDetail[] = trip.settlements.map((s) => ({
+        ...s,
+        paymentMethod: (s.paymentMethod as 'PERSONAL' | 'WALLET') || 'PERSONAL',
+        status: s.status as any,
+        createdAt: s.createdAt.toISOString(),
+        updatedAt: s.updatedAt.toISOString(),
       }));
 
-    const settlementRecords: SettlementRecordDetail[] = trip.settlements.map((s) => ({
-      ...s,
-      paymentMethod: (s.paymentMethod as 'PERSONAL' | 'WALLET') || 'PERSONAL',
-      status: s.status as any,
-      createdAt: s.createdAt.toISOString(),
-      updatedAt: s.updatedAt.toISOString(),
-    }));
+      const mappedMembers = trip.members.map((m) => ({
+        user: { id: m.user.id, name: m.user.name, email: m.user.email },
+      }));
 
-    const mappedMembers = trip.members.map((m) => ({
-      user: { id: m.user.id, name: m.user.name, email: m.user.email },
-    }));
+      const computedSettlements = computeSettlements(mappedMembers, approvedExpenses, settlementRecords);
+      const pairTx = computedSettlements.find((txItem) => txItem.fromUser.id === fromUserId && txItem.toUser.id === toUserId);
+      const currentOutstanding = pairTx ? pairTx.amount : 0;
 
-    const computedSettlements = computeSettlements(mappedMembers, approvedExpenses, settlementRecords);
-    const pairTx = computedSettlements.find((tx) => tx.fromUser.id === fromUserId && tx.toUser.id === toUserId);
-    const currentOutstanding = pairTx ? pairTx.amount : 0;
+      if (currentOutstanding <= 0.01) {
+        throw new Error(`Debt between ${fromUser.name} and ${toUser.name} has already been settled or does not exist.`);
+      }
 
-    if (currentOutstanding <= 0.01) {
-      throw new Error(`There is no outstanding debt for ${fromUser.name} to pay ${toUser.name}.`);
-    }
-
-    if (roundedPaymentAmount > currentOutstanding + 0.01) {
-      throw new Error(
-        `Payment amount (${trip.currency}${roundedPaymentAmount}) cannot exceed current outstanding debt (${trip.currency}${currentOutstanding}).`
-      );
-    }
-
-    let userWalletObj: any = null;
-    if (paymentMethod === 'WALLET') {
-      userWalletObj = await dbStore.getOrCreateUserWallet(fromUserId, tripId);
-      if (userWalletObj.balance < roundedPaymentAmount - 0.01) {
+      if (roundedPaymentAmount > currentOutstanding + 0.01) {
         throw new Error(
-          `Your advance wallet balance (${trip.currency}${userWalletObj.balance}) is insufficient to cover ${trip.currency}${roundedPaymentAmount}. Please add advance funds or pay via Personal Money.`
+          `Payment amount (${trip.currency}${roundedPaymentAmount}) exceeds current remaining debt (${trip.currency}${currentOutstanding}).`
         );
       }
-    }
 
-    const result = await prisma.$transaction(async (tx) => {
+      // If paying via WALLET, atomically verify and decrement the wallet
+      let userWalletId: string | null = null;
+      if (paymentMethod === 'WALLET') {
+        let userWallet = await tx.userWallet.findUnique({
+          where: { userId_tripId: { userId: fromUserId, tripId } },
+        });
+
+        if (!userWallet) {
+          userWallet = await tx.userWallet.create({
+            data: {
+              id: generateObjectId(),
+              userId: fromUserId,
+              tripId,
+              balance: 0,
+              totalAdded: 0,
+              totalSpent: 0,
+            },
+          });
+        }
+
+        if (userWallet.balance < roundedPaymentAmount - 0.01) {
+          throw new Error(
+            `Insufficient wallet balance. Available: ${trip.currency}${userWallet.balance}, required: ${trip.currency}${roundedPaymentAmount}.`
+          );
+        }
+
+        // Atomic conditional update to prevent race conditions
+        const updateWalletResult = await tx.userWallet.updateMany({
+          where: {
+            id: userWallet.id,
+            balance: { gte: roundedPaymentAmount - 0.01 },
+          },
+          data: {
+            balance: { decrement: roundedPaymentAmount },
+            totalSpent: { increment: roundedPaymentAmount },
+          },
+        });
+
+        if (updateWalletResult.count === 0) {
+          throw new Error('Concurrent wallet update detected or insufficient balance. Transaction aborted.');
+        }
+
+        userWalletId = userWallet.id;
+      }
+
+      // Find or create existing open settlement record
       let existingSettlement = await tx.settlement.findFirst({
         where: {
           tripId,
@@ -1721,19 +1766,11 @@ export const dbStore = {
       const isFullySettled = newRemainingAmount <= 0.01;
       const newStatus = isFullySettled ? 'SETTLED' : 'PARTIALLY_SETTLED';
 
-      if (paymentMethod === 'WALLET' && userWalletObj) {
-        await tx.userWallet.update({
-          where: { id: userWalletObj.id },
-          data: {
-            balance: { decrement: roundedPaymentAmount },
-            totalSpent: { increment: roundedPaymentAmount },
-          },
-        });
-
+      if (paymentMethod === 'WALLET' && userWalletId) {
         await tx.walletTransaction.create({
           data: {
             id: generateObjectId(),
-            walletId: userWalletObj.id,
+            walletId: userWalletId,
             type: 'SETTLEMENT_PAYMENT',
             amount: roundedPaymentAmount,
             description: `Settlement payment to ${toUser.name}`,
@@ -1755,16 +1792,19 @@ export const dbStore = {
         include: { fromUser: true, toUser: true },
       });
 
+      await tx.activity.create({
+        data: {
+          id: generateObjectId(),
+          tripId,
+          userId: fromUserId,
+          actionType: 'SETTLEMENT_CONFIRMED',
+          details: `${fromUser.name} paid ${trip.currency}${roundedPaymentAmount} to ${toUser.name} via ${paymentMethod === 'WALLET' ? 'Advance Wallet' : 'Personal Money'} (${updatedSettlement.status === 'SETTLED' ? 'Fully Settled' : 'Partially Settled'})`,
+          amount: roundedPaymentAmount,
+        },
+      });
+
       return updatedSettlement;
     });
-
-    await logActivity(
-      tripId,
-      fromUserId,
-      'SETTLEMENT_CONFIRMED',
-      `${fromUser.name} paid ${trip.currency}${roundedPaymentAmount} to ${toUser.name} via ${paymentMethod === 'WALLET' ? 'Advance Wallet' : 'Personal Money'} (${result.status === 'SETTLED' ? 'Fully Settled' : 'Partially Settled'})`,
-      roundedPaymentAmount
-    );
 
     return {
       id: result.id,

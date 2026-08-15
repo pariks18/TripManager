@@ -494,7 +494,7 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
                     <span className="inline-flex items-center gap-1 text-xs font-bold text-purple-800 bg-purple-100 px-3 py-1.5 rounded-2xl">
                       <RotateCcw className="w-3.5 h-3.5 text-purple-600" /> Rollback Requested
                     </span>
-                  ) : (
+                  ) : isPayer ? (
                     <button
                       onClick={() => handleOpenSettleModal(tx)}
                       disabled={submittingId === tx.id}
@@ -503,6 +503,10 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
                       <CheckCircle2 className="w-4 h-4" />
                       Settle Up
                     </button>
+                  ) : (
+                    <span className="text-[11px] font-semibold text-slate-500 bg-slate-100 border border-slate-200/80 px-3 py-1.5 rounded-2xl">
+                      {isReceiver ? 'Awaiting payment to you' : `Awaiting ${tx.fromUser.name}'s payment`}
+                    </span>
                   )}
                 </div>
               </div>

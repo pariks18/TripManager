@@ -27,6 +27,7 @@ export async function POST(
 
     const record = await dbStore.paySettlement(
       params.tripId,
+      user.id,
       fromUserId,
       toUserId,
       paymentAmount,
