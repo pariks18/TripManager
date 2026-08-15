@@ -18,15 +18,27 @@ export async function GET(
     return NextResponse.json({ error: 'Trip not found' }, { status: 404 });
   }
 
+  const isHost = trip.createdById === user.id || trip.members.some((m) => m.userId === user.id && m.role === 'ADMIN');
   const balances = calculateMemberBalances(trip.members, trip.expenses, trip.settlementRecords);
-  const settlements = computeSettlements(trip.members, trip.expenses, trip.settlementRecords);
+  const allSettlements = computeSettlements(trip.members, trip.expenses, trip.settlementRecords);
+
+  // Normal users see ONLY their own actionable debts (where fromUser.id === user.id).
+  // Hosts see their own debts + transfers involving them.
+  const userSettlements = allSettlements.filter(
+    (tx) => tx.fromUser.id === user.id || (isHost && tx.toUser.id === user.id)
+  );
+
+  // Settlement history records filtered for user relevance
+  const userRecords = (trip.settlementRecords || []).filter(
+    (r) => r.fromUserId === user.id || r.toUserId === user.id || isHost
+  );
 
   return NextResponse.json({
     tripId: trip.id,
     currency: trip.currency,
-    balances,
-    settlements,
-    records: trip.settlementRecords || [],
+    balances: isHost ? balances : balances.filter((b) => b.user.id === user.id),
+    settlements: userSettlements,
+    records: userRecords,
   });
 }
 

@@ -707,7 +707,9 @@ export const dbStore = {
       })),
       settlementRecords: formattedSettlements,
       myWallet,
-      allWallets: formattedUserWallets,
+      allWallets: (directTrip.createdById === userId || directTrip.members.some((m) => m.userId === userId && m.role === 'ADMIN'))
+        ? formattedUserWallets
+        : [myWallet],
       itinerary: directTrip.itinerary.map((item) => ({
         id: item.id,
         tripId: item.tripId,
