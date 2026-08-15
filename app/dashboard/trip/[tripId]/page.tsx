@@ -637,6 +637,8 @@ export default function TripDashboardPage() {
             currency={trip.currency}
             currentUserId={user.id}
             members={trip.members}
+            myWallet={trip.myWallet}
+            allWallets={trip.allWallets}
             isAdmin={isAdmin}
             tripId={trip.id}
             onRefresh={fetchTripDetails}

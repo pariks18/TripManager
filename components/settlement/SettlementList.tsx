@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { SettlementRecordDetail, SettlementTransaction, TripMemberDetail } from '@/types';
+import { SettlementRecordDetail, SettlementTransaction, TripMemberDetail, UserWalletDetail } from '@/types';
 import { Avatar } from '@/components/ui/Avatar';
 import { formatCurrency } from '@/lib/utils';
 import { SettleUpModal } from './SettleUpModal';
@@ -27,6 +27,8 @@ interface SettlementListProps {
   currency: string;
   currentUserId: string;
   members?: TripMemberDetail[];
+  myWallet?: UserWalletDetail | null;
+  allWallets?: UserWalletDetail[];
   isAdmin?: boolean;
   tripId?: string;
   onRefresh?: () => void;
@@ -38,6 +40,8 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
   currency,
   currentUserId,
   members = [],
+  myWallet,
+  allWallets = [],
   isAdmin = false,
   tripId,
   onRefresh,
@@ -52,7 +56,7 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
 
   const pendingRecords = React.useMemo(() => settlementRecords.filter((r) => r.status === 'PENDING'), [settlementRecords]);
   const rollbackRecords = React.useMemo(() => settlementRecords.filter((r) => r.status === 'ROLLBACK_REQUESTED'), [settlementRecords]);
-  const confirmedRecords = React.useMemo(() => settlementRecords.filter((r) => r.status === 'CONFIRMED' || r.status === 'COMPLETED'), [settlementRecords]);
+  const confirmedRecords = React.useMemo(() => settlementRecords.filter((r) => r.status === 'CONFIRMED' || r.status === 'SETTLED' || r.status === 'PARTIALLY_SETTLED' || r.status === 'COMPLETED'), [settlementRecords]);
   const historyRecords = React.useMemo(() => settlementRecords.filter((r) => r.status === 'REJECTED' || r.status === 'ROLLED_BACK'), [settlementRecords]);
 
   const handleCopyUPI = (fromName: string, toName: string, amount: number, id: string) => {
@@ -533,16 +537,28 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
           <div className="space-y-2 pt-1">
             {confirmedRecords.map((rec) => {
               const canRequestRollback = isAdmin || rec.toUserId === currentUserId;
+              const displayAmount = typeof rec.settledAmount === 'number' && rec.settledAmount > 0 ? rec.settledAmount : rec.amount;
 
               return (
                 <div
                   key={rec.id}
-                  className="flex items-center justify-between p-3.5 rounded-2xl bg-slate-50 border border-slate-100 text-xs"
+                  className="flex items-center justify-between p-3.5 rounded-2xl bg-slate-50 border border-slate-100 text-xs gap-2"
                 >
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-bold text-slate-900">{rec.fromUser.name}</span>
                     <span className="text-slate-400">paid</span>
                     <span className="font-bold text-slate-900">{rec.toUser.name}</span>
+
+                    {rec.paymentMethod === 'WALLET' ? (
+                      <span className="text-[10px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-lg flex items-center gap-1">
+                        <Wallet className="w-3 h-3 text-emerald-600" /> Advance Wallet
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-semibold text-slate-600 bg-white border border-slate-200 px-2 py-0.5 rounded-lg">
+                        Personal Money
+                      </span>
+                    )}
+
                     {rec.note && (
                       <span className="text-[11px] text-slate-500 italic bg-white px-2 py-0.5 rounded-lg border border-slate-200">
                         "{rec.note}"
@@ -550,12 +566,18 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
                     )}
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 shrink-0">
                     <span className="font-extrabold text-emerald-700">
-                      {formatCurrency(rec.amount, currency)}
+                      {formatCurrency(displayAmount, currency)}
                     </span>
-                    <span className="bg-emerald-100 text-emerald-800 font-bold text-[10px] px-2 py-0.5 rounded-full">
-                      Settled
+                    <span
+                      className={`font-bold text-[10px] px-2 py-0.5 rounded-full ${
+                        rec.status === 'PARTIALLY_SETTLED'
+                          ? 'bg-amber-100 text-amber-900'
+                          : 'bg-emerald-100 text-emerald-800'
+                      }`}
+                    >
+                      {rec.status === 'PARTIALLY_SETTLED' ? 'Partially Settled' : 'Settled'}
                     </span>
 
                     {canRequestRollback && (
@@ -633,6 +655,8 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
           currency={currency}
           transaction={settleModalTx}
           members={members}
+          myWallet={myWallet}
+          allWallets={allWallets}
           currentUserId={currentUserId}
           isAdmin={isAdmin}
           onSuccess={() => {

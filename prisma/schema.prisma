@@ -142,19 +142,23 @@ model Activity {
 }
 
 model Settlement {
-  id         String   @id @default(auto()) @map("_id") @db.ObjectId
-  tripId     String   @db.ObjectId
-  fromUserId String   @db.ObjectId
-  toUserId   String   @db.ObjectId
-  amount     Float
-  status     String   @default("PENDING") // PENDING, CONFIRMED, REJECTED, COMPLETED, ROLLBACK_REQUESTED, ROLLED_BACK
-  note       String?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  tripId          String   @db.ObjectId
+  fromUserId      String   @db.ObjectId
+  toUserId        String   @db.ObjectId
+  amount          Float
+  settledAmount   Float    @default(0)
+  remainingAmount Float?
+  paymentMethod   String   @default("PERSONAL") // PERSONAL or WALLET
+  status          String   @default("PENDING") // PENDING, PARTIALLY_SETTLED, SETTLED, CONFIRMED, REJECTED, COMPLETED, ROLLBACK_REQUESTED, ROLLED_BACK
+  note            String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
-  trip     Trip @relation(fields: [tripId], references: [id], onDelete: Cascade)
-  fromUser User @relation("FromUser", fields: [fromUserId], references: [id], onDelete: Cascade)
-  toUser   User @relation("ToUser", fields: [toUserId], references: [id], onDelete: Cascade)
+  trip               Trip                @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  fromUser           User                @relation("FromUser", fields: [fromUserId], references: [id], onDelete: Cascade)
+  toUser             User                @relation("ToUser", fields: [toUserId], references: [id], onDelete: Cascade)
+  walletTransactions WalletTransaction[]
 
   @@index([tripId])
 }
@@ -202,20 +206,22 @@ model WalletAdvance {
 }
 
 model WalletTransaction {
-  id          String   @id @default(auto()) @map("_id") @db.ObjectId
-  walletId    String   @db.ObjectId
-  type        String   // ADVANCE_CREDIT, EXPENSE_DEBIT, REFUND, ADJUSTMENT
-  amount      Float
-  description String?
-  expenseId   String?  @db.ObjectId
-  advanceId   String?  @db.ObjectId
-  createdById String   @db.ObjectId
-  createdAt   DateTime @default(now())
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  walletId     String   @db.ObjectId
+  type         String   // ADVANCE_CREDIT, EXPENSE_DEBIT, SETTLEMENT_PAYMENT, REFUND, ADJUSTMENT
+  amount       Float
+  description  String?
+  expenseId    String?  @db.ObjectId
+  advanceId    String?  @db.ObjectId
+  settlementId String?  @db.ObjectId
+  createdById  String   @db.ObjectId
+  createdAt    DateTime @default(now())
 
-  wallet    UserWallet     @relation(fields: [walletId], references: [id], onDelete: Cascade)
-  expense   Expense?       @relation(fields: [expenseId], references: [id], onDelete: SetNull)
-  advance   WalletAdvance? @relation(fields: [advanceId], references: [id], onDelete: SetNull)
-  createdBy User           @relation("TransactionCreatedBy", fields: [createdById], references: [id], onDelete: Cascade)
+  wallet     UserWallet     @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  expense    Expense?       @relation(fields: [expenseId], references: [id], onDelete: SetNull)
+  advance    WalletAdvance? @relation(fields: [advanceId], references: [id], onDelete: SetNull)
+  settlement Settlement?    @relation(fields: [settlementId], references: [id], onDelete: SetNull)
+  createdBy  User           @relation("TransactionCreatedBy", fields: [createdById], references: [id], onDelete: Cascade)
 
   @@index([walletId])
 }

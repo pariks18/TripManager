@@ -166,7 +166,10 @@ export interface SettlementRecordDetail {
   toUserId: string;
   toUser: UserSummary;
   amount: number;
-  status: 'PENDING' | 'CONFIRMED' | 'REJECTED' | 'COMPLETED' | 'ROLLBACK_REQUESTED' | 'ROLLED_BACK';
+  settledAmount?: number;
+  remainingAmount?: number | null;
+  paymentMethod?: 'PERSONAL' | 'WALLET';
+  status: 'PENDING' | 'PARTIALLY_SETTLED' | 'SETTLED' | 'CONFIRMED' | 'REJECTED' | 'COMPLETED' | 'ROLLBACK_REQUESTED' | 'ROLLED_BACK';
   note?: string | null;
   createdAt: string;
   updatedAt: string;
@@ -191,11 +194,12 @@ export interface WalletAdvanceDetail {
 export interface WalletTransactionDetail {
   id: string;
   walletId: string;
-  type: 'ADVANCE_CREDIT' | 'EXPENSE_DEBIT' | 'REFUND' | 'ADJUSTMENT';
+  type: 'ADVANCE_CREDIT' | 'EXPENSE_DEBIT' | 'SETTLEMENT_PAYMENT' | 'REFUND' | 'ADJUSTMENT';
   amount: number;
   description?: string | null;
   expenseId?: string | null;
   advanceId?: string | null;
+  settlementId?: string | null;
   createdById: string;
   createdBy: UserSummary;
   createdAt: string;

@@ -35,21 +35,27 @@ export function calculateMemberBalances(
     });
   });
 
-  // Incorporate CONFIRMED / COMPLETED settlements
+  // Incorporate CONFIRMED / SETTLED / PARTIALLY_SETTLED / COMPLETED settlements
   if (settlements && settlements.length > 0) {
-    const confirmedSettlements = settlements.filter(
-      (s) => s.status === 'CONFIRMED' || s.status === 'COMPLETED' || s.status === 'ROLLBACK_REQUESTED'
+    const validSettlements = settlements.filter(
+      (s) =>
+        s.status === 'CONFIRMED' ||
+        s.status === 'SETTLED' ||
+        s.status === 'PARTIALLY_SETTLED' ||
+        s.status === 'COMPLETED' ||
+        s.status === 'ROLLBACK_REQUESTED'
     );
 
-    confirmedSettlements.forEach((s) => {
+    validSettlements.forEach((s) => {
+      const effectiveAmount = typeof s.settledAmount === 'number' && s.settledAmount > 0 ? s.settledAmount : s.amount;
       // fromUser paid money to toUser
       if (balanceMap.has(s.fromUserId)) {
         const fromRecord = balanceMap.get(s.fromUserId)!;
-        fromRecord.paid += s.amount;
+        fromRecord.paid += effectiveAmount;
       }
       if (balanceMap.has(s.toUserId)) {
         const toRecord = balanceMap.get(s.toUserId)!;
-        toRecord.share += s.amount;
+        toRecord.share += effectiveAmount;
       }
     });
   }
