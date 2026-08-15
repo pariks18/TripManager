@@ -19,9 +19,9 @@ export async function POST(
     }
 
     const advance = await dbStore.requestWalletAdvance(user.id, params.tripId, numAmount, note);
-    return NextResponse.json({ advance, contribution: advance }, { status: 201 });
+    return NextResponse.json({ advance }, { status: 201 });
   } catch (error: any) {
-    console.error('[API POST /api/trips/[tripId]/wallet/contribute error]:', error);
+    console.error('[API POST /api/trips/[tripId]/wallet/advance error]:', error);
     return NextResponse.json({ error: error.message || 'Failed to submit advance request' }, { status: 400 });
   }
 }

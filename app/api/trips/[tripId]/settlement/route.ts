@@ -18,8 +18,8 @@ export async function GET(
     return NextResponse.json({ error: 'Trip not found' }, { status: 404 });
   }
 
-  const balances = calculateMemberBalances(trip.members, trip.expenses, trip.settlementRecords, trip.wallet);
-  const settlements = computeSettlements(trip.members, trip.expenses, trip.settlementRecords, trip.wallet);
+  const balances = calculateMemberBalances(trip.members, trip.expenses, trip.settlementRecords);
+  const settlements = computeSettlements(trip.members, trip.expenses, trip.settlementRecords);
 
   return NextResponse.json({
     tripId: trip.id,

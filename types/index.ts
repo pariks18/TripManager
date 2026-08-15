@@ -149,10 +149,9 @@ export interface ActivityDetail {
     | 'TRIP_LOCKED'
     | 'TRIP_UPDATED'
     | 'APPROVAL_MODE_UPDATED'
-    | 'WALLET_CONTRIBUTION_SUBMITTED'
-    | 'WALLET_CONTRIBUTION_APPROVED'
-    | 'WALLET_CONTRIBUTION_REJECTED'
-    | 'WALLET_REFUND_ISSUED';
+    | 'WALLET_ADVANCE_SUBMITTED'
+    | 'WALLET_ADVANCE_APPROVED'
+    | 'WALLET_ADVANCE_REJECTED';
   details: string;
   amount?: number | null;
   category?: string | null;
@@ -173,10 +172,11 @@ export interface SettlementRecordDetail {
   updatedAt: string;
 }
 
-export interface WalletContributionDetail {
+export interface WalletAdvanceDetail {
   id: string;
   walletId: string;
   userId: string;
+  tripId: string;
   user: UserSummary;
   amount: number;
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
@@ -191,25 +191,26 @@ export interface WalletContributionDetail {
 export interface WalletTransactionDetail {
   id: string;
   walletId: string;
-  type: 'DEPOSIT' | 'EXPENSE' | 'REFUND' | 'ADJUSTMENT';
+  type: 'ADVANCE_CREDIT' | 'EXPENSE_DEBIT' | 'REFUND' | 'ADJUSTMENT';
   amount: number;
   description?: string | null;
   expenseId?: string | null;
-  contributionId?: string | null;
+  advanceId?: string | null;
   createdById: string;
   createdBy: UserSummary;
   createdAt: string;
 }
 
-export interface WalletDetail {
+export interface UserWalletDetail {
   id: string;
+  userId: string;
   tripId: string;
   balance: number;
   totalAdded: number;
   totalSpent: number;
   createdAt: string;
   updatedAt: string;
-  contributions: WalletContributionDetail[];
+  advances: WalletAdvanceDetail[];
   transactions: WalletTransactionDetail[];
 }
 
@@ -264,7 +265,8 @@ export interface TripSummary {
   editRequests?: ExpenseEditRequestDetail[];
   activities?: ActivityDetail[];
   settlementRecords?: SettlementRecordDetail[];
-  wallet?: WalletDetail | null;
+  myWallet?: UserWalletDetail | null;
+  allWallets?: UserWalletDetail[];
   itinerary?: ItineraryItemDetail[];
   stays?: StayDetail[];
   totalExpense: number;

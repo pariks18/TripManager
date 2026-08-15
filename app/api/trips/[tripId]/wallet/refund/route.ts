@@ -12,11 +12,10 @@ export async function POST(
   }
 
   try {
-    const wallet = await dbStore.refundWalletBalance(params.tripId, user.id);
-    return NextResponse.json({ wallet, message: 'Remaining wallet balance successfully refunded to contributors.' });
+    const wallet = await dbStore.getOrCreateUserWallet(user.id, params.tripId);
+    return NextResponse.json({ wallet, message: 'Personal wallet balance is maintained per user.' });
   } catch (error: any) {
     console.error('[API POST /api/trips/[tripId]/wallet/refund error]:', error);
-    const status = error.message?.includes('Forbidden') ? 403 : 400;
-    return NextResponse.json({ error: error.message || 'Failed to refund wallet balance' }, { status });
+    return NextResponse.json({ error: error.message || 'Failed to fetch personal wallet' }, { status: 400 });
   }
 }

@@ -4,7 +4,7 @@ import { dbStore } from '@/lib/dbStore';
 
 export async function PATCH(
   request: Request,
-  { params }: { params: { tripId: string; contributionId: string } }
+  { params }: { params: { tripId: string; advanceId: string } }
 ) {
   const user = await getSessionUser();
   if (!user) {
@@ -18,14 +18,14 @@ export async function PATCH(
     }
 
     const advance = await dbStore.processWalletAdvance(
-      params.contributionId,
+      params.advanceId,
       user.id,
       action as 'APPROVE' | 'REJECT'
     );
 
-    return NextResponse.json({ advance, contribution: advance });
+    return NextResponse.json({ advance });
   } catch (error: any) {
-    console.error('[API PATCH /api/trips/[tripId]/wallet/contributions/[contributionId] error]:', error);
+    console.error('[API PATCH /api/trips/[tripId]/wallet/advances/[advanceId] error]:', error);
     const status = error.message?.includes('Forbidden') ? 403 : 400;
     return NextResponse.json({ error: error.message || 'Failed to process advance' }, { status });
   }

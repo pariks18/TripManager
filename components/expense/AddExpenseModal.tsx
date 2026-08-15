@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Modal } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
-import { CategoryType, ExpenseDetail, TripMemberDetail, UserSummary } from '@/types';
+import { CategoryType, ExpenseDetail, TripMemberDetail, UserSummary, UserWalletDetail } from '@/types';
 import { CATEGORY_CONFIG, formatCurrency } from '@/lib/utils';
 import { Utensils, Plane, Fuel, Home, Ticket, ShoppingBag, Sparkles, Check, CheckSquare, Square, Camera, Image as ImageIcon, Trash2, Receipt, X } from 'lucide-react';
 
@@ -17,6 +17,7 @@ interface AddExpenseModalProps {
   currentUserId: string;
   isAdmin?: boolean;
   walletBalance?: number;
+  allWallets?: UserWalletDetail[];
   existingExpense?: ExpenseDetail | null;
   onSuccess: (expense: ExpenseDetail) => void;
 }
@@ -40,6 +41,7 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
   currentUserId,
   isAdmin = false,
   walletBalance = 0,
+  allWallets = [],
   existingExpense,
   onSuccess,
 }) => {
@@ -59,6 +61,12 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
   const isRejected = existingExpense?.status === 'REJECTED';
   const isApproved = existingExpense?.status === 'APPROVED';
   const isEditRequestRequired = isApproved && !isAdmin;
+
+  // Find the selected Payer's personal wallet balance
+  const payerWallet = allWallets.find((w) => w.userId === paidById);
+  const payerWalletBalance = payerWallet?.balance ?? walletBalance;
+  const payerMember = members.find((m) => m.userId === paidById);
+  const payerName = payerMember?.user.name || (paidById === currentUserId ? 'You' : 'Payer');
 
   useEffect(() => {
     if (existingExpense) {
@@ -124,8 +132,10 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
       setError('Please enter a valid amount');
       return;
     }
-    if (paymentMode === 'WALLET' && numAmount > walletBalance + 0.01) {
-      setError(`Insufficient group wallet balance. Available: ${formatCurrency(walletBalance, currency)}, required: ${formatCurrency(numAmount, currency)}.`);
+    if (paymentMode === 'WALLET' && numAmount > payerWalletBalance + 0.01) {
+      setError(
+        `Insufficient advance balance in ${paidById === currentUserId ? 'your' : `${payerName}'s`} personal wallet. Available: ${formatCurrency(payerWalletBalance, currency)}, required: ${formatCurrency(numAmount, currency)}.`
+      );
       return;
     }
     if (splitBetween.length === 0) {
@@ -149,16 +159,15 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
               category,
               paidById,
               paymentMode,
-              splitBetween,
+              participantUserIds: splitBetween,
               receiptUrl,
             },
+            reason: 'User proposed expense updates',
           }),
         });
-
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Failed to submit edit request');
-
-        alert('Edit request submitted successfully! Super Host/Admin will verify your changes.');
+        alert('Edit request submitted successfully! Waiting for host approval.');
         onSuccess(existingExpense);
         onClose();
         return;
@@ -177,17 +186,13 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
           category,
           paidById,
           paymentMode,
-          splitBetween,
+          participantUserIds: splitBetween,
           receiptUrl,
         }),
       });
 
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to save expense');
-
-      if (data.expense?.status === 'PENDING_APPROVAL') {
-        alert('Expense submitted successfully! It is currently Pending review and approval by the Super Host / Admin.');
-      }
 
       onSuccess(data.expense);
       onClose();
@@ -207,34 +212,19 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={
-        isRejected
-          ? 'Resubmit Rejected Expense'
-          : isEditRequestRequired
-          ? 'Request Edit on Approved Expense'
-          : existingExpense
-          ? 'Edit Expense'
-          : 'Add New Expense'
-      }
+      title={existingExpense ? (isEditRequestRequired ? 'Propose Expense Edit' : 'Edit Expense') : 'Add New Expense'}
     >
       <form onSubmit={handleSubmit} className="space-y-4">
         {error && (
-          <div className="p-3 bg-rose-50 border border-rose-200 rounded-2xl text-xs font-medium text-rose-600">
+          <div className="p-3 bg-rose-50 border border-rose-200 rounded-2xl text-xs font-semibold text-rose-700">
             {error}
           </div>
         )}
 
-        {isRejected && (
-          <div className="p-3 bg-rose-50 border border-rose-200 rounded-2xl text-xs text-rose-800 space-y-1">
-            <p className="font-bold">⚠️ Expense Was Previously Rejected</p>
-            <p>{existingExpense?.rejectionReason ? `Reason: "${existingExpense.rejectionReason}"` : 'Please verify details and resubmit for approval.'}</p>
-          </div>
-        )}
-
         {isEditRequestRequired && (
-          <div className="p-3 bg-blue-50 border border-blue-200 rounded-2xl text-xs text-blue-800 space-y-1">
-            <p className="font-bold">ℹ️ Approved Expense Edit Workflow</p>
-            <p>Submitting this form will send an Edit Request to the Super Host / Admin for verification.</p>
+          <div className="p-3.5 bg-blue-50 border border-blue-200 rounded-2xl text-xs text-blue-800 space-y-1">
+            <p className="font-bold">Approval Mode Active</p>
+            <p>Changes to approved expenses require host review before taking effect.</p>
           </div>
         )}
 
@@ -246,46 +236,24 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
           required
         />
 
-        {/* Payment Mode Selector */}
-        <div>
-          <label className="block text-xs font-semibold text-slate-700 tracking-wide uppercase mb-1.5">
-            Payment Mode
-          </label>
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={() => setPaymentMode('PERSONALLY')}
-              className={`p-2.5 rounded-2xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
-                paymentMode === 'PERSONALLY'
-                  ? 'bg-slate-900 border-slate-900 text-white shadow-sm'
-                  : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
-              }`}
-            >
-              <span>Pay Personally</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setPaymentMode('WALLET')}
-              disabled={walletBalance <= 0}
-              className={`p-2.5 rounded-2xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
-                paymentMode === 'WALLET'
-                  ? 'bg-emerald-600 border-emerald-600 text-white shadow-sm font-bold'
-                  : walletBalance <= 0
-                  ? 'bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed opacity-60'
-                  : 'bg-emerald-50/60 border-emerald-200 text-emerald-900 hover:bg-emerald-100'
-              }`}
-            >
-              <span>💳 Pay from Wallet</span>
-            </button>
-          </div>
-          {paymentMode === 'WALLET' && (
-            <p className="text-[11px] text-emerald-700 font-semibold mt-1">
-              Available Group Wallet Balance: {formatCurrency(walletBalance, currency)}
-            </p>
-          )}
-        </div>
-
         <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 tracking-wide uppercase mb-1.5">
+              Paid By
+            </label>
+            <select
+              value={paidById}
+              onChange={(e) => setPaidById(e.target.value)}
+              className="w-full bg-slate-50 border border-slate-200 text-slate-900 text-sm rounded-2xl p-3 focus:outline-none focus:border-emerald-500 focus:bg-white"
+            >
+              {members.map((m) => (
+                <option key={m.userId} value={m.userId}>
+                  {m.user.name} {m.userId === currentUserId ? '(You)' : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+
           <div>
             <label className="block text-xs font-semibold text-slate-700 tracking-wide uppercase mb-1.5">
               Amount ({currency})
@@ -300,24 +268,49 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
               required
             />
           </div>
+        </div>
 
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 tracking-wide uppercase mb-1.5">
-              {paymentMode === 'WALLET' ? 'Recorded By' : 'Paid By'}
-            </label>
-            <select
-              value={paidById}
-              onChange={(e) => setPaidById(e.target.value)}
-              disabled={paymentMode === 'WALLET'}
-              className="w-full bg-slate-50 border border-slate-200 text-slate-900 text-sm rounded-2xl p-3 focus:outline-none focus:border-emerald-500 focus:bg-white disabled:opacity-60"
+        {/* Payment Source Selector */}
+        <div>
+          <label className="block text-xs font-semibold text-slate-700 tracking-wide uppercase mb-1.5">
+            Payment Source
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => setPaymentMode('PERSONALLY')}
+              className={`p-2.5 rounded-2xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+                paymentMode === 'PERSONALLY'
+                  ? 'bg-slate-900 border-slate-900 text-white shadow-sm font-bold'
+                  : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+              }`}
             >
-              {members.map((m) => (
-                <option key={m.userId} value={m.userId}>
-                  {m.user.name} {m.userId === currentUserId ? '(You)' : ''}
-                </option>
-              ))}
-            </select>
+              <span>Personal Money</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setPaymentMode('WALLET')}
+              disabled={payerWalletBalance <= 0}
+              className={`p-2.5 rounded-2xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+                paymentMode === 'WALLET'
+                  ? 'bg-emerald-600 border-emerald-600 text-white shadow-sm font-bold'
+                  : payerWalletBalance <= 0
+                  ? 'bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed opacity-60'
+                  : 'bg-emerald-50/60 border-emerald-200 text-emerald-900 hover:bg-emerald-100'
+              }`}
+            >
+              <span>💳 Advance Wallet</span>
+            </button>
           </div>
+          {paymentMode === 'WALLET' ? (
+            <p className="text-[11px] text-emerald-700 font-semibold mt-1">
+              {paidById === currentUserId ? 'Your' : `${payerName}'s`} Advance Wallet Balance: {formatCurrency(payerWalletBalance, currency)}
+            </p>
+          ) : (
+            <p className="text-[11px] text-slate-500 font-medium mt-1">
+              Advance balance available: {formatCurrency(payerWalletBalance, currency)}
+            </p>
+          )}
         </div>
 
         {/* Category Picker */}

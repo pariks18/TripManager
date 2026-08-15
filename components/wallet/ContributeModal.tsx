@@ -33,14 +33,14 @@ export const ContributeModal: React.FC<ContributeModalProps> = ({
 
     const numAmount = parseFloat(amount);
     if (isNaN(numAmount) || numAmount <= 0) {
-      setError('Please enter a valid contribution amount greater than zero.');
+      setError('Please enter a valid advance amount greater than zero.');
       return;
     }
 
     setIsLoading(true);
 
     try {
-      const res = await fetch(`/api/trips/${tripId}/wallet/contribute`, {
+      const res = await fetch(`/api/trips/${tripId}/wallet/advance`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -50,10 +50,10 @@ export const ContributeModal: React.FC<ContributeModalProps> = ({
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to submit wallet contribution');
+      if (!res.ok) throw new Error(data.error || 'Failed to submit advance request');
 
       alert(
-        `Wallet contribution of ${formatCurrency(numAmount, currency)} submitted successfully! Waiting for host approval before funds are added to group wallet balance.`
+        `Advance money request of ${formatCurrency(numAmount, currency)} submitted successfully! Waiting for host approval before it is added to your personal wallet balance.`
       );
 
       setAmount('');
@@ -68,7 +68,7 @@ export const ContributeModal: React.FC<ContributeModalProps> = ({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Contribute to Group Wallet">
+    <Modal isOpen={isOpen} onClose={onClose} title="Add Personal Advance Money">
       <form onSubmit={handleSubmit} className="space-y-4">
         {error && (
           <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-2xl text-xs font-medium text-rose-700 flex items-start gap-2">
@@ -80,17 +80,16 @@ export const ContributeModal: React.FC<ContributeModalProps> = ({
         <div className="bg-emerald-50/70 border border-emerald-200/80 rounded-2xl p-4 space-y-2">
           <div className="flex items-center gap-2 text-emerald-950 font-bold text-xs">
             <Sparkles className="w-4 h-4 text-emerald-600" />
-            <span>How Wallet Contributions Work</span>
+            <span>Personal Advance Wallet</span>
           </div>
           <p className="text-xs text-emerald-800 leading-relaxed font-medium">
-            Money contributed goes into the group's shared wallet ledger after <strong>Host approval</strong>.
-            This money can then be used to pay for group expenses directly!
+            This advance money belongs exclusively to <strong>your personal wallet</strong>. Once the <strong>Host approves it</strong>, you can use your personal wallet balance to pay for expenses during the trip!
           </p>
         </div>
 
         <div>
           <label className="block text-xs font-semibold text-slate-700 tracking-wide uppercase mb-1.5">
-            Contribution Amount ({currency})
+            Advance Amount ({currency})
           </label>
           <input
             type="number"
@@ -105,10 +104,10 @@ export const ContributeModal: React.FC<ContributeModalProps> = ({
 
         <div>
           <label className="block text-xs font-semibold text-slate-700 tracking-wide uppercase mb-1.5">
-            Note / Description (Optional)
+            Note / Reference (Optional)
           </label>
           <Input
-            placeholder="e.g. Advance cash pool contribution, UPI payment"
+            placeholder="e.g. Paid cash to Host, UPI reference number"
             value={note}
             onChange={(e) => setNote(e.target.value)}
           />
@@ -123,7 +122,7 @@ export const ContributeModal: React.FC<ContributeModalProps> = ({
             Cancel
           </button>
           <Button type="submit" isLoading={isLoading} className="flex-1 text-xs font-bold py-3">
-            Submit Contribution
+            Submit Advance Request
           </Button>
         </div>
       </form>

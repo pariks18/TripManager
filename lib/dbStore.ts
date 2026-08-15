@@ -2,7 +2,7 @@ import { prisma } from './prisma';
 import { hashPassword, comparePassword } from './auth';
 import { generateTripCode, generateObjectId } from './utils';
 import { calculateMemberBalances, computeSettlements } from './settlement';
-import { CategoryType, ExpenseDetail, TripSummary, UserSummary, ActivityDetail, SettlementRecordDetail, MemberBalance, MemberAnalytics, DocumentType, UserDocumentDetail, ItineraryItemDetail, StayDetail, PollDetail, PollOptionDetail, PollVoteDetail, MemberLocationDetail, WalletDetail, WalletContributionDetail, WalletTransactionDetail } from '@/types';
+import { CategoryType, ExpenseDetail, TripSummary, UserSummary, ActivityDetail, SettlementRecordDetail, MemberBalance, MemberAnalytics, DocumentType, UserDocumentDetail, ItineraryItemDetail, StayDetail, PollDetail, PollOptionDetail, PollVoteDetail, MemberLocationDetail, UserWalletDetail, WalletAdvanceDetail, WalletTransactionDetail } from '@/types';
 
 const SEED_USERS = [
   {
@@ -501,9 +501,9 @@ export const dbStore = {
         settlements: { include: { fromUser: userSelect, toUser: userSelect }, orderBy: { updatedAt: 'desc' } },
         itinerary: { orderBy: [{ dayNumber: 'asc' }, { order: 'asc' }, { createdAt: 'asc' }] },
         stays: { orderBy: { createdAt: 'desc' } },
-        wallet: {
+        userWallets: {
           include: {
-            contributions: { include: { user: userSelect, approvedBy: userSelect }, orderBy: { createdAt: 'desc' } },
+            advances: { include: { user: userSelect, approvedBy: userSelect }, orderBy: { createdAt: 'desc' } },
             transactions: { include: { createdBy: userSelect }, orderBy: { createdAt: 'desc' } },
           },
         },
@@ -515,43 +515,51 @@ export const dbStore = {
     const approvedExpenses = directTrip.expenses.filter((e) => e.status === 'APPROVED');
     const totalExpense = approvedExpenses.reduce((sum, e) => sum + e.amount, 0);
 
-    const formattedWallet: WalletDetail | null = directTrip.wallet
-      ? {
-          id: directTrip.wallet.id,
-          tripId: directTrip.wallet.tripId,
-          balance: directTrip.wallet.balance,
-          totalAdded: directTrip.wallet.totalAdded,
-          totalSpent: directTrip.wallet.totalSpent,
-          createdAt: directTrip.wallet.createdAt.toISOString(),
-          updatedAt: directTrip.wallet.updatedAt.toISOString(),
-          contributions: directTrip.wallet.contributions.map((c) => ({
-            id: c.id,
-            walletId: c.walletId,
-            userId: c.userId,
-            user: { id: c.user.id, name: c.user.name, email: c.user.email },
-            amount: c.amount,
-            status: c.status as WalletContributionDetail['status'],
-            note: c.note,
-            approvedById: c.approvedById,
-            approvedBy: c.approvedBy ? { id: c.approvedBy.id, name: c.approvedBy.name, email: c.approvedBy.email } : null,
-            approvedAt: c.approvedAt ? c.approvedAt.toISOString() : null,
-            createdAt: c.createdAt.toISOString(),
-            updatedAt: c.updatedAt.toISOString(),
-          })),
-          transactions: directTrip.wallet.transactions.map((t) => ({
-            id: t.id,
-            walletId: t.walletId,
-            type: t.type as WalletTransactionDetail['type'],
-            amount: t.amount,
-            description: t.description,
-            expenseId: t.expenseId,
-            contributionId: t.contributionId,
-            createdById: t.createdById,
-            createdBy: { id: t.createdBy.id, name: t.createdBy.name, email: t.createdBy.email },
-            createdAt: t.createdAt.toISOString(),
-          })),
-        }
-      : null;
+    // Format all user wallets
+    const formattedUserWallets: UserWalletDetail[] = directTrip.userWallets.map((w) => ({
+      id: w.id,
+      userId: w.userId,
+      tripId: w.tripId,
+      balance: w.balance,
+      totalAdded: w.totalAdded,
+      totalSpent: w.totalSpent,
+      createdAt: w.createdAt.toISOString(),
+      updatedAt: w.updatedAt.toISOString(),
+      advances: w.advances.map((a) => ({
+        id: a.id,
+        walletId: a.walletId,
+        userId: a.userId,
+        tripId: a.tripId,
+        user: { id: a.user.id, name: a.user.name, email: a.user.email },
+        amount: a.amount,
+        status: a.status as WalletAdvanceDetail['status'],
+        note: a.note,
+        approvedById: a.approvedById,
+        approvedBy: a.approvedBy ? { id: a.approvedBy.id, name: a.approvedBy.name, email: a.approvedBy.email } : null,
+        approvedAt: a.approvedAt ? a.approvedAt.toISOString() : null,
+        createdAt: a.createdAt.toISOString(),
+        updatedAt: a.updatedAt.toISOString(),
+      })),
+      transactions: w.transactions.map((t) => ({
+        id: t.id,
+        walletId: t.walletId,
+        type: t.type as WalletTransactionDetail['type'],
+        amount: t.amount,
+        description: t.description,
+        expenseId: t.expenseId,
+        advanceId: t.advanceId,
+        createdById: t.createdById,
+        createdBy: { id: t.createdBy.id, name: t.createdBy.name, email: t.createdBy.email },
+        createdAt: t.createdAt.toISOString(),
+      })),
+    }));
+
+    // Find current user's personal wallet
+    let myWallet = formattedUserWallets.find((w) => w.userId === userId) || null;
+    if (!myWallet) {
+      // Ensure current user wallet exists
+      myWallet = await this.getOrCreateUserWallet(userId, tripId);
+    }
 
     const formattedExpenses: ExpenseDetail[] = directTrip.expenses.map((e) => ({
       id: e.id,
@@ -616,7 +624,7 @@ export const dbStore = {
       updatedAt: s.updatedAt.toISOString(),
     }));
 
-    const memberBalances = calculateMemberBalances(formattedMembers, formattedExpenses, formattedSettlements, formattedWallet);
+    const memberBalances = calculateMemberBalances(formattedMembers, formattedExpenses, formattedSettlements);
     const userBalanceRec = memberBalances.find((b) => b.user.id === userId);
     const paid = userBalanceRec?.paid || 0;
     const share = userBalanceRec?.share || 0;
@@ -653,20 +661,21 @@ export const dbStore = {
       members: formattedMembers,
       expenses: formattedExpenses,
       editRequests: allEditRequests,
-      activities: directTrip.activities?.map((a) => ({
+      activities: directTrip.activities.map((a) => ({
         id: a.id,
         tripId: a.tripId,
         userId: a.userId,
         user: { id: a.user.id, name: a.user.name, email: a.user.email },
-        actionType: a.actionType as ActivityDetail['actionType'],
+        actionType: a.actionType as any,
         details: a.details,
         amount: a.amount,
         category: a.category,
         createdAt: a.createdAt.toISOString(),
       })),
       settlementRecords: formattedSettlements,
-      wallet: formattedWallet,
-      itinerary: directTrip.itinerary?.map((item) => ({
+      myWallet,
+      allWallets: formattedUserWallets,
+      itinerary: directTrip.itinerary.map((item) => ({
         id: item.id,
         tripId: item.tripId,
         dayNumber: item.dayNumber,
@@ -681,7 +690,7 @@ export const dbStore = {
         createdAt: item.createdAt.toISOString(),
         updatedAt: item.updatedAt.toISOString(),
       })),
-      stays: directTrip.stays?.map((stay) => ({
+      stays: directTrip.stays.map((stay) => ({
         id: stay.id,
         tripId: stay.tripId,
         name: stay.name,
@@ -697,7 +706,7 @@ export const dbStore = {
         createdAt: stay.createdAt.toISOString(),
         updatedAt: stay.updatedAt.toISOString(),
       })),
-      totalExpense,
+      totalExpense: Math.round(totalExpense * 100) / 100,
       userBalance,
       userTotalPaid: paid,
       userTotalShare: share,
@@ -793,30 +802,31 @@ export const dbStore = {
     return fetchedTrip;
   },
 
-  async getOrCreateWallet(tripId: string): Promise<WalletDetail> {
+  async getOrCreateUserWallet(userId: string, tripId: string): Promise<UserWalletDetail> {
     await ensureDatabaseSeeded();
 
     const userSelect = { select: { id: true, name: true, email: true } };
 
-    let wallet = await prisma.wallet.findUnique({
-      where: { tripId },
+    let wallet = await prisma.userWallet.findUnique({
+      where: { userId_tripId: { userId, tripId } },
       include: {
-        contributions: { include: { user: userSelect, approvedBy: userSelect }, orderBy: { createdAt: 'desc' } },
+        advances: { include: { user: userSelect, approvedBy: userSelect }, orderBy: { createdAt: 'desc' } },
         transactions: { include: { createdBy: userSelect }, orderBy: { createdAt: 'desc' } },
       },
     });
 
     if (!wallet) {
-      wallet = await prisma.wallet.create({
+      wallet = await prisma.userWallet.create({
         data: {
           id: generateObjectId(),
+          userId,
           tripId,
           balance: 0,
           totalAdded: 0,
           totalSpent: 0,
         },
         include: {
-          contributions: { include: { user: userSelect, approvedBy: userSelect }, orderBy: { createdAt: 'desc' } },
+          advances: { include: { user: userSelect, approvedBy: userSelect }, orderBy: { createdAt: 'desc' } },
           transactions: { include: { createdBy: userSelect }, orderBy: { createdAt: 'desc' } },
         },
       });
@@ -824,25 +834,27 @@ export const dbStore = {
 
     return {
       id: wallet.id,
+      userId: wallet.userId,
       tripId: wallet.tripId,
       balance: wallet.balance,
       totalAdded: wallet.totalAdded,
       totalSpent: wallet.totalSpent,
       createdAt: wallet.createdAt.toISOString(),
       updatedAt: wallet.updatedAt.toISOString(),
-      contributions: wallet.contributions.map((c) => ({
-        id: c.id,
-        walletId: c.walletId,
-        userId: c.userId,
-        user: { id: c.user.id, name: c.user.name, email: c.user.email },
-        amount: c.amount,
-        status: c.status as WalletContributionDetail['status'],
-        note: c.note,
-        approvedById: c.approvedById,
-        approvedBy: c.approvedBy ? { id: c.approvedBy.id, name: c.approvedBy.name, email: c.approvedBy.email } : null,
-        approvedAt: c.approvedAt ? c.approvedAt.toISOString() : null,
-        createdAt: c.createdAt.toISOString(),
-        updatedAt: c.updatedAt.toISOString(),
+      advances: wallet.advances.map((a) => ({
+        id: a.id,
+        walletId: a.walletId,
+        userId: a.userId,
+        tripId: a.tripId,
+        user: { id: a.user.id, name: a.user.name, email: a.user.email },
+        amount: a.amount,
+        status: a.status as WalletAdvanceDetail['status'],
+        note: a.note,
+        approvedById: a.approvedById,
+        approvedBy: a.approvedBy ? { id: a.approvedBy.id, name: a.approvedBy.name, email: a.approvedBy.email } : null,
+        approvedAt: a.approvedAt ? a.approvedAt.toISOString() : null,
+        createdAt: a.createdAt.toISOString(),
+        updatedAt: a.updatedAt.toISOString(),
       })),
       transactions: wallet.transactions.map((t) => ({
         id: t.id,
@@ -851,7 +863,7 @@ export const dbStore = {
         amount: t.amount,
         description: t.description,
         expenseId: t.expenseId,
-        contributionId: t.contributionId,
+        advanceId: t.advanceId,
         createdById: t.createdById,
         createdBy: { id: t.createdBy.id, name: t.createdBy.name, email: t.createdBy.email },
         createdAt: t.createdAt.toISOString(),
@@ -859,29 +871,30 @@ export const dbStore = {
     };
   },
 
-  async contributeToWallet(
-    tripId: string,
+  async requestWalletAdvance(
     userId: string,
+    tripId: string,
     amount: number,
     note?: string
-  ): Promise<WalletContributionDetail> {
+  ): Promise<WalletAdvanceDetail> {
     await ensureDatabaseSeeded();
 
     if (!amount || isNaN(amount) || amount <= 0) {
-      throw new Error('Contribution amount must be greater than zero.');
+      throw new Error('Advance amount must be greater than zero.');
     }
 
     const userSelect = { select: { id: true, name: true, email: true } };
     const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new Error('User not found');
 
-    const wallet = await this.getOrCreateWallet(tripId);
+    const wallet = await this.getOrCreateUserWallet(userId, tripId);
 
-    const contribution = await prisma.walletContribution.create({
+    const advance = await prisma.walletAdvance.create({
       data: {
         id: generateObjectId(),
         walletId: wallet.id,
         userId,
+        tripId,
         amount: Math.round(amount * 100) / 100,
         status: 'PENDING',
         note: note ? note.trim() : null,
@@ -893,41 +906,47 @@ export const dbStore = {
     await logActivity(
       tripId,
       userId,
-      'WALLET_CONTRIBUTION_SUBMITTED',
-      `${user.name} submitted a wallet contribution of ${trip?.currency || '₹'}${contribution.amount} (Pending Host approval)`,
-      contribution.amount
+      'WALLET_ADVANCE_SUBMITTED',
+      `${user.name} submitted a personal advance request of ${trip?.currency || '₹'}${advance.amount} (Pending Host approval)`,
+      advance.amount
     );
 
     return {
-      id: contribution.id,
-      walletId: contribution.walletId,
-      userId: contribution.userId,
-      user: { id: contribution.user.id, name: contribution.user.name, email: contribution.user.email },
-      amount: contribution.amount,
-      status: contribution.status as WalletContributionDetail['status'],
-      note: contribution.note,
-      approvedById: contribution.approvedById,
-      approvedBy: contribution.approvedBy ? { id: contribution.approvedBy.id, name: contribution.approvedBy.name, email: contribution.approvedBy.email } : null,
-      approvedAt: contribution.approvedAt ? contribution.approvedAt.toISOString() : null,
-      createdAt: contribution.createdAt.toISOString(),
-      updatedAt: contribution.updatedAt.toISOString(),
+      id: advance.id,
+      walletId: advance.walletId,
+      userId: advance.userId,
+      tripId: advance.tripId,
+      user: { id: advance.user.id, name: advance.user.name, email: advance.user.email },
+      amount: advance.amount,
+      status: advance.status as WalletAdvanceDetail['status'],
+      note: advance.note,
+      approvedById: advance.approvedById,
+      approvedBy: advance.approvedBy ? { id: advance.approvedBy.id, name: advance.approvedBy.name, email: advance.approvedBy.email } : null,
+      approvedAt: advance.approvedAt ? advance.approvedAt.toISOString() : null,
+      createdAt: advance.createdAt.toISOString(),
+      updatedAt: advance.updatedAt.toISOString(),
     };
   },
 
-  async processWalletContribution(
-    tripId: string,
-    contributionId: string,
+  async processWalletAdvance(
+    advanceId: string,
     hostUserId: string,
     action: 'APPROVE' | 'REJECT'
-  ): Promise<WalletContributionDetail> {
+  ): Promise<WalletAdvanceDetail> {
     await ensureDatabaseSeeded();
 
     const userSelect = { select: { id: true, name: true, email: true } };
     const hostUser = await prisma.user.findUnique({ where: { id: hostUserId } });
     if (!hostUser) throw new Error('User not found');
 
+    const advance = await prisma.walletAdvance.findUnique({
+      where: { id: advanceId },
+      include: { user: userSelect, wallet: true },
+    });
+    if (!advance) throw new Error('Wallet advance request not found.');
+
     const trip = await prisma.trip.findUnique({
-      where: { id: tripId },
+      where: { id: advance.tripId },
       include: { members: true },
     });
     if (!trip) throw new Error('Trip not found');
@@ -935,42 +954,35 @@ export const dbStore = {
     const hostMember = trip.members.find((m) => m.userId === hostUserId);
     const isHost = hostMember?.role === 'ADMIN' || trip.createdById === hostUserId;
     if (!isHost) {
-      throw new Error('Forbidden: Only the Trip Host/Admin can approve or reject wallet contributions.');
+      throw new Error('Forbidden: Only the Trip Host/Admin can approve or reject wallet advances.');
     }
 
-    const contribution = await prisma.walletContribution.findUnique({
-      where: { id: contributionId },
-      include: { user: userSelect, wallet: true },
-    });
-    if (!contribution || contribution.wallet.tripId !== tripId) {
-      throw new Error('Wallet contribution not found.');
-    }
-
-    if (contribution.status !== 'PENDING') {
-      throw new Error(`Contribution has already been ${contribution.status.toLowerCase()}.`);
+    if (advance.status !== 'PENDING') {
+      throw new Error(`Advance request has already been ${advance.status.toLowerCase()}.`);
     }
 
     if (action === 'REJECT') {
-      const updated = await prisma.walletContribution.update({
-        where: { id: contributionId },
+      const updated = await prisma.walletAdvance.update({
+        where: { id: advanceId },
         data: { status: 'REJECTED', approvedById: hostUserId, approvedAt: new Date() },
         include: { user: userSelect, approvedBy: userSelect },
       });
 
       await logActivity(
-        tripId,
+        trip.id,
         hostUserId,
-        'WALLET_CONTRIBUTION_REJECTED',
-        `${hostUser.name} rejected ${contribution.user.name}'s wallet contribution of ${trip.currency}${contribution.amount}`
+        'WALLET_ADVANCE_REJECTED',
+        `${hostUser.name} rejected ${advance.user.name}'s advance request of ${trip.currency}${advance.amount}`
       );
 
       return {
         id: updated.id,
         walletId: updated.walletId,
         userId: updated.userId,
+        tripId: updated.tripId,
         user: { id: updated.user.id, name: updated.user.name, email: updated.user.email },
         amount: updated.amount,
-        status: updated.status as WalletContributionDetail['status'],
+        status: updated.status as WalletAdvanceDetail['status'],
         note: updated.note,
         approvedById: updated.approvedById,
         approvedBy: updated.approvedBy ? { id: updated.approvedBy.id, name: updated.approvedBy.name, email: updated.approvedBy.email } : null,
@@ -980,57 +992,57 @@ export const dbStore = {
       };
     }
 
-    // APPROVE action with Prisma transaction for consistency and concurrency protection
     const result = await prisma.$transaction(async (tx) => {
-      const freshContrib = await tx.walletContribution.findUnique({ where: { id: contributionId } });
-      if (!freshContrib || freshContrib.status !== 'PENDING') {
-        throw new Error('Contribution has already been processed.');
+      const freshAdvance = await tx.walletAdvance.findUnique({ where: { id: advanceId } });
+      if (!freshAdvance || freshAdvance.status !== 'PENDING') {
+        throw new Error('Advance request has already been processed.');
       }
 
-      const updatedContrib = await tx.walletContribution.update({
-        where: { id: contributionId },
+      const updatedAdvance = await tx.walletAdvance.update({
+        where: { id: advanceId },
         data: { status: 'APPROVED', approvedById: hostUserId, approvedAt: new Date() },
         include: { user: userSelect, approvedBy: userSelect },
       });
 
-      await tx.wallet.update({
-        where: { id: contribution.walletId },
+      await tx.userWallet.update({
+        where: { id: advance.walletId },
         data: {
-          balance: { increment: contribution.amount },
-          totalAdded: { increment: contribution.amount },
+          balance: { increment: advance.amount },
+          totalAdded: { increment: advance.amount },
         },
       });
 
       await tx.walletTransaction.create({
         data: {
           id: generateObjectId(),
-          walletId: contribution.walletId,
-          type: 'DEPOSIT',
-          amount: contribution.amount,
-          description: `${contribution.user.name} wallet contribution`,
-          contributionId: contribution.id,
+          walletId: advance.walletId,
+          type: 'ADVANCE_CREDIT',
+          amount: advance.amount,
+          description: `Advance added (${advance.note || 'Approved by Host'})`,
+          advanceId: advance.id,
           createdById: hostUserId,
         },
       });
 
-      return updatedContrib;
+      return updatedAdvance;
     });
 
     await logActivity(
-      tripId,
+      trip.id,
       hostUserId,
-      'WALLET_CONTRIBUTION_APPROVED',
-      `${hostUser.name} approved ${contribution.user.name}'s wallet contribution of ${trip.currency}${contribution.amount}`,
-      contribution.amount
+      'WALLET_ADVANCE_APPROVED',
+      `${hostUser.name} approved ${advance.user.name}'s advance request of ${trip.currency}${advance.amount}`,
+      advance.amount
     );
 
     return {
       id: result.id,
       walletId: result.walletId,
       userId: result.userId,
+      tripId: result.tripId,
       user: { id: result.user.id, name: result.user.name, email: result.user.email },
       amount: result.amount,
-      status: result.status as WalletContributionDetail['status'],
+      status: result.status as WalletAdvanceDetail['status'],
       note: result.note,
       approvedById: result.approvedById,
       approvedBy: result.approvedBy ? { id: result.approvedBy.id, name: result.approvedBy.name, email: result.approvedBy.email } : null,
@@ -1038,112 +1050,6 @@ export const dbStore = {
       createdAt: result.createdAt.toISOString(),
       updatedAt: result.updatedAt.toISOString(),
     };
-  },
-
-  async refundWalletBalance(tripId: string, currentUserId: string): Promise<WalletDetail> {
-    await ensureDatabaseSeeded();
-
-    const userSelect = { select: { id: true, name: true, email: true } };
-    const currentUser = await prisma.user.findUnique({ where: { id: currentUserId } });
-    if (!currentUser) throw new Error('User not found');
-
-    const trip = await prisma.trip.findUnique({
-      where: { id: tripId },
-      include: { members: true },
-    });
-    if (!trip) throw new Error('Trip not found');
-
-    const memberRole = trip.members.find((m) => m.userId === currentUserId)?.role;
-    const isHost = memberRole === 'ADMIN' || trip.createdById === currentUserId;
-    if (!isHost) {
-      throw new Error('Forbidden: Only the Trip Host/Admin can trigger a wallet balance refund.');
-    }
-
-    const walletDetail = await this.getOrCreateWallet(tripId);
-    if (walletDetail.balance <= 0.01) {
-      throw new Error('Wallet balance is zero. Nothing to refund.');
-    }
-
-    const dbWallet = await prisma.wallet.findUnique({
-      where: { tripId },
-      include: {
-        contributions: {
-          where: { status: 'APPROVED' },
-          include: { user: userSelect },
-        },
-      },
-    });
-
-    if (!dbWallet || dbWallet.contributions.length === 0) {
-      throw new Error('No approved wallet contributions found to calculate refunds.');
-    }
-
-    const userContribMap = new Map<string, { user: UserSummary; totalContrib: number }>();
-    let grandTotalContrib = 0;
-
-    dbWallet.contributions.forEach((c) => {
-      grandTotalContrib += c.amount;
-      if (userContribMap.has(c.userId)) {
-        userContribMap.get(c.userId)!.totalContrib += c.amount;
-      } else {
-        userContribMap.set(c.userId, { user: { id: c.user.id, name: c.user.name, email: c.user.email }, totalContrib: c.amount });
-      }
-    });
-
-    if (grandTotalContrib <= 0) {
-      throw new Error('Total approved contributions is zero.');
-    }
-
-    const remainingBalance = dbWallet.balance;
-    const refunds: { user: UserSummary; amount: number }[] = [];
-    let allocatedRefund = 0;
-
-    const entries = Array.from(userContribMap.entries());
-    entries.forEach(([uid, entry], idx) => {
-      let refundAmount = 0;
-      if (idx === entries.length - 1) {
-        refundAmount = Math.round((remainingBalance - allocatedRefund) * 100) / 100;
-      } else {
-        refundAmount = Math.round((remainingBalance * (entry.totalContrib / grandTotalContrib)) * 100) / 100;
-        allocatedRefund += refundAmount;
-      }
-
-      if (refundAmount > 0) {
-        refunds.push({ user: entry.user, amount: refundAmount });
-      }
-    });
-
-    await prisma.$transaction(async (tx) => {
-      for (const r of refunds) {
-        await tx.walletTransaction.create({
-          data: {
-            id: generateObjectId(),
-            walletId: dbWallet.id,
-            type: 'REFUND',
-            amount: r.amount,
-            description: `Wallet refund to ${r.user.name}`,
-            createdById: currentUserId,
-          },
-        });
-      }
-
-      await tx.wallet.update({
-        where: { id: dbWallet.id },
-        data: {
-          balance: 0,
-        },
-      });
-    });
-
-    await logActivity(
-      tripId,
-      currentUserId,
-      'WALLET_REFUND_ISSUED',
-      `${currentUser.name} refunded remaining wallet balance (${trip.currency}${remainingBalance}) to contributors`,
-      remainingBalance
-    );
-
-    return await this.getOrCreateWallet(tripId);
   },
 
   async addExpense(
@@ -1170,10 +1076,11 @@ export const dbStore = {
     }
 
     if (paymentMode === 'WALLET') {
-      const wallet = await prisma.wallet.findUnique({ where: { tripId } });
-      if (!wallet || wallet.balance < amount - 0.01) {
-        const avail = wallet ? wallet.balance : 0;
-        throw new Error(`Insufficient group wallet balance. Available: ${trip.currency}${avail}, Expense amount: ${trip.currency}${amount}.`);
+      const payerWallet = await this.getOrCreateUserWallet(paidById, tripId);
+      if (payerWallet.balance < amount - 0.01) {
+        throw new Error(
+          `Insufficient advance balance in ${paidById === createdById ? 'your' : 'payer\'s'} personal wallet. Available: ${trip.currency}${payerWallet.balance}, required: ${trip.currency}${amount}.`
+        );
       }
     }
 
@@ -1189,25 +1096,27 @@ export const dbStore = {
     const result = await prisma.$transaction(async (tx) => {
       let walletTxId: string | null = null;
       if (paymentMode === 'WALLET') {
-        const freshWallet = await tx.wallet.findUnique({ where: { tripId } });
+        const freshWallet = await tx.userWallet.findUnique({
+          where: { userId_tripId: { userId: paidById, tripId } },
+        });
         if (!freshWallet || freshWallet.balance < amount - 0.01) {
-          throw new Error(`Insufficient wallet balance.`);
+          throw new Error('Insufficient wallet balance.');
         }
 
         const walletTx = await tx.walletTransaction.create({
           data: {
             id: generateObjectId(),
             walletId: freshWallet.id,
-            type: 'EXPENSE',
+            type: 'EXPENSE_DEBIT',
             amount,
-            description: `Expense: ${title}`,
+            description: `Used for expense: ${title}`,
             expenseId: expenseObjectId,
             createdById,
           },
         });
         walletTxId = walletTx.id;
 
-        await tx.wallet.update({
+        await tx.userWallet.update({
           where: { id: freshWallet.id },
           data: {
             balance: { decrement: amount },
@@ -1252,7 +1161,7 @@ export const dbStore = {
       tripId,
       createdById,
       'EXPENSE_ADDED',
-      `${creatorUser.name} added expense "${title}" (${trip.currency}${amount})${paymentMode === 'WALLET' ? ' [Paid from Wallet]' : ''}`,
+      `${creatorUser.name} added expense "${title}" (${trip.currency}${amount})${paymentMode === 'WALLET' ? ' [Paid from Advance Wallet]' : ''}`,
       amount,
       category
     );
@@ -1329,12 +1238,14 @@ export const dbStore = {
       if (oldMode === 'WALLET' && paymentMode === 'WALLET') {
         const diff = amount - oldAmount;
         if (diff !== 0) {
-          const wallet = await tx.wallet.findUnique({ where: { tripId: existingExpense.tripId } });
+          const wallet = await tx.userWallet.findUnique({
+            where: { userId_tripId: { userId: paidById, tripId: existingExpense.tripId } },
+          });
           if (diff > 0 && (!wallet || wallet.balance < diff - 0.01)) {
-            throw new Error(`Insufficient wallet balance for updated amount.`);
+            throw new Error(`Insufficient personal wallet balance for updated amount.`);
           }
           if (wallet) {
-            await tx.wallet.update({
+            await tx.userWallet.update({
               where: { id: wallet.id },
               data: {
                 balance: { decrement: diff },
@@ -1356,11 +1267,13 @@ export const dbStore = {
           }
         }
       } else if (oldMode === 'PERSONALLY' && paymentMode === 'WALLET') {
-        const wallet = await tx.wallet.findUnique({ where: { tripId: existingExpense.tripId } });
+        const wallet = await tx.userWallet.findUnique({
+          where: { userId_tripId: { userId: paidById, tripId: existingExpense.tripId } },
+        });
         if (!wallet || wallet.balance < amount - 0.01) {
-          throw new Error(`Insufficient wallet balance to switch payment mode to Wallet.`);
+          throw new Error(`Insufficient personal wallet balance to switch payment source to Advance Wallet.`);
         }
-        await tx.wallet.update({
+        await tx.userWallet.update({
           where: { id: wallet.id },
           data: {
             balance: { decrement: amount },
@@ -1371,18 +1284,20 @@ export const dbStore = {
           data: {
             id: generateObjectId(),
             walletId: wallet.id,
-            type: 'EXPENSE',
+            type: 'EXPENSE_DEBIT',
             amount,
-            description: `Expense: ${title}`,
+            description: `Used for expense: ${title}`,
             expenseId,
             createdById: currentUserId,
           },
         });
         walletTxId = wTx.id;
       } else if (oldMode === 'WALLET' && paymentMode === 'PERSONALLY') {
-        const wallet = await tx.wallet.findUnique({ where: { tripId: existingExpense.tripId } });
+        const wallet = await tx.userWallet.findUnique({
+          where: { userId_tripId: { userId: existingExpense.paidById, tripId: existingExpense.tripId } },
+        });
         if (wallet) {
-          await tx.wallet.update({
+          await tx.userWallet.update({
             where: { id: wallet.id },
             data: {
               balance: { increment: oldAmount },
@@ -1395,7 +1310,7 @@ export const dbStore = {
               walletId: wallet.id,
               type: 'REFUND',
               amount: oldAmount,
-              description: `Reversal for expense switched to personally paid: ${title}`,
+              description: `Reversal for expense switched to personal money: ${title}`,
               expenseId,
               createdById: currentUserId,
             },
@@ -1498,9 +1413,11 @@ export const dbStore = {
 
     await prisma.$transaction(async (tx) => {
       if (existingExpense.paymentMode === 'WALLET') {
-        const wallet = await tx.wallet.findUnique({ where: { tripId: existingExpense.tripId } });
+        const wallet = await tx.userWallet.findUnique({
+          where: { userId_tripId: { userId: existingExpense.paidById, tripId: existingExpense.tripId } },
+        });
         if (wallet) {
-          await tx.wallet.update({
+          await tx.userWallet.update({
             where: { id: wallet.id },
             data: {
               balance: { increment: existingExpense.amount },
@@ -1513,7 +1430,7 @@ export const dbStore = {
               walletId: wallet.id,
               type: 'REFUND',
               amount: existingExpense.amount,
-              description: `Refund for deleted wallet expense: ${existingExpense.title}`,
+              description: `Restored advance for deleted expense: ${existingExpense.title}`,
               expenseId,
               createdById: currentUserId,
             },
@@ -1569,12 +1486,6 @@ export const dbStore = {
           },
         },
         settlements: { include: { fromUser: userSelect, toUser: userSelect } },
-        wallet: {
-          include: {
-            contributions: { include: { user: userSelect, approvedBy: userSelect } },
-            transactions: { include: { createdBy: userSelect } },
-          },
-        },
       },
     });
     if (!trip) throw new Error('Trip not found');
@@ -1603,45 +1514,7 @@ export const dbStore = {
       user: { id: m.user.id, name: m.user.name, email: m.user.email },
     }));
 
-    const formattedWallet: WalletDetail | null = trip.wallet
-      ? {
-          id: trip.wallet.id,
-          tripId: trip.wallet.tripId,
-          balance: trip.wallet.balance,
-          totalAdded: trip.wallet.totalAdded,
-          totalSpent: trip.wallet.totalSpent,
-          createdAt: trip.wallet.createdAt.toISOString(),
-          updatedAt: trip.wallet.updatedAt.toISOString(),
-          contributions: trip.wallet.contributions.map((c) => ({
-            id: c.id,
-            walletId: c.walletId,
-            userId: c.userId,
-            user: { id: c.user.id, name: c.user.name, email: c.user.email },
-            amount: c.amount,
-            status: c.status as WalletContributionDetail['status'],
-            note: c.note,
-            approvedById: c.approvedById,
-            approvedBy: c.approvedBy ? { id: c.approvedBy.id, name: c.approvedBy.name, email: c.approvedBy.email } : null,
-            approvedAt: c.approvedAt ? c.approvedAt.toISOString() : null,
-            createdAt: c.createdAt.toISOString(),
-            updatedAt: c.updatedAt.toISOString(),
-          })),
-          transactions: trip.wallet.transactions.map((t) => ({
-            id: t.id,
-            walletId: t.walletId,
-            type: t.type as WalletTransactionDetail['type'],
-            amount: t.amount,
-            description: t.description,
-            expenseId: t.expenseId,
-            contributionId: t.contributionId,
-            createdById: t.createdById,
-            createdBy: { id: t.createdBy.id, name: t.createdBy.name, email: t.createdBy.email },
-            createdAt: t.createdAt.toISOString(),
-          })),
-        }
-      : null;
-
-    const computedSettlements = computeSettlements(mappedMembers, approvedExpenses, settlementRecords, formattedWallet);
+    const computedSettlements = computeSettlements(mappedMembers, approvedExpenses, settlementRecords);
     const pairTx = computedSettlements.find((tx) => tx.fromUser.id === fromUserId && tx.toUser.id === toUserId);
     const currentOutstanding = pairTx ? pairTx.amount : 0;
 
@@ -1711,6 +1584,7 @@ export const dbStore = {
   ): Promise<SettlementRecordDetail> {
     await ensureDatabaseSeeded();
 
+    const userSelect = { select: { id: true, name: true, email: true } };
     const settlement = await prisma.settlement.findUnique({
       where: { id: settlementId },
       include: { trip: { include: { members: true } }, fromUser: true, toUser: true },
@@ -1736,12 +1610,6 @@ export const dbStore = {
             },
           },
           settlements: { include: { fromUser: userSelect, toUser: userSelect } },
-          wallet: {
-            include: {
-              contributions: { include: { user: userSelect, approvedBy: userSelect } },
-              transactions: { include: { createdBy: userSelect } },
-            },
-          },
         },
       });
       if (trip) {
@@ -1769,45 +1637,7 @@ export const dbStore = {
           user: { id: m.user.id, name: m.user.name, email: m.user.email },
         }));
 
-        const formattedWallet: WalletDetail | null = trip.wallet
-          ? {
-              id: trip.wallet.id,
-              tripId: trip.wallet.tripId,
-              balance: trip.wallet.balance,
-              totalAdded: trip.wallet.totalAdded,
-              totalSpent: trip.wallet.totalSpent,
-              createdAt: trip.wallet.createdAt.toISOString(),
-              updatedAt: trip.wallet.updatedAt.toISOString(),
-              contributions: trip.wallet.contributions.map((c) => ({
-                id: c.id,
-                walletId: c.walletId,
-                userId: c.userId,
-                user: { id: c.user.id, name: c.user.name, email: c.user.email },
-                amount: c.amount,
-                status: c.status as WalletContributionDetail['status'],
-                note: c.note,
-                approvedById: c.approvedById,
-                approvedBy: c.approvedBy ? { id: c.approvedBy.id, name: c.approvedBy.name, email: c.approvedBy.email } : null,
-                approvedAt: c.approvedAt ? c.approvedAt.toISOString() : null,
-                createdAt: c.createdAt.toISOString(),
-                updatedAt: c.updatedAt.toISOString(),
-              })),
-              transactions: trip.wallet.transactions.map((t) => ({
-                id: t.id,
-                walletId: t.walletId,
-                type: t.type as WalletTransactionDetail['type'],
-                amount: t.amount,
-                description: t.description,
-                expenseId: t.expenseId,
-                contributionId: t.contributionId,
-                createdById: t.createdById,
-                createdBy: { id: t.createdBy.id, name: t.createdBy.name, email: t.createdBy.email },
-                createdAt: t.createdAt.toISOString(),
-              })),
-            }
-          : null;
-
-        const computedSettlements = computeSettlements(mappedMembers, approvedExpenses, settlementRecords, formattedWallet);
+        const computedSettlements = computeSettlements(mappedMembers, approvedExpenses, settlementRecords);
         const pairTx = computedSettlements.find(
           (tx) => tx.fromUser.id === settlement.fromUserId && tx.toUser.id === settlement.toUserId
         );

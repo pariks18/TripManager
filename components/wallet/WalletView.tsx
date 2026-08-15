@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { WalletDetail, TripMemberDetail, UserSummary } from '@/types';
+import { UserWalletDetail, TripMemberDetail, WalletAdvanceDetail } from '@/types';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { Avatar } from '@/components/ui/Avatar';
 import { ContributeModal } from './ContributeModal';
@@ -13,19 +13,19 @@ import {
   Clock,
   ArrowUpRight,
   ArrowDownLeft,
-  RefreshCw,
   Sparkles,
   RotateCcw,
-  Receipt,
   ShieldCheck,
-  AlertTriangle,
   History,
+  UserCheck,
 } from 'lucide-react';
 
 interface WalletViewProps {
   tripId: string;
   currency: string;
-  wallet?: WalletDetail | null;
+  myWallet?: UserWalletDetail | null;
+  allWallets?: UserWalletDetail[];
+  members?: TripMemberDetail[];
   currentUserId: string;
   isAdmin?: boolean;
   onRefresh: () => void;
@@ -34,84 +34,72 @@ interface WalletViewProps {
 export const WalletView: React.FC<WalletViewProps> = ({
   tripId,
   currency,
-  wallet,
+  myWallet,
+  allWallets = [],
+  members = [],
   currentUserId,
   isAdmin = false,
   onRefresh,
 }) => {
   const [isContributeModalOpen, setIsContributeModalOpen] = useState(false);
-  const [isRefunding, setIsRefunding] = useState(false);
   const [submittingId, setSubmittingId] = useState<string | null>(null);
-  const [showRefundConfirm, setShowRefundConfirm] = useState(false);
 
-  const balance = wallet?.balance || 0;
-  const totalAdded = wallet?.totalAdded || 0;
-  const totalSpent = wallet?.totalSpent || 0;
+  const balance = myWallet?.balance || 0;
+  const totalAdded = myWallet?.totalAdded || 0;
+  const totalSpent = myWallet?.totalSpent || 0;
 
-  const contributions = wallet?.contributions || [];
-  const transactions = wallet?.transactions || [];
+  const myAdvances = myWallet?.advances || [];
+  const myTransactions = myWallet?.transactions || [];
 
-  const pendingContributions = contributions.filter((c) => c.status === 'PENDING');
-  const approvedContributions = contributions.filter((c) => c.status === 'APPROVED');
+  // Collect all pending advance requests across members (for Host verification)
+  const pendingAdvances: WalletAdvanceDetail[] = [];
+  allWallets.forEach((w) => {
+    (w.advances || []).forEach((adv) => {
+      if (adv.status === 'PENDING') {
+        pendingAdvances.push(adv);
+      }
+    });
+  });
 
-  const handleApproveContribution = async (contributionId: string) => {
-    setSubmittingId(contributionId);
+  const handleApproveAdvance = async (advanceId: string) => {
+    setSubmittingId(advanceId);
     try {
-      const res = await fetch(`/api/trips/${tripId}/wallet/contributions/${contributionId}`, {
+      const res = await fetch(`/api/trips/${tripId}/wallet/advances/${advanceId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'APPROVE' }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to approve contribution');
+      if (!res.ok) throw new Error(data.error || 'Failed to approve advance request');
       onRefresh();
     } catch (err: any) {
-      alert(err.message || 'Failed to approve contribution');
+      alert(err.message || 'Failed to approve advance request');
     } finally {
       setSubmittingId(null);
     }
   };
 
-  const handleRejectContribution = async (contributionId: string) => {
-    setSubmittingId(contributionId);
+  const handleRejectAdvance = async (advanceId: string) => {
+    setSubmittingId(advanceId);
     try {
-      const res = await fetch(`/api/trips/${tripId}/wallet/contributions/${contributionId}`, {
+      const res = await fetch(`/api/trips/${tripId}/wallet/advances/${advanceId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'REJECT' }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to reject contribution');
+      if (!res.ok) throw new Error(data.error || 'Failed to reject advance request');
       onRefresh();
     } catch (err: any) {
-      alert(err.message || 'Failed to reject contribution');
+      alert(err.message || 'Failed to reject advance request');
     } finally {
       setSubmittingId(null);
     }
   };
 
-  const handleRefundWallet = async () => {
-    setIsRefunding(true);
-    try {
-      const res = await fetch(`/api/trips/${tripId}/wallet/refund`, {
-        method: 'POST',
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to refund wallet balance');
-
-      alert(data.message || 'Remaining wallet balance successfully refunded to contributors!');
-      setShowRefundConfirm(false);
-      onRefresh();
-    } catch (err: any) {
-      alert(err.message || 'Failed to refund wallet balance');
-    } finally {
-      setIsRefunding(false);
-    }
-  };
-
   return (
     <div className="space-y-5">
-      {/* 1. Wallet Overview Stats Cards */}
+      {/* 1. Personal Wallet Overview Card */}
       <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 rounded-3xl p-6 text-white shadow-xl space-y-5 relative overflow-hidden">
         <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none">
           <Wallet className="w-36 h-36" />
@@ -123,8 +111,8 @@ export const WalletView: React.FC<WalletViewProps> = ({
               <Wallet className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-300">Group Wallet</h3>
-              <p className="text-[11px] text-slate-400">Shared Money Pool Ledger</p>
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-300">My Personal Wallet</h3>
+              <p className="text-[11px] text-slate-400">Advance Funds Paid for Trip Expenses</p>
             </div>
           </div>
 
@@ -132,12 +120,12 @@ export const WalletView: React.FC<WalletViewProps> = ({
             onClick={() => setIsContributeModalOpen(true)}
             className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl shadow-lg transition-all active:scale-95"
           >
-            <Plus className="w-4 h-4" /> Add Money
+            <Plus className="w-4 h-4" /> Add Advance
           </button>
         </div>
 
         <div>
-          <span className="text-xs font-semibold text-slate-400 block mb-1">Available Wallet Balance</span>
+          <span className="text-xs font-semibold text-slate-400 block mb-1">Available Advance Balance</span>
           <span className="text-3xl font-extrabold tracking-tight text-white">
             {formatCurrency(balance, currency)}
           </span>
@@ -147,7 +135,7 @@ export const WalletView: React.FC<WalletViewProps> = ({
         <div className="grid grid-cols-2 gap-3 pt-3 border-t border-slate-700/60">
           <div className="bg-slate-800/80 rounded-2xl p-3 border border-slate-700/50">
             <div className="flex items-center gap-1.5 text-emerald-400 text-xs font-semibold mb-0.5">
-              <ArrowDownLeft className="w-3.5 h-3.5" /> Total Added
+              <ArrowDownLeft className="w-3.5 h-3.5" /> Total Advance Added
             </div>
             <span className="text-base font-extrabold text-white">
               {formatCurrency(totalAdded, currency)}
@@ -156,29 +144,17 @@ export const WalletView: React.FC<WalletViewProps> = ({
 
           <div className="bg-slate-800/80 rounded-2xl p-3 border border-slate-700/50">
             <div className="flex items-center gap-1.5 text-rose-400 text-xs font-semibold mb-0.5">
-              <ArrowUpRight className="w-3.5 h-3.5" /> Total Used
+              <ArrowUpRight className="w-3.5 h-3.5" /> Total Spent
             </div>
             <span className="text-base font-extrabold text-white">
               {formatCurrency(totalSpent, currency)}
             </span>
           </div>
         </div>
-
-        {/* Refund Trigger for Host */}
-        {isAdmin && balance > 0.01 && (
-          <div className="pt-2">
-            <button
-              onClick={() => setShowRefundConfirm(true)}
-              className="w-full py-2.5 px-4 rounded-2xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-bold transition-all flex items-center justify-center gap-1.5"
-            >
-              <RotateCcw className="w-3.5 h-3.5" /> Return / Refund Wallet Balance ({formatCurrency(balance, currency)})
-            </button>
-          </div>
-        )}
       </div>
 
-      {/* 2. Pending Contributions Section (For Host verification) */}
-      {pendingContributions.length > 0 && (
+      {/* 2. Pending Advances Section (For Host Verification) */}
+      {pendingAdvances.length > 0 && (
         <div className="bg-amber-50/80 border border-amber-200/80 rounded-3xl p-5 space-y-3 apple-shadow">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -186,67 +162,67 @@ export const WalletView: React.FC<WalletViewProps> = ({
                 <Clock className="w-4 h-4" />
               </div>
               <div>
-                <h4 className="text-sm font-bold text-amber-950">Pending Contribution Approvals</h4>
-                <p className="text-[11px] text-amber-700">Money waiting to be added to group wallet</p>
+                <h4 className="text-sm font-bold text-amber-950">Pending Advance Approvals</h4>
+                <p className="text-[11px] text-amber-700">Member advances waiting for Host approval</p>
               </div>
             </div>
             <span className="bg-amber-200 text-amber-900 text-xs font-extrabold px-2.5 py-0.5 rounded-full">
-              {pendingContributions.length} Pending
+              {pendingAdvances.length} Pending
             </span>
           </div>
 
           <div className="space-y-3 pt-1">
-            {pendingContributions.map((contrib) => {
-              const isContributor = contrib.userId === currentUserId;
+            {pendingAdvances.map((adv) => {
+              const isRequester = adv.userId === currentUserId;
               const canApprove = isAdmin;
 
               return (
                 <div
-                  key={contrib.id}
+                  key={adv.id}
                   className="bg-white rounded-2xl p-4 border border-amber-200/80 space-y-3 shadow-sm"
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2.5">
-                      <Avatar name={contrib.user.name} size="sm" />
+                      <Avatar name={adv.user.name} size="sm" />
                       <div>
                         <span className="text-xs font-bold text-slate-900 block">
-                          {isContributor ? 'You' : contrib.user.name}
+                          {isRequester ? 'You' : adv.user.name}
                         </span>
                         <span className="text-[10px] text-slate-500">
-                          {formatDate(contrib.createdAt)}
+                          {formatDate(adv.createdAt)}
                         </span>
                       </div>
                     </div>
 
                     <span className="text-sm font-extrabold text-amber-800 bg-amber-100 px-3 py-1 rounded-full border border-amber-200">
-                      +{formatCurrency(contrib.amount, currency)}
+                      +{formatCurrency(adv.amount, currency)}
                     </span>
                   </div>
 
-                  {contrib.note && (
+                  {adv.note && (
                     <div className="text-xs text-slate-600 bg-slate-50 p-2.5 rounded-xl border border-slate-100 italic">
-                      "{contrib.note}"
+                      "{adv.note}"
                     </div>
                   )}
 
                   <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
                     <span className="text-[11px] font-semibold text-slate-500 flex items-center gap-1">
                       <Clock className="w-3.5 h-3.5 text-amber-600 animate-pulse" />
-                      {isContributor ? 'Waiting for Host approval' : 'Host Verification Required'}
+                      {isRequester ? 'Waiting for Host approval' : 'Host Verification Required'}
                     </span>
 
                     {canApprove ? (
                       <div className="flex items-center gap-2">
                         <button
-                          onClick={() => handleRejectContribution(contrib.id)}
-                          disabled={submittingId === contrib.id}
+                          onClick={() => handleRejectAdvance(adv.id)}
+                          disabled={submittingId === adv.id}
                           className="px-2.5 py-1 text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-xl transition-colors"
                         >
                           Reject
                         </button>
                         <button
-                          onClick={() => handleApproveContribution(contrib.id)}
-                          disabled={submittingId === contrib.id}
+                          onClick={() => handleApproveAdvance(adv.id)}
+                          disabled={submittingId === adv.id}
                           className="px-3 py-1 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-sm transition-all flex items-center gap-1"
                         >
                           <CheckCircle2 className="w-3.5 h-3.5" />
@@ -266,24 +242,69 @@ export const WalletView: React.FC<WalletViewProps> = ({
         </div>
       )}
 
-      {/* 3. Wallet Transaction History Ledger */}
+      {/* 3. Members' Personal Wallet Balances Overview */}
+      {allWallets.length > 0 && (
+        <div className="bg-white rounded-3xl p-5 border border-slate-100 apple-shadow space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <UserCheck className="w-4 h-4 text-emerald-600" />
+              <h4 className="text-sm font-bold text-slate-900">Member Wallet Balances</h4>
+            </div>
+            <span className="text-xs text-slate-400 font-medium">Per-User Advance Balances</span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+            {allWallets.map((w) => {
+              const memberInfo = members.find((m) => m.userId === w.userId);
+              const name = memberInfo?.user.name || (w.userId === currentUserId ? 'You' : 'Member');
+              const isMe = w.userId === currentUserId;
+
+              return (
+                <div
+                  key={w.id}
+                  className={`p-3.5 rounded-2xl border ${
+                    isMe ? 'bg-emerald-50/60 border-emerald-200' : 'bg-slate-50 border-slate-100'
+                  } flex items-center justify-between`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <Avatar name={name} size="sm" />
+                    <div>
+                      <span className="text-xs font-bold text-slate-900 block">
+                        {name} {isMe && '(You)'}
+                      </span>
+                      <span className="text-[10px] text-slate-400">
+                        Added: {formatCurrency(w.totalAdded, currency)}
+                      </span>
+                    </div>
+                  </div>
+
+                  <span className={`text-sm font-extrabold ${w.balance > 0 ? 'text-emerald-600' : 'text-slate-500'}`}>
+                    {formatCurrency(w.balance, currency)}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* 4. Personal Wallet Transaction Ledger */}
       <div className="bg-white rounded-3xl p-5 border border-slate-100 apple-shadow space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <History className="w-4 h-4 text-emerald-600" />
-            <h4 className="text-sm font-bold text-slate-900">Wallet Transaction History</h4>
+            <h4 className="text-sm font-bold text-slate-900">My Wallet History</h4>
           </div>
           <span className="text-xs text-slate-400 font-medium">
-            {transactions.length} Transactions
+            {myTransactions.length} Transactions
           </span>
         </div>
 
-        {transactions.length > 0 ? (
+        {myTransactions.length > 0 ? (
           <div className="space-y-2.5">
-            {transactions.map((tx) => {
-              const isDeposit = tx.type === 'DEPOSIT';
-              const isExpense = tx.type === 'EXPENSE';
-              const isRefund = tx.type === 'REFUND';
+            {myTransactions.map((tx) => {
+              const isCredit = tx.type === 'ADVANCE_CREDIT';
+              const isDebit = tx.type === 'EXPENSE_DEBIT';
 
               return (
                 <div
@@ -293,18 +314,16 @@ export const WalletView: React.FC<WalletViewProps> = ({
                   <div className="flex items-center gap-3">
                     <div
                       className={`p-2 rounded-xl shrink-0 ${
-                        isDeposit
+                        isCredit
                           ? 'bg-emerald-100 text-emerald-700'
-                          : isExpense
+                          : isDebit
                           ? 'bg-rose-100 text-rose-700'
-                          : isRefund
-                          ? 'bg-blue-100 text-blue-700'
-                          : 'bg-slate-200 text-slate-700'
+                          : 'bg-blue-100 text-blue-700'
                       }`}
                     >
-                      {isDeposit ? (
+                      {isCredit ? (
                         <ArrowDownLeft className="w-4 h-4" />
-                      ) : isExpense ? (
+                      ) : isDebit ? (
                         <ArrowUpRight className="w-4 h-4" />
                       ) : (
                         <RotateCcw className="w-4 h-4" />
@@ -314,13 +333,13 @@ export const WalletView: React.FC<WalletViewProps> = ({
                     <div>
                       <div className="flex items-center gap-1.5">
                         <span className="font-bold text-slate-900">
-                          {tx.description || (isDeposit ? 'Wallet Contribution' : isExpense ? 'Expense Paid' : 'Refund')}
+                          {tx.description || (isCredit ? 'Advance Added' : isDebit ? 'Expense Paid' : 'Adjustment')}
                         </span>
                         <span
                           className={`text-[9px] font-extrabold uppercase px-1.5 py-0.2 rounded-md ${
-                            isDeposit
+                            isCredit
                               ? 'bg-emerald-100 text-emerald-800'
-                              : isExpense
+                              : isDebit
                               ? 'bg-rose-100 text-rose-800'
                               : 'bg-blue-100 text-blue-800'
                           }`}
@@ -329,8 +348,6 @@ export const WalletView: React.FC<WalletViewProps> = ({
                         </span>
                       </div>
                       <div className="flex items-center gap-2 text-[10px] text-slate-400 mt-0.5">
-                        <span>By {tx.createdBy.name}</span>
-                        <span>•</span>
                         <span>{formatDate(tx.createdAt)}</span>
                       </div>
                     </div>
@@ -338,10 +355,10 @@ export const WalletView: React.FC<WalletViewProps> = ({
 
                   <span
                     className={`text-sm font-extrabold ${
-                      isDeposit ? 'text-emerald-600' : isExpense ? 'text-slate-900' : 'text-blue-600'
+                      isCredit ? 'text-emerald-600' : isDebit ? 'text-rose-600' : 'text-blue-600'
                     }`}
                   >
-                    {isDeposit ? '+' : isExpense ? '-' : ''}
+                    {isCredit ? '+' : isDebit ? '-' : ''}
                     {formatCurrency(tx.amount, currency)}
                   </span>
                 </div>
@@ -351,15 +368,15 @@ export const WalletView: React.FC<WalletViewProps> = ({
         ) : (
           <div className="bg-slate-50 border border-slate-200/60 rounded-2xl p-6 text-center space-y-2">
             <Sparkles className="w-8 h-8 text-slate-300 mx-auto" />
-            <p className="text-xs font-bold text-slate-700">No Wallet Transactions Yet</p>
+            <p className="text-xs font-bold text-slate-700">No Transactions Yet</p>
             <p className="text-[11px] text-slate-500 max-w-xs mx-auto">
-              Contribute money to the wallet or pay for expenses using group wallet funds to view the ledger history!
+              Add advance money to your personal wallet to use it for expenses!
             </p>
           </div>
         )}
       </div>
 
-      {/* Modal to Contribute */}
+      {/* Modal to Add Advance */}
       <ContributeModal
         isOpen={isContributeModalOpen}
         onClose={() => setIsContributeModalOpen(false)}
@@ -367,49 +384,6 @@ export const WalletView: React.FC<WalletViewProps> = ({
         currency={currency}
         onSuccess={onRefresh}
       />
-
-      {/* Refund Confirmation Modal for Host */}
-      {showRefundConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
-          <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl border border-slate-100 overflow-hidden flex flex-col p-6 space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 bg-amber-100 text-amber-700 rounded-2xl">
-                <AlertTriangle className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="text-base font-bold text-slate-900">Refund Remaining Wallet Balance</h3>
-                <p className="text-xs text-amber-700 font-medium">Proportional Distribution</p>
-              </div>
-            </div>
-
-            <div className="bg-amber-50 border border-amber-200/80 rounded-2xl p-3.5 text-xs text-amber-900 leading-relaxed space-y-2">
-              <p className="font-bold">
-                Are you sure you want to refund the remaining {formatCurrency(balance, currency)} wallet balance?
-              </p>
-              <p>
-                This action will calculate each contributor's proportional share based on their approved contributions, record individual refund transactions, and set the wallet balance to zero.
-              </p>
-            </div>
-
-            <div className="flex gap-3 pt-2">
-              <button
-                onClick={() => setShowRefundConfirm(false)}
-                disabled={isRefunding}
-                className="flex-1 py-2.5 px-4 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleRefundWallet}
-                disabled={isRefunding}
-                className="flex-1 py-2.5 px-4 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs shadow-sm transition-all"
-              >
-                {isRefunding ? 'Processing...' : 'Confirm Refund'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

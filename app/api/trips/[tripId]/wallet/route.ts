@@ -12,10 +12,10 @@ export async function GET(
   }
 
   try {
-    const wallet = await dbStore.getOrCreateWallet(params.tripId);
+    const wallet = await dbStore.getOrCreateUserWallet(user.id, params.tripId);
     return NextResponse.json({ wallet });
   } catch (error: any) {
     console.error('[API GET /api/trips/[tripId]/wallet error]:', error);
-    return NextResponse.json({ error: error.message || 'Failed to fetch wallet' }, { status: 400 });
+    return NextResponse.json({ error: error.message || 'Failed to fetch personal wallet' }, { status: 400 });
   }
 }

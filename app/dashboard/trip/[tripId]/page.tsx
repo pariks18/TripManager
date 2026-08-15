@@ -615,12 +615,14 @@ export default function TripDashboardPage() {
           />
         )}
 
-        {/* TAB: GROUP WALLET */}
+        {/* TAB: PERSONAL WALLET */}
         {activeTab === 'wallet' && (
           <WalletView
             tripId={trip.id}
             currency={trip.currency}
-            wallet={trip.wallet}
+            myWallet={trip.myWallet}
+            allWallets={trip.allWallets}
+            members={trip.members}
             currentUserId={user.id}
             isAdmin={isAdmin}
             onRefresh={fetchTripDetails}
@@ -673,7 +675,8 @@ export default function TripDashboardPage() {
         members={trip.members}
         currentUserId={user.id}
         isAdmin={isAdmin}
-        walletBalance={trip.wallet?.balance || 0}
+        walletBalance={trip.myWallet?.balance || 0}
+        allWallets={trip.allWallets}
         existingExpense={editingExpense}
         onSuccess={handleExpenseSuccess}
       />
