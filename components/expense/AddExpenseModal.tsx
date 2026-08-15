@@ -1,12 +1,30 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
+import { CategoryType, ExpenseDetail, TripMemberDetail, UserWalletDetail } from '@/types';
 import { Modal } from '@/components/ui/Modal';
-import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
-import { CategoryType, ExpenseDetail, TripMemberDetail, UserSummary, UserWalletDetail } from '@/types';
-import { CATEGORY_CONFIG, formatCurrency } from '@/lib/utils';
-import { Utensils, Plane, Fuel, Home, Ticket, ShoppingBag, Sparkles, Check, CheckSquare, Square, Camera, Image as ImageIcon, Trash2, Receipt, X } from 'lucide-react';
+import { Input } from '@/components/ui/Input';
+import { formatCurrency } from '@/lib/utils';
+import { Avatar } from '@/components/ui/Avatar';
+import { useToast } from '@/components/ui/Toast';
+import {
+  Upload,
+  X,
+  Check,
+  Users,
+  Sparkles,
+  AlertCircle,
+  ShieldAlert,
+  Wallet,
+  CreditCard,
+  Receipt,
+  Camera,
+  Image as ImageIcon,
+  Trash2,
+  CheckSquare,
+  Square,
+} from 'lucide-react';
 
 interface AddExpenseModalProps {
   isOpen: boolean;
@@ -15,9 +33,11 @@ interface AddExpenseModalProps {
   currency: string;
   members: TripMemberDetail[];
   currentUserId: string;
-  isAdmin?: boolean;
-  walletBalance?: number;
   allWallets?: UserWalletDetail[];
+  myWallet?: UserWalletDetail | null;
+  walletBalance?: number;
+  isAdmin?: boolean;
+  approvalMode?: boolean;
   existingExpense?: ExpenseDetail | null;
   onSuccess: (expense: ExpenseDetail) => void;
 }
@@ -39,12 +59,15 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
   currency,
   members,
   currentUserId,
-  isAdmin = false,
-  walletBalance = 0,
   allWallets = [],
+  myWallet,
+  walletBalance = 0,
+  isAdmin = false,
+  approvalMode = false,
   existingExpense,
   onSuccess,
 }) => {
+  const { showToast } = useToast();
   const [title, setTitle] = useState('');
   const [amount, setAmount] = useState('');
   const [category, setCategory] = useState<CategoryType>('Food');
@@ -59,14 +82,13 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
   const galleryInputRef = useRef<HTMLInputElement>(null);
 
   const isRejected = existingExpense?.status === 'REJECTED';
-  const isApproved = existingExpense?.status === 'APPROVED';
-  const isEditRequestRequired = isApproved && !isAdmin;
+  const isCreatorAdmin = isAdmin;
+  const isEditRequestRequired = approvalMode && existingExpense && existingExpense.status === 'APPROVED' && !isCreatorAdmin;
 
-  // Find the selected Payer's personal wallet balance
-  const payerWallet = allWallets.find((w) => w.userId === paidById);
-  const payerWalletBalance = payerWallet?.balance ?? walletBalance;
-  const payerMember = members.find((m) => m.userId === paidById);
-  const payerName = payerMember?.user.name || (paidById === currentUserId ? 'You' : 'Payer');
+  const selectedPayerWallet =
+    allWallets.find((w) => w.userId === paidById) || (paidById === currentUserId ? myWallet : null);
+  const payerWalletBalance = selectedPayerWallet?.balance ?? walletBalance;
+  const payerName = members.find((m) => m.userId === paidById)?.user.name || 'Payer';
 
   useEffect(() => {
     if (existingExpense) {
@@ -86,14 +108,15 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
       setSplitBetween(members.map((m) => m.userId));
       setReceiptUrl(null);
     }
-  }, [existingExpense, isOpen, members, currentUserId]);
+    setError('');
+  }, [existingExpense, isOpen, currentUserId, members]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 8 * 1024 * 1024) {
-      setError('Receipt photo must be smaller than 8MB');
+    if (file.size > 2 * 1024 * 1024) {
+      setError('Receipt image size should be less than 2MB');
       return;
     }
 
@@ -106,7 +129,7 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
 
   const toggleParticipant = (userId: string) => {
     if (splitBetween.includes(userId)) {
-      if (splitBetween.length === 1) return; // Must have at least 1 split participant
+      if (splitBetween.length === 1) return;
       setSplitBetween(splitBetween.filter((id) => id !== userId));
     } else {
       setSplitBetween([...splitBetween, userId]);
@@ -167,7 +190,7 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Failed to submit edit request');
-        alert('Edit request submitted successfully! Waiting for host approval.');
+        showToast('✓ Edit request submitted successfully! Waiting for host approval.', 'info', 'Request Submitted');
         onSuccess(existingExpense);
         onClose();
         return;
@@ -194,10 +217,17 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to save expense');
 
+      showToast(
+        `✓ Expense "${title.trim()}" (${formatCurrency(numAmount, currency)}) ${existingExpense ? 'updated' : 'added'} successfully`,
+        'success',
+        existingExpense ? 'Expense Updated' : 'Expense Added'
+      );
+
       onSuccess(data.expense);
       onClose();
     } catch (err: any) {
       setError(err.message);
+      showToast(err.message || 'Failed to save expense', 'error', 'Error');
     } finally {
       setIsLoading(false);
     }
@@ -212,65 +242,71 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={existingExpense ? (isEditRequestRequired ? 'Propose Expense Edit' : 'Edit Expense') : 'Add New Expense'}
+      title={existingExpense ? 'Edit Expense' : 'Add New Expense'}
     >
       <form onSubmit={handleSubmit} className="space-y-4">
         {error && (
-          <div className="p-3 bg-rose-50 border border-rose-200 rounded-2xl text-xs font-semibold text-rose-700">
-            {error}
+          <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-2xl text-xs font-medium text-rose-700 flex items-start gap-2">
+            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+            <span>{error}</span>
           </div>
         )}
 
-        {isEditRequestRequired && (
-          <div className="p-3.5 bg-blue-50 border border-blue-200 rounded-2xl text-xs text-blue-800 space-y-1">
-            <p className="font-bold">Approval Mode Active</p>
-            <p>Changes to approved expenses require host review before taking effect.</p>
-          </div>
-        )}
+        <div>
+          <label className="block text-xs font-semibold text-slate-700 tracking-wide uppercase mb-1.5">
+            Expense Title
+          </label>
+          <Input
+            placeholder="e.g. Seafood Dinner, Taxi Ride"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            required
+          />
+        </div>
 
-        <Input
-          label="Expense Title"
-          placeholder="e.g. Resort, Lunch, Fuel, Taxi"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          required
-        />
+        <div>
+          <label className="block text-xs font-semibold text-slate-700 tracking-wide uppercase mb-1.5">
+            Amount ({currency})
+          </label>
+          <input
+            type="number"
+            step="any"
+            placeholder="0.00"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            className="w-full bg-slate-50 border border-slate-200 text-slate-900 text-xl font-bold rounded-2xl p-3 focus:outline-none focus:border-emerald-500 focus:bg-white"
+            required
+          />
+        </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 tracking-wide uppercase mb-1.5">
-              Paid By
-            </label>
-            <select
-              value={paidById}
-              onChange={(e) => setPaidById(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 text-slate-900 text-sm rounded-2xl p-3 focus:outline-none focus:border-emerald-500 focus:bg-white"
-            >
-              {members.map((m) => (
-                <option key={m.userId} value={m.userId}>
-                  {m.user.name} {m.userId === currentUserId ? '(You)' : ''}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 tracking-wide uppercase mb-1.5">
-              Amount ({currency})
-            </label>
-            <input
-              type="number"
-              step="any"
-              placeholder="0.00"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 text-slate-900 text-lg font-bold rounded-2xl p-3 focus:outline-none focus:border-emerald-500 focus:bg-white"
-              required
-            />
+        {/* Payer Selection */}
+        <div>
+          <label className="block text-xs font-semibold text-slate-700 tracking-wide uppercase mb-1.5">
+            Paid By
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            {members.map((m) => {
+              const isSelected = paidById === m.userId;
+              return (
+                <button
+                  type="button"
+                  key={m.userId}
+                  onClick={() => setPaidById(m.userId)}
+                  className={`flex items-center gap-2 p-2.5 rounded-2xl border text-xs font-bold transition-all ${
+                    isSelected
+                      ? 'bg-emerald-50 border-emerald-500 text-emerald-950 shadow-sm'
+                      : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  <Avatar name={m.user.name} size="sm" />
+                  <span className="truncate">{m.user.name} {m.userId === currentUserId ? '(You)' : ''}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
 
-        {/* Payment Source Selector */}
+        {/* Payment Source Selection */}
         <div>
           <label className="block text-xs font-semibold text-slate-700 tracking-wide uppercase mb-1.5">
             Payment Source
@@ -279,38 +315,35 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
             <button
               type="button"
               onClick={() => setPaymentMode('PERSONALLY')}
-              className={`p-2.5 rounded-2xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+              className={`p-3 rounded-2xl border flex flex-col items-start transition-all ${
                 paymentMode === 'PERSONALLY'
-                  ? 'bg-slate-900 border-slate-900 text-white shadow-sm font-bold'
-                  : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                  ? 'bg-emerald-600 text-white border-emerald-600 shadow-md'
+                  : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
               }`}
             >
-              <span>Personal Money</span>
+              <div className="flex items-center gap-1.5 font-bold text-xs">
+                <CreditCard className="w-4 h-4" /> Personal Money
+              </div>
+              <span className="text-[10px] opacity-80 mt-0.5">Out of pocket payment</span>
             </button>
+
             <button
               type="button"
               onClick={() => setPaymentMode('WALLET')}
-              disabled={payerWalletBalance <= 0}
-              className={`p-2.5 rounded-2xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+              className={`p-3 rounded-2xl border flex flex-col items-start transition-all ${
                 paymentMode === 'WALLET'
-                  ? 'bg-emerald-600 border-emerald-600 text-white shadow-sm font-bold'
-                  : payerWalletBalance <= 0
-                  ? 'bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed opacity-60'
-                  : 'bg-emerald-50/60 border-emerald-200 text-emerald-900 hover:bg-emerald-100'
+                  ? 'bg-emerald-600 text-white border-emerald-600 shadow-md'
+                  : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
               }`}
             >
-              <span>💳 Advance Wallet</span>
+              <div className="flex items-center gap-1.5 font-bold text-xs">
+                <Wallet className="w-4 h-4" /> Advance Wallet
+              </div>
+              <span className="text-[10px] opacity-80 mt-0.5">
+                Avail: {formatCurrency(payerWalletBalance, currency)}
+              </span>
             </button>
           </div>
-          {paymentMode === 'WALLET' ? (
-            <p className="text-[11px] text-emerald-700 font-semibold mt-1">
-              {paidById === currentUserId ? 'Your' : `${payerName}'s`} Advance Wallet Balance: {formatCurrency(payerWalletBalance, currency)}
-            </p>
-          ) : (
-            <p className="text-[11px] text-slate-500 font-medium mt-1">
-              Advance balance available: {formatCurrency(payerWalletBalance, currency)}
-            </p>
-          )}
         </div>
 
         {/* Category Picker */}

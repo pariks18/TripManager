@@ -1,10 +1,9 @@
-'use client';
-
 import React, { useState } from 'react';
 import { UserWalletDetail, TripMemberDetail, WalletAdvanceDetail } from '@/types';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { Avatar } from '@/components/ui/Avatar';
 import { ContributeModal } from './ContributeModal';
+import { useToast } from '@/components/ui/Toast';
 import {
   Wallet,
   Plus,
@@ -41,6 +40,7 @@ export const WalletView: React.FC<WalletViewProps> = ({
   isAdmin = false,
   onRefresh,
 }) => {
+  const { showToast } = useToast();
   const [isContributeModalOpen, setIsContributeModalOpen] = useState(false);
   const [submittingId, setSubmittingId] = useState<string | null>(null);
 
@@ -61,37 +61,39 @@ export const WalletView: React.FC<WalletViewProps> = ({
     });
   });
 
-  const handleApproveAdvance = async (advanceId: string) => {
-    setSubmittingId(advanceId);
+  const handleApproveAdvance = async (advance: WalletAdvanceDetail) => {
+    setSubmittingId(advance.id);
     try {
-      const res = await fetch(`/api/trips/${tripId}/wallet/advances/${advanceId}`, {
+      const res = await fetch(`/api/trips/${tripId}/wallet/advances/${advance.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'APPROVE' }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to approve advance request');
+      showToast(`✓ Approved ${advance.user.name}'s advance request of ${currency}${advance.amount}`, 'success', 'Advance Approved');
       onRefresh();
     } catch (err: any) {
-      alert(err.message || 'Failed to approve advance request');
+      showToast(err.message || 'Failed to approve advance request', 'error', 'Approval Failed');
     } finally {
       setSubmittingId(null);
     }
   };
 
-  const handleRejectAdvance = async (advanceId: string) => {
-    setSubmittingId(advanceId);
+  const handleRejectAdvance = async (advance: WalletAdvanceDetail) => {
+    setSubmittingId(advance.id);
     try {
-      const res = await fetch(`/api/trips/${tripId}/wallet/advances/${advanceId}`, {
+      const res = await fetch(`/api/trips/${tripId}/wallet/advances/${advance.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'REJECT' }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to reject advance request');
+      showToast(`✓ Rejected ${advance.user.name}'s advance request`, 'info', 'Advance Rejected');
       onRefresh();
     } catch (err: any) {
-      alert(err.message || 'Failed to reject advance request');
+      showToast(err.message || 'Failed to reject advance request', 'error', 'Rejection Failed');
     } finally {
       setSubmittingId(null);
     }
@@ -214,19 +216,19 @@ export const WalletView: React.FC<WalletViewProps> = ({
                     {canApprove ? (
                       <div className="flex items-center gap-2">
                         <button
-                          onClick={() => handleRejectAdvance(adv.id)}
+                          onClick={() => handleRejectAdvance(adv)}
                           disabled={submittingId === adv.id}
-                          className="px-2.5 py-1 text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-xl transition-colors"
+                          className="px-2.5 py-1 text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-xl transition-colors disabled:opacity-50"
                         >
-                          Reject
+                          {submittingId === adv.id ? 'Rejecting...' : 'Reject'}
                         </button>
                         <button
-                          onClick={() => handleApproveAdvance(adv.id)}
+                          onClick={() => handleApproveAdvance(adv)}
                           disabled={submittingId === adv.id}
-                          className="px-3 py-1 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-sm transition-all flex items-center gap-1"
+                          className="px-3 py-1 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-sm transition-all flex items-center gap-1 disabled:opacity-50"
                         >
                           <CheckCircle2 className="w-3.5 h-3.5" />
-                          Approve
+                          {submittingId === adv.id ? 'Approving...' : 'Approve'}
                         </button>
                       </div>
                     ) : (

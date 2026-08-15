@@ -5,6 +5,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { formatCurrency } from '@/lib/utils';
+import { useToast } from '@/components/ui/Toast';
 import { Wallet, AlertCircle, Info, Sparkles } from 'lucide-react';
 
 interface ContributeModalProps {
@@ -22,6 +23,7 @@ export const ContributeModal: React.FC<ContributeModalProps> = ({
   currency,
   onSuccess,
 }) => {
+  const { showToast } = useToast();
   const [amount, setAmount] = useState('');
   const [note, setNote] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -52,8 +54,10 @@ export const ContributeModal: React.FC<ContributeModalProps> = ({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to submit advance request');
 
-      alert(
-        `Advance money request of ${formatCurrency(numAmount, currency)} submitted successfully! Waiting for host approval before it is added to your personal wallet balance.`
+      showToast(
+        `✓ Advance request of ${formatCurrency(numAmount, currency)} submitted to Host for approval`,
+        'success',
+        'Request Submitted'
       );
 
       setAmount('');
@@ -62,6 +66,7 @@ export const ContributeModal: React.FC<ContributeModalProps> = ({
       onClose();
     } catch (err: any) {
       setError(err.message);
+      showToast(err.message || 'Failed to submit advance request', 'error', 'Submission Failed');
     } finally {
       setIsLoading(false);
     }

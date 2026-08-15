@@ -7,7 +7,8 @@ import { Input } from '@/components/ui/Input';
 import { Avatar } from '@/components/ui/Avatar';
 import { SettlementTransaction, TripMemberDetail, UserSummary, UserWalletDetail } from '@/types';
 import { formatCurrency } from '@/lib/utils';
-import { ArrowRight, CheckCircle2, Wallet, AlertCircle, Sparkles, CreditCard } from 'lucide-react';
+import { useToast } from '@/components/ui/Toast';
+import { ArrowRight, CheckCircle2, Wallet, AlertCircle, CreditCard } from 'lucide-react';
 
 interface SettleUpModalProps {
   isOpen: boolean;
@@ -36,6 +37,7 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
   isAdmin = false,
   onSuccess,
 }) => {
+  const { showToast } = useToast();
   const [settlementMode, setSettlementMode] = useState<'FULL' | 'CUSTOM'>('FULL');
   const [customAmount, setCustomAmount] = useState<string>('');
   const [paymentMethod, setPaymentMethod] = useState<'PERSONAL' | 'WALLET'>('WALLET');
@@ -170,9 +172,16 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
         fromUserName: fromUser.id === currentUserId ? 'You' : fromUser.name,
       });
 
+      showToast(
+        `✓ ${formatCurrency(amountToSettle, currency)} paid to ${toUser.name} via ${paymentMethod === 'WALLET' ? 'Advance Wallet' : 'Personal Money'}`,
+        'success',
+        'Payment Successful'
+      );
+
       onSuccess();
     } catch (err: any) {
       setError(err.message || 'Failed to process settlement payment');
+      showToast(err.message || 'Failed to process settlement payment', 'error', 'Payment Failed');
     } finally {
       setIsLoading(false);
     }

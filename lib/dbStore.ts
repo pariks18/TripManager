@@ -1643,8 +1643,10 @@ export const dbStore = {
       });
       if (!trip) throw new Error('Trip not found.');
 
-      const fromUser = await tx.user.findUnique({ where: { id: fromUserId } });
-      const toUser = await tx.user.findUnique({ where: { id: toUserId } });
+      const [fromUser, toUser] = await Promise.all([
+        tx.user.findUnique({ where: { id: fromUserId } }),
+        tx.user.findUnique({ where: { id: toUserId } }),
+      ]);
       if (!fromUser || !toUser) throw new Error('Users not found.');
 
       // Re-calculate live debt inside transaction
