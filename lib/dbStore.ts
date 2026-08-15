@@ -559,7 +559,26 @@ export const dbStore = {
     if (!myWallet) {
       // Ensure current user wallet exists
       myWallet = await this.getOrCreateUserWallet(userId, tripId);
+      formattedUserWallets.push(myWallet);
     }
+
+    // Ensure every trip member has a wallet entry in formattedUserWallets
+    directTrip.members.forEach((m) => {
+      if (!formattedUserWallets.some((w) => w.userId === m.userId)) {
+        formattedUserWallets.push({
+          id: `wallet-${m.userId}-${tripId}`,
+          userId: m.userId,
+          tripId,
+          balance: 0,
+          totalAdded: 0,
+          totalSpent: 0,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          advances: [],
+          transactions: [],
+        });
+      }
+    });
 
     const formattedExpenses: ExpenseDetail[] = directTrip.expenses.map((e) => ({
       id: e.id,

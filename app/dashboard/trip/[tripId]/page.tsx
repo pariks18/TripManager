@@ -465,6 +465,9 @@ export default function TripDashboardPage() {
               settlements={settlements}
               onMarkSettled={handleMarkSettled}
               memberBalances={balances}
+              myWallet={trip.myWallet}
+              allWallets={trip.allWallets}
+              members={trip.members}
               tripId={trip.id}
               isAdmin={isAdmin}
               onMemberRemoved={fetchTripDetails}

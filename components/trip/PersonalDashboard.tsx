@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { MemberBalance, SettlementTransaction, TripMemberDetail, UserSummary } from '@/types';
+import { MemberBalance, SettlementTransaction, TripMemberDetail, UserSummary, UserWalletDetail } from '@/types';
 import { formatCurrency } from '@/lib/utils';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
@@ -18,6 +18,9 @@ interface PersonalDashboardProps {
   settlements: SettlementTransaction[];
   onMarkSettled: (tx: SettlementTransaction) => void;
   memberBalances?: MemberBalance[];
+  myWallet?: UserWalletDetail | null;
+  allWallets?: UserWalletDetail[];
+  members?: TripMemberDetail[];
   tripId?: string;
   isAdmin?: boolean;
   onMemberRemoved?: () => void;
@@ -32,6 +35,9 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = React.memo(({
   settlements,
   onMarkSettled,
   memberBalances = [],
+  myWallet,
+  allWallets = [],
+  members = [],
   tripId,
   isAdmin = false,
   onMemberRemoved,
@@ -90,8 +96,8 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = React.memo(({
           </div>
         </div>
 
-        {/* 3 Metrics Grid */}
-        <div className="grid grid-cols-3 gap-3 pt-2 relative z-10">
+        {/* 4 Metrics Grid */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-2 relative z-10">
           {/* You Paid */}
           <div className="bg-white/5 border border-white/10 p-3 rounded-2xl backdrop-blur-md">
             <span className="text-[10px] font-semibold uppercase tracking-wider text-blue-300 block">
@@ -127,6 +133,16 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = React.memo(({
               }`}
             >
               {netBalance === 0 ? '₹0' : formatCurrency(netBalance, currency)}
+            </span>
+          </div>
+
+          {/* Personal Advance Wallet */}
+          <div className="bg-white/5 border border-white/10 p-3 rounded-2xl backdrop-blur-md">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-emerald-300 block">
+              Advance Wallet
+            </span>
+            <span className="text-base font-extrabold text-emerald-400 mt-0.5 block">
+              {formatCurrency(myWallet?.balance || 0, currency)}
             </span>
           </div>
         </div>
@@ -271,6 +287,9 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = React.memo(({
           tripId={tripId}
           currency={currency}
           transaction={selectedTx}
+          members={members}
+          myWallet={myWallet}
+          allWallets={allWallets}
           currentUserId={currentUserId}
           isAdmin={isAdmin}
           onSuccess={() => {
@@ -281,4 +300,3 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = React.memo(({
     </div>
   );
 });
-
