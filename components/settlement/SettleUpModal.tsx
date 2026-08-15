@@ -173,9 +173,9 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
       });
 
       showToast(
-        `✓ Settlement request of ${formatCurrency(amountToSettle, currency)} submitted to ${toUser.name} for Host approval`,
+        `✓ Settlement Request Sent: ${formatCurrency(amountToSettle, currency)} sent to ${toUser.name} for Host approval`,
         'info',
-        'Request Submitted'
+        'Request Sent'
       );
 
       onSuccess();
@@ -201,12 +201,12 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
           </div>
 
           <div>
-            <span className="text-xs font-bold uppercase tracking-wider text-amber-700">Settlement Request Submitted</span>
-            <h3 className="text-2xl font-black text-slate-900 mt-0.5">
+            <span className="text-xs font-bold uppercase tracking-wider text-amber-700">✓ Request Sent</span>
+            <h3 className="text-3xl font-black text-slate-900 mt-1">
               {formatCurrency(successResult.paidAmount, currency)}
             </h3>
             <p className="text-xs font-semibold text-slate-600 mt-1">
-              Sent to <span className="text-slate-900 font-bold">{successResult.toUserName}</span> for Host Approval
+              Sent to <span className="text-slate-900 font-bold">{successResult.toUserName}</span> for Host approval
             </p>
           </div>
 
@@ -230,13 +230,13 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
             )}
 
             <div className="flex justify-between items-center text-slate-600 pt-2 border-t border-slate-200/60">
-              <span>Request Status:</span>
+              <span>Status:</span>
               <span className="font-extrabold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900">
-                {successResult.status}
+                Pending Approval
               </span>
             </div>
             <p className="text-[11px] text-slate-500 italic pt-1">
-              * Wallet balance will be deducted only after the Host/Recipient approves this request.
+              * Your request was sent — wallet balance will be deducted only after the Host approves.
             </p>
           </div>
 

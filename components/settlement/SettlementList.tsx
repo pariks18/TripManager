@@ -34,6 +34,8 @@ interface SettlementListProps {
   onRefresh?: () => void;
 }
 
+import { useToast } from '@/components/ui/Toast';
+
 export const SettlementList: React.FC<SettlementListProps> = React.memo(({
   settlements,
   settlementRecords = [],
@@ -46,6 +48,7 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
   tripId,
   onRefresh,
 }) => {
+  const { showToast } = useToast();
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [submittingId, setSubmittingId] = useState<string | null>(null);
   const [rollbackConfirmId, setRollbackConfirmId] = useState<string | null>(null);
@@ -83,9 +86,11 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to approve settlement');
 
+      showToast('✓ Settlement Approved — Payment completed & finalized', 'success', 'Settlement Approved');
+
       if (onRefresh) onRefresh();
     } catch (err: any) {
-      alert(err.message || 'Failed to approve settlement');
+      showToast(err.message || 'Failed to approve settlement', 'error', 'Error');
     } finally {
       setSubmittingId(null);
     }
@@ -103,9 +108,11 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to reject settlement');
 
+      showToast('Settlement Request Rejected by Host', 'info', 'Request Rejected');
+
       if (onRefresh) onRefresh();
     } catch (err: any) {
-      alert(err.message || 'Failed to reject settlement');
+      showToast(err.message || 'Failed to reject settlement', 'error', 'Error');
     } finally {
       setSubmittingId(null);
     }
@@ -267,7 +274,7 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
                     <span className="text-[11px] font-semibold text-slate-500 flex items-center gap-1">
                       <Clock className="w-3.5 h-3.5 text-amber-600 animate-pulse" />
                       {isPayer
-                        ? 'Waiting for host/recipient approval'
+                        ? 'Request sent — waiting for Host'
                         : isReceiver
                         ? 'Confirm payment received'
                         : 'Host Override Authority Active'}
