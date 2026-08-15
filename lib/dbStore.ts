@@ -557,8 +557,19 @@ export const dbStore = {
     // Find current user's personal wallet
     let myWallet = formattedUserWallets.find((w) => w.userId === userId) || null;
     if (!myWallet) {
-      // Ensure current user wallet exists
-      myWallet = await this.getOrCreateUserWallet(userId, tripId);
+      // Construct default zero-balance wallet in memory to eliminate secondary DB query
+      myWallet = {
+        id: `wallet-${userId}-${tripId}`,
+        userId,
+        tripId,
+        balance: 0,
+        totalAdded: 0,
+        totalSpent: 0,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        advances: [],
+        transactions: [],
+      };
       formattedUserWallets.push(myWallet);
     }
 

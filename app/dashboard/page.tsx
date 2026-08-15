@@ -33,14 +33,17 @@ export default function DashboardPage() {
 
   const fetchTrips = async () => {
     try {
-      const meUser = await fetchClientSession();
+      const [meUser, resTrips] = await Promise.all([
+        fetchClientSession(),
+        fetch('/api/trips'),
+      ]);
+
       if (!meUser) {
         router.push('/login');
         return;
       }
       setUser(meUser);
 
-      const resTrips = await fetch('/api/trips');
       const dataTrips = await resTrips.json();
       if (resTrips.ok) {
         setTrips(dataTrips.trips || []);

@@ -85,14 +85,17 @@ export default function TripDashboardPage() {
 
   const fetchTripDetails = React.useCallback(async () => {
     try {
-      const meUser = await fetchClientSession();
+      const [meUser, resTrip] = await Promise.all([
+        fetchClientSession(),
+        fetch(`/api/trips/${tripId}`),
+      ]);
+
       if (!meUser) {
         router.push('/login');
         return;
       }
       setUser(meUser);
 
-      const resTrip = await fetch(`/api/trips/${tripId}`);
       const dataTrip = await resTrip.json();
       if (!resTrip.ok) {
         router.push('/dashboard');
