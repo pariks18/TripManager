@@ -17,6 +17,8 @@ model User {
   gender              String?
   isEmailVerified     Boolean  @default(true)
   isMobileVerified    Boolean  @default(false)
+  recoveryEmail       String?
+  isRecoveryEmailVerified Boolean @default(false)
   nationality         String?
   preferredCurrency   String?  @default("₹")
   emergencyContactName String?

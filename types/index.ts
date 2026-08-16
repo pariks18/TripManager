@@ -16,6 +16,8 @@ export interface UserSession {
   gender?: string | null;
   isEmailVerified?: boolean;
   isMobileVerified?: boolean;
+  recoveryEmail?: string | null;
+  isRecoveryEmailVerified?: boolean;
   nationality?: string | null;
   preferredCurrency?: string | null;
   emergencyContactName?: string | null;
@@ -32,6 +34,8 @@ export interface UserSummary {
   gender?: string | null;
   isEmailVerified?: boolean;
   isMobileVerified?: boolean;
+  recoveryEmail?: string | null;
+  isRecoveryEmailVerified?: boolean;
   nationality?: string | null;
   preferredCurrency?: string | null;
   emergencyContactName?: string | null;

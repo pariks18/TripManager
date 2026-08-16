@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { UserProfileDetail } from '@/types';
 import { ChangePasswordModal } from './ChangePasswordModal';
 import { PhoneVerificationModal } from './PhoneVerificationModal';
+import { RecoveryEmailModal } from './RecoveryEmailModal';
 import { VerificationModal } from './VerificationModal';
 import {
   ArrowLeft,
@@ -16,6 +17,7 @@ import {
   AlertCircle,
   ChevronRight,
   ShieldAlert,
+  Trash2,
 } from 'lucide-react';
 
 interface AccountSecurityViewProps {
@@ -31,12 +33,36 @@ export const AccountSecurityView: React.FC<AccountSecurityViewProps> = ({
 }) => {
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
   const [isPhoneModalOpen, setIsPhoneModalOpen] = useState(false);
+  const [isRecoveryEmailModalOpen, setIsRecoveryEmailModalOpen] = useState(false);
   const [isChangePhoneMode, setIsChangePhoneMode] = useState(false);
   const [verificationType, setVerificationType] = useState<'EMAIL' | null>(null);
+  const [isRemovingRecovery, setIsRemovingRecovery] = useState(false);
 
   const handlePhoneSuccess = async () => {
-    // Refresh profile state
     window.location.reload();
+  };
+
+  const handleRecoveryEmailSuccess = async () => {
+    window.location.reload();
+  };
+
+  const handleRemoveRecoveryEmail = async () => {
+    if (!confirm('Are you sure you want to remove your recovery email? You will not be able to recover your password if you forget it.')) {
+      return;
+    }
+    setIsRemovingRecovery(true);
+    try {
+      const res = await fetch('/api/user/recovery-email/remove', { method: 'POST' });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to remove recovery email');
+      }
+      window.location.reload();
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setIsRemovingRecovery(false);
+    }
   };
 
   const handleVerifySuccess = async () => {
@@ -69,7 +95,7 @@ export const AccountSecurityView: React.FC<AccountSecurityViewProps> = ({
             </div>
             <div>
               <h3 className="text-base font-bold">Account Security Center</h3>
-              <p className="text-xs text-slate-300">Protected with OTP & JWT Authentication</p>
+              <p className="text-xs text-slate-300">Protected with Recovery Email & OTP Verification</p>
             </div>
           </div>
           <span className="text-xs font-extrabold bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 px-3 py-1 rounded-full">
@@ -85,14 +111,14 @@ export const AccountSecurityView: React.FC<AccountSecurityViewProps> = ({
         </h3>
 
         <div className="space-y-3">
-          {/* Email Verification */}
+          {/* Primary Login Email */}
           <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="p-2.5 bg-emerald-100 text-emerald-700 rounded-xl">
                 <Mail className="w-4 h-4" />
               </div>
               <div>
-                <span className="text-xs font-bold text-slate-900 block">Email Address</span>
+                <span className="text-xs font-bold text-slate-900 block">Primary Login Email</span>
                 <span className="text-[11px] text-slate-500">{profile.email}</span>
               </div>
             </div>
@@ -108,6 +134,65 @@ export const AccountSecurityView: React.FC<AccountSecurityViewProps> = ({
                 className="text-xs font-bold text-amber-900 bg-amber-100 hover:bg-amber-200 px-3 py-1 rounded-full border border-amber-200 transition-colors"
               >
                 Verify Now
+              </button>
+            )}
+          </div>
+
+          {/* Recovery Email */}
+          <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 bg-blue-100 text-blue-700 rounded-xl">
+                <Mail className="w-4 h-4" />
+              </div>
+              <div>
+                <span className="text-xs font-bold text-slate-900 block">Recovery Email</span>
+                <span className="text-[11px] text-slate-500">
+                  {profile.recoveryEmail && profile.isRecoveryEmailVerified
+                    ? profile.recoveryEmail
+                    : profile.recoveryEmail
+                    ? `${profile.recoveryEmail} (Pending Verification)`
+                    : 'Not Added'}
+                </span>
+              </div>
+            </div>
+
+            {profile.isRecoveryEmailVerified && profile.recoveryEmail ? (
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-extrabold text-emerald-800 bg-emerald-100 px-3 py-1 rounded-full flex items-center gap-1">
+                  <CheckCircle2 className="w-3.5 h-3.5" /> Verified
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setIsRecoveryEmailModalOpen(true)}
+                  className="text-xs font-bold text-slate-600 hover:text-slate-900 underline"
+                >
+                  Change
+                </button>
+                <button
+                  type="button"
+                  onClick={handleRemoveRecoveryEmail}
+                  disabled={isRemovingRecovery}
+                  className="p-1 text-slate-400 hover:text-rose-600 transition-colors"
+                  title="Remove Recovery Email"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ) : profile.recoveryEmail ? (
+              <button
+                type="button"
+                onClick={() => setIsRecoveryEmailModalOpen(true)}
+                className="text-xs font-bold text-amber-900 bg-amber-100 hover:bg-amber-200 px-3 py-1 rounded-full border border-amber-200 transition-colors"
+              >
+                Verify Now
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setIsRecoveryEmailModalOpen(true)}
+                className="text-xs font-bold text-blue-900 bg-blue-100 hover:bg-blue-200 px-3.5 py-1.5 rounded-full border border-blue-200 transition-colors"
+              >
+                Add Recovery Email
               </button>
             )}
           </div>
@@ -181,9 +266,7 @@ export const AccountSecurityView: React.FC<AccountSecurityViewProps> = ({
               <div>
                 <span className="text-xs font-bold text-slate-900 block">Change Password</span>
                 <span className="text-[11px] text-slate-400">
-                  {profile.isMobileVerified
-                    ? 'OTP verification sent to your verified mobile number'
-                    : 'Requires verified mobile number'}
+                  Update password or use Forgot Password recovery
                 </span>
               </div>
             </div>
@@ -213,13 +296,19 @@ export const AccountSecurityView: React.FC<AccountSecurityViewProps> = ({
         <ChangePasswordModal
           isOpen={isPasswordModalOpen}
           onClose={() => setIsPasswordModalOpen(false)}
-          isMobileVerified={!!profile.isMobileVerified}
-          userMobile={profile.mobile}
-          onOpenPhoneModal={() => {
-            setIsChangePhoneMode(false);
-            setIsPhoneModalOpen(true);
-          }}
+          isRecoveryEmailVerified={!!profile.isRecoveryEmailVerified}
+          userRecoveryEmail={profile.recoveryEmail}
+          onOpenRecoveryEmailModal={() => setIsRecoveryEmailModalOpen(true)}
           onSuccess={() => setIsPasswordModalOpen(false)}
+        />
+      )}
+
+      {isRecoveryEmailModalOpen && (
+        <RecoveryEmailModal
+          isOpen={isRecoveryEmailModalOpen}
+          onClose={() => setIsRecoveryEmailModalOpen(false)}
+          currentRecoveryEmail={profile.recoveryEmail}
+          onSuccess={handleRecoveryEmailSuccess}
         />
       )}
 
