@@ -121,6 +121,7 @@ export default function TripDashboardPage() {
   };
 
   const handleExpenseSuccess = React.useCallback((newExpense: ExpenseDetail) => {
+    setIsAddExpenseOpen(false);
     fetchTripDetails();
   }, [fetchTripDetails]);
 
@@ -294,9 +295,18 @@ export default function TripDashboardPage() {
               </button>
             )}
             <button
+              onClick={() => {
+                setEditingExpense(null);
+                setIsAddExpenseOpen(true);
+              }}
+              className="flex items-center gap-1 text-[11px] font-bold bg-emerald-600 text-white border border-emerald-600 px-3 py-1 rounded-xl hover:bg-emerald-700 transition-colors shadow-sm"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Add Expense</span>
+            </button>
+            <button
               onClick={() => router.push('/dashboard/profile')}
-              className="flex items-center gap-1 text-[11px] font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 px-2.5 py-1 rounded-xl transition-colors"
-              title="Profile & Documents"
+              className="flex items-center gap-1 text-[11px] font-bold bg-white text-slate-700 border border-slate-200 px-2.5 py-1 rounded-xl hover:bg-slate-50 transition-colors"
             >
               <User className="w-3.5 h-3.5 text-emerald-600" />
               <span className="hidden sm:inline">Profile</span>
@@ -512,6 +522,23 @@ export default function TripDashboardPage() {
               onOpenSettings={() => setIsSettingsOpen(true)}
             />
 
+            {/* Expenses Tab Header Bar */}
+            <div className="flex items-center justify-between gap-3 bg-white p-4 rounded-3xl border border-slate-100 apple-shadow">
+              <div>
+                <h3 className="text-sm font-extrabold text-slate-900">Trip Expenses ({trip.expenses.length})</h3>
+                <p className="text-[11px] text-slate-400">Record out-of-pocket spending for group splits</p>
+              </div>
+              <button
+                onClick={() => {
+                  setEditingExpense(null);
+                  setIsAddExpenseOpen(true);
+                }}
+                className="bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-extrabold text-xs px-4 py-2.5 rounded-2xl flex items-center gap-1.5 shadow-md hover:shadow-lg transition-all shrink-0"
+              >
+                <Plus className="w-4 h-4" /> Add Expense
+              </button>
+            </div>
+
             {/* Search & Category Pills */}
             <div className="space-y-2">
               <div className="relative flex items-center">
@@ -668,7 +695,7 @@ export default function TripDashboardPage() {
           setEditingExpense(null);
           setIsAddExpenseOpen(true);
         }}
-        className="fixed right-5 bottom-20 z-40 w-14 h-14 bg-gradient-to-tr from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white rounded-full flex items-center justify-center shadow-float active:scale-95 transition-all sm:hidden"
+        className="fixed right-5 bottom-20 z-40 w-14 h-14 bg-gradient-to-tr from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white rounded-full flex items-center justify-center shadow-float active:scale-95 transition-all"
         aria-label="Add Expense"
       >
         <Plus className="w-7 h-7" />
