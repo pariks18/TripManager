@@ -124,6 +124,27 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
     }
   };
 
+  const handleCancelSettlement = async (settlementId: string) => {
+    if (!tripId) return;
+    if (!confirm('Are you sure you want to cancel this settlement request?')) return;
+    setSubmittingId(settlementId);
+    try {
+      const res = await fetch(`/api/trips/${tripId}/settlement/${settlementId}`, {
+        method: 'DELETE',
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to cancel settlement');
+
+      showToast('✓ Settlement Request Cancelled', 'info', 'Request Cancelled');
+
+      if (onRefresh) onRefresh();
+    } catch (err: any) {
+      showToast(err.message || 'Failed to cancel settlement', 'error', 'Error');
+    } finally {
+      setSubmittingId(null);
+    }
+  };
+
   const handleRequestRollback = async (settlementId: string) => {
     if (!tripId) return;
     setSubmittingId(settlementId);
@@ -258,6 +279,15 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
                           Approve
                         </button>
                       </div>
+                    ) : isPayer ? (
+                      <button
+                        onClick={() => handleCancelSettlement(record.id)}
+                        disabled={submittingId === record.id}
+                        className="px-3 py-1 text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-xl transition-colors flex items-center gap-1"
+                      >
+                        <XCircle className="w-3.5 h-3.5" />
+                        Cancel Request
+                      </button>
                     ) : (
                       <span className="bg-amber-100 text-amber-800 text-[10px] font-extrabold px-2.5 py-1 rounded-xl">
                         Pending Approval

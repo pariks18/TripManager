@@ -1882,6 +1882,43 @@ export const dbStore = {
     };
   },
 
+  async deleteSettlement(tripId: string, settlementId: string, currentUserId: string): Promise<boolean> {
+    await ensureDatabaseSeeded();
+
+    const settlement = await prisma.settlement.findUnique({
+      where: { id: settlementId },
+      include: { trip: { include: { members: true } }, fromUser: true, toUser: true },
+    });
+    if (!settlement) return false;
+
+    const currentUser = await prisma.user.findUnique({ where: { id: currentUserId } });
+    if (!currentUser) throw new Error('User not found');
+
+    const memberRole = settlement.trip.members.find((m) => m.userId === currentUserId)?.role;
+    const isPayer = settlement.fromUserId === currentUserId;
+    const isAdmin = memberRole === 'ADMIN' || settlement.trip.createdById === currentUserId;
+
+    if (!isPayer && !isAdmin) {
+      throw new Error('Forbidden: You can only delete or cancel settlements that belong to you.');
+    }
+
+    if (settlement.status !== 'PENDING' && !isAdmin) {
+      throw new Error('Forbidden: Confirmed settlements can only be deleted or rolled back by the Host.');
+    }
+
+    await prisma.settlement.delete({ where: { id: settlementId } });
+
+    await logActivity(
+      tripId,
+      currentUserId,
+      'SETTLEMENT_REJECTED',
+      `${currentUser.name} cancelled pending settlement request of ${settlement.trip.currency || '₹'}${settlement.amount} (From: ${settlement.fromUser.name}, To: ${settlement.toUser.name})`,
+      settlement.amount
+    );
+
+    return true;
+  },
+
   async checkMemberRemovalStatus(
     tripId: string,
     targetUserId: string

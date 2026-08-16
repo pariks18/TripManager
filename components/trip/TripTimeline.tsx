@@ -38,6 +38,10 @@ const ACTION_ICONS: Record<string, { icon: React.ElementType; bg: string; color:
   BUDGET_UPDATED: { icon: PiggyBank, bg: 'bg-amber-100 dark:bg-amber-950', color: 'text-amber-600' },
   SETTLEMENT_MARKED: { icon: CheckCircle2, bg: 'bg-purple-100 dark:bg-purple-950', color: 'text-purple-600' },
   SETTLEMENT_CONFIRMED: { icon: Sparkles, bg: 'bg-emerald-100 dark:bg-emerald-950', color: 'text-emerald-600' },
+  SETTLEMENT_REJECTED: { icon: ShieldAlert, bg: 'bg-rose-100 dark:bg-rose-950', color: 'text-rose-600' },
+  SETTLEMENT_CANCELLED: { icon: Trash2, bg: 'bg-slate-100 dark:bg-slate-950', color: 'text-slate-600' },
+  ADVANCE_REQUESTED: { icon: PiggyBank, bg: 'bg-amber-100 dark:bg-amber-950', color: 'text-amber-600' },
+  ADVANCE_APPROVED: { icon: ShieldCheck, bg: 'bg-emerald-100 dark:bg-emerald-950', color: 'text-emerald-600' },
 };
 
 export const TripTimeline: React.FC<TripTimelineProps> = React.memo(({ activities, currency }) => {

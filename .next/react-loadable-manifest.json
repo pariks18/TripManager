@@ -1,14 +1,14 @@
 {
   "app/dashboard/trip/[tripId]/page.tsx -> @/components/expense/PendingApprovalsView": {
-    "id": 5983,
+    "id": 47,
     "files": [
-      "static/chunks/983.e03ec9dbb548c82a.js"
+      "static/chunks/47.c2f44a9df3ba3dc6.js"
     ]
   },
   "app/dashboard/trip/[tripId]/page.tsx -> @/components/settlement/SettlementList": {
     "id": 1286,
     "files": [
-      "static/chunks/286.20ad6a6cf3aa6f2c.js"
+      "static/chunks/286.71ceb321d438d3f1.js"
     ]
   },
   "app/dashboard/trip/[tripId]/page.tsx -> @/components/trip/AnalyticsView": {
@@ -44,7 +44,7 @@
   "app/dashboard/trip/[tripId]/page.tsx -> @/components/trip/TripTimeline": {
     "id": 616,
     "files": [
-      "static/chunks/616.3fbd32d333444b59.js"
+      "static/chunks/616.cb2de43312b4656c.js"
     ]
   },
   "app/dashboard/trip/[tripId]/page.tsx -> @/components/wallet/WalletView": {
