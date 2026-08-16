@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useState } from 'react';
+import { ConfirmModal } from '@/components/ui/ConfirmModal';
+import { useToast } from '@/components/ui/Toast';
 import { StayDetail } from '@/types';
 import { formatDate } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
@@ -129,17 +131,26 @@ export const StayView: React.FC<StayViewProps> = React.memo(({
     }
   };
 
-  const handleDelete = async (stayId: string) => {
-    if (!confirm('Are you sure you want to delete this stay record?')) return;
+  const { showToast } = useToast();
+  const [deletingStayId, setDeletingStayId] = useState<string | null>(null);
+
+  const performDelete = async (stayId: string) => {
     try {
       const res = await fetch(`/api/trips/${tripId}/stay/${stayId}`, {
         method: 'DELETE',
       });
       if (!res.ok) throw new Error('Failed to delete stay record');
+      showToast('✓ Stay record deleted', 'info', 'Deleted');
       onRefresh();
     } catch (err: any) {
-      alert(err.message);
+      showToast(err.message || 'Failed to delete stay record', 'error', 'Error');
+    } finally {
+      setDeletingStayId(null);
     }
+  };
+
+  const handleDelete = (stayId: string) => {
+    setDeletingStayId(stayId);
   };
 
   return (
@@ -424,7 +435,18 @@ export const StayView: React.FC<StayViewProps> = React.memo(({
               </Button>
             </div>
           </form>
-        </Modal>
+      {deletingStayId && (
+        <ConfirmModal
+          isOpen={!!deletingStayId}
+          onClose={() => setDeletingStayId(null)}
+          title="Delete Stay Accommodation"
+          message="Are you sure you want to delete this stay record?"
+          confirmText="Delete Accommodation"
+          variant="danger"
+          onConfirm={() => {
+            if (deletingStayId) performDelete(deletingStayId);
+          }}
+        />
       )}
     </div>
   );

@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useState } from 'react';
+import { ConfirmModal } from '@/components/ui/ConfirmModal';
+import { useToast } from '@/components/ui/Toast';
 import { ItineraryItemDetail } from '@/types';
 import { formatDate } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
@@ -140,17 +142,26 @@ export const ItineraryView: React.FC<ItineraryViewProps> = React.memo(({
     }
   };
 
-  const handleDelete = async (itemId: string) => {
-    if (!confirm('Are you sure you want to delete this itinerary item?')) return;
+  const { showToast } = useToast();
+  const [deletingItemId, setDeletingItemId] = useState<string | null>(null);
+
+  const performDelete = async (itemId: string) => {
     try {
       const res = await fetch(`/api/trips/${tripId}/itinerary/${itemId}`, {
         method: 'DELETE',
       });
       if (!res.ok) throw new Error('Failed to delete item');
+      showToast('✓ Itinerary item deleted', 'info', 'Deleted');
       onRefresh();
     } catch (err: any) {
-      alert(err.message);
+      showToast(err.message || 'Failed to delete item', 'error', 'Error');
+    } finally {
+      setDeletingItemId(null);
     }
+  };
+
+  const handleDelete = (itemId: string) => {
+    setDeletingItemId(itemId);
   };
 
   return (
@@ -404,7 +415,18 @@ export const ItineraryView: React.FC<ItineraryViewProps> = React.memo(({
               </Button>
             </div>
           </form>
-        </Modal>
+      {deletingItemId && (
+        <ConfirmModal
+          isOpen={!!deletingItemId}
+          onClose={() => setDeletingItemId(null)}
+          title="Delete Itinerary Item"
+          message="Are you sure you want to delete this itinerary activity?"
+          confirmText="Delete Activity"
+          variant="danger"
+          onConfirm={() => {
+            if (deletingItemId) performDelete(deletingItemId);
+          }}
+        />
       )}
     </div>
   );

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { SettlementRecordDetail, SettlementTransaction, TripMemberDetail, UserWalletDetail } from '@/types';
 import { Avatar } from '@/components/ui/Avatar';
 import { formatCurrency } from '@/lib/utils';
@@ -124,9 +125,10 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
     }
   };
 
-  const handleCancelSettlement = async (settlementId: string) => {
+  const [cancellingSettlementId, setCancellingSettlementId] = useState<string | null>(null);
+
+  const performCancelSettlement = async (settlementId: string) => {
     if (!tripId) return;
-    if (!confirm('Are you sure you want to cancel this settlement request?')) return;
     setSubmittingId(settlementId);
     try {
       const res = await fetch(`/api/trips/${tripId}/settlement/${settlementId}`, {
@@ -142,7 +144,12 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
       showToast(err.message || 'Failed to cancel settlement', 'error', 'Error');
     } finally {
       setSubmittingId(null);
+      setCancellingSettlementId(null);
     }
+  };
+
+  const handleCancelSettlement = (settlementId: string) => {
+    setCancellingSettlementId(settlementId);
   };
 
   const handleRequestRollback = async (settlementId: string) => {
@@ -157,10 +164,11 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to request settlement rollback');
 
+      showToast('Rollback requested', 'info', 'Rollback Requested');
       setRollbackConfirmId(null);
       if (onRefresh) onRefresh();
     } catch (err: any) {
-      alert(err.message || 'Failed to request settlement rollback');
+      showToast(err.message || 'Failed to request settlement rollback', 'error', 'Error');
     } finally {
       setSubmittingId(null);
     }
@@ -178,9 +186,10 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to approve rollback');
 
+      showToast('✓ Settlement Rollback Approved', 'success', 'Rollback Approved');
       if (onRefresh) onRefresh();
     } catch (err: any) {
-      alert(err.message || 'Failed to approve rollback');
+      showToast(err.message || 'Failed to approve rollback', 'error', 'Error');
     } finally {
       setSubmittingId(null);
     }
@@ -198,9 +207,10 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to reject rollback');
 
+      showToast('Rollback request rejected', 'info', 'Rollback Rejected');
       if (onRefresh) onRefresh();
     } catch (err: any) {
-      alert(err.message || 'Failed to reject rollback');
+      showToast(err.message || 'Failed to reject rollback', 'error', 'Error');
     } finally {
       setSubmittingId(null);
     }
@@ -724,7 +734,20 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
               </button>
             </div>
           </div>
-        </div>
+      {/* Cancel Settlement Confirmation Modal */}
+      {cancellingSettlementId && (
+        <ConfirmModal
+          isOpen={!!cancellingSettlementId}
+          onClose={() => setCancellingSettlementId(null)}
+          title="Cancel Settlement Request"
+          message="Are you sure you want to cancel this settlement request? The request will be removed."
+          confirmText="Cancel Request"
+          variant="danger"
+          isLoading={submittingId === cancellingSettlementId}
+          onConfirm={() => {
+            if (cancellingSettlementId) performCancelSettlement(cancellingSettlementId);
+          }}
+        />
       )}
     </div>
   );

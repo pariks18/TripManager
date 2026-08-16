@@ -2,7 +2,8 @@
 
 import React, { useState, useRef } from 'react';
 import { UserDocumentDetail, DocumentType } from '@/types';
-import { Modal } from '@/components/ui/Modal';
+import { ConfirmModal } from '@/components/ui/ConfirmModal';
+import { useToast } from '@/components/ui/Toast';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import {
@@ -117,16 +118,24 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
     }
   };
 
-  const handleDeleteDocument = async (documentId: string) => {
-    if (!confirm('Are you sure you want to remove this document from your profile?')) return;
+  const [deletingDocId, setDeletingDocId] = useState<string | null>(null);
+
+  const performDeleteDocument = async (documentId: string) => {
     try {
       const res = await fetch(`/api/user/documents/${documentId}`, { method: 'DELETE' });
       if (res.ok) {
+        showToast('✓ Document deleted', 'info', 'Document Removed');
         await onRefreshDocs();
       }
     } catch (err) {
-      console.error('Failed to delete document:', err);
+      showToast('Failed to delete document', 'error', 'Error');
+    } finally {
+      setDeletingDocId(null);
     }
+  };
+
+  const handleDeleteDocument = (documentId: string) => {
+    setDeletingDocId(documentId);
   };
 
   return (
@@ -419,6 +428,17 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
           </div>
         </Modal>
       )}
+        <ConfirmModal
+          isOpen={!!deletingDocId}
+          onClose={() => setDeletingDocId(null)}
+          title="Remove Document"
+          message="Are you sure you want to remove this document from your profile?"
+          confirmText="Delete Document"
+          variant="danger"
+          onConfirm={() => {
+            if (deletingDocId) performDeleteDocument(deletingDocId);
+          }}
+        />
     </div>
   );
 };

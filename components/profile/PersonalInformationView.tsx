@@ -6,6 +6,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
+import { useToast } from '@/components/ui/Toast';
 import { VerificationModal } from './VerificationModal';
 import {
   ArrowLeft,
@@ -97,6 +98,8 @@ export const PersonalInformationView: React.FC<PersonalInformationViewProps> = (
     }
   };
 
+  const { showToast } = useToast();
+
   const handleVerifiedSave = async () => {
     if (!verificationData) return;
     try {
@@ -105,9 +108,10 @@ export const PersonalInformationView: React.FC<PersonalInformationViewProps> = (
       } else {
         await onUpdateProfile({ mobile: verificationData.value, isMobileVerified: true });
       }
+      showToast('✓ Profile updated successfully', 'success', 'Profile Updated');
       setVerificationData(null);
     } catch (err: any) {
-      alert(err.message || 'Failed to save verified value');
+      showToast(err.message || 'Failed to save verified value', 'error', 'Error');
     }
   };
 

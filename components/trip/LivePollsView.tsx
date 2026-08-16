@@ -30,12 +30,15 @@ interface LivePollsViewProps {
   onRefreshTrip?: () => void;
 }
 
+import { useToast } from '@/components/ui/Toast';
+
 export const LivePollsView: React.FC<LivePollsViewProps> = React.memo(({
   tripId,
   isAdmin,
   currentUserId,
   onRefreshTrip,
 }) => {
+  const { showToast } = useToast();
   const [polls, setPolls] = useState<PollDetail[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
@@ -80,9 +83,10 @@ export const LivePollsView: React.FC<LivePollsViewProps> = React.memo(({
       }
 
       fetchPolls();
+      showToast('✓ Vote recorded', 'success', 'Vote Submitted');
       if (onRefreshTrip) onRefreshTrip();
     } catch (err: any) {
-      alert(err.message);
+      showToast(err.message || 'Failed to submit vote', 'error', 'Error');
     } finally {
       setVotingPollId(null);
     }
@@ -98,9 +102,10 @@ export const LivePollsView: React.FC<LivePollsViewProps> = React.memo(({
       if (!res.ok) throw new Error('Failed to update poll status');
 
       fetchPolls();
+      showToast(currentIsClosed ? 'Poll re-opened' : 'Poll closed', 'info', 'Poll Updated');
       if (onRefreshTrip) onRefreshTrip();
     } catch (err: any) {
-      alert(err.message);
+      showToast(err.message || 'Failed to update poll status', 'error', 'Error');
     }
   };
 

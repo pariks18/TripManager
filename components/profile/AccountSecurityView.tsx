@@ -38,6 +38,12 @@ export const AccountSecurityView: React.FC<AccountSecurityViewProps> = ({
   const [verificationType, setVerificationType] = useState<'EMAIL' | null>(null);
   const [isRemovingRecovery, setIsRemovingRecovery] = useState(false);
 
+import { ConfirmModal } from '@/components/ui/ConfirmModal';
+import { useToast } from '@/components/ui/Toast';
+
+  const { showToast } = useToast();
+  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+
   const handlePhoneSuccess = async () => {
     window.location.reload();
   };
@@ -46,10 +52,7 @@ export const AccountSecurityView: React.FC<AccountSecurityViewProps> = ({
     window.location.reload();
   };
 
-  const handleRemoveRecoveryEmail = async () => {
-    if (!confirm('Are you sure you want to remove your recovery email? You will not be able to recover your password if you forget it.')) {
-      return;
-    }
+  const performRemoveRecoveryEmail = async () => {
     setIsRemovingRecovery(true);
     try {
       const res = await fetch('/api/user/recovery-email/remove', { method: 'POST' });
@@ -57,9 +60,10 @@ export const AccountSecurityView: React.FC<AccountSecurityViewProps> = ({
         const data = await res.json();
         throw new Error(data.error || 'Failed to remove recovery email');
       }
+      showToast('✓ Recovery email removed', 'info', 'Recovery Email');
       window.location.reload();
     } catch (err: any) {
-      alert(err.message);
+      showToast(err.message || 'Failed to remove recovery email', 'error', 'Error');
     } finally {
       setIsRemovingRecovery(false);
     }
@@ -170,7 +174,7 @@ export const AccountSecurityView: React.FC<AccountSecurityViewProps> = ({
                 </button>
                 <button
                   type="button"
-                  onClick={handleRemoveRecoveryEmail}
+                  onClick={() => setIsConfirmOpen(true)}
                   disabled={isRemovingRecovery}
                   className="p-1 text-slate-400 hover:text-rose-600 transition-colors"
                   title="Remove Recovery Email"
@@ -331,6 +335,17 @@ export const AccountSecurityView: React.FC<AccountSecurityViewProps> = ({
           onVerified={handleVerifySuccess}
         />
       )}
+
+      <ConfirmModal
+        isOpen={isConfirmOpen}
+        onClose={() => setIsConfirmOpen(false)}
+        title="Remove Recovery Email"
+        message="Are you sure you want to remove your recovery email? You will not be able to recover your password if you forget it."
+        confirmText="Remove Email"
+        variant="danger"
+        isLoading={isRemovingRecovery}
+        onConfirm={performRemoveRecoveryEmail}
+      />
     </div>
   );
 };

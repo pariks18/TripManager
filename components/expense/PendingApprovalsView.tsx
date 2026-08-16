@@ -8,6 +8,8 @@ import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { ShieldCheck, CheckCircle2, XCircle, AlertCircle, Edit3, Trash2, Clock, Receipt, FileText } from 'lucide-react';
 
+import { useToast } from '@/components/ui/Toast';
+
 interface PendingApprovalsViewProps {
   tripId: string;
   currency: string;
@@ -28,6 +30,8 @@ export const PendingApprovalsView: React.FC<PendingApprovalsViewProps> = React.m
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
 
+  const { showToast } = useToast();
+
   const handleApproveExpense = async (expenseId: string) => {
     setIsSubmitting(true);
     try {
@@ -37,9 +41,10 @@ export const PendingApprovalsView: React.FC<PendingApprovalsViewProps> = React.m
         body: JSON.stringify({ action: 'APPROVE' }),
       });
       if (!res.ok) throw new Error('Failed to approve expense');
+      showToast('✓ Expense Approved', 'success', 'Approved');
       onActionComplete();
     } catch (err: any) {
-      alert(err.message);
+      showToast(err.message || 'Failed to approve expense', 'error', 'Error');
     } finally {
       setIsSubmitting(false);
     }
@@ -58,6 +63,7 @@ export const PendingApprovalsView: React.FC<PendingApprovalsViewProps> = React.m
       });
       if (!res.ok) throw new Error('Failed to reject expense');
 
+      showToast('Expense Request Rejected', 'info', 'Rejected');
       setRejectingExpenseId(null);
       setRejectionReason('');
       onActionComplete();
@@ -77,9 +83,10 @@ export const PendingApprovalsView: React.FC<PendingApprovalsViewProps> = React.m
         body: JSON.stringify({ action }),
       });
       if (!res.ok) throw new Error(`Failed to ${action.toLowerCase()} request`);
+      showToast(`Request ${action === 'APPROVE' ? 'Approved' : 'Rejected'}`, 'info', 'Processed');
       onActionComplete();
     } catch (err: any) {
-      alert(err.message);
+      showToast(err.message || 'Failed to process request', 'error', 'Error');
     } finally {
       setIsSubmitting(false);
     }

@@ -113,6 +113,19 @@ export default function TripDashboardPage() {
     if (tripId) fetchTripDetails();
   }, [tripId, fetchTripDetails]);
 
+import { ConfirmModal } from '@/components/ui/ConfirmModal';
+import { useToast } from '@/components/ui/Toast';
+
+  const { showToast } = useToast();
+  const [confirmModalConfig, setConfirmModalConfig] = useState<{
+    isOpen: boolean;
+    title?: string;
+    message: string;
+    confirmText?: string;
+    variant?: 'danger' | 'warning' | 'info' | 'success';
+    onConfirm?: () => void;
+  }>({ isOpen: false, message: '' });
+
   const handleCopyCode = () => {
     if (!trip) return;
     navigator.clipboard.writeText(trip.code);
@@ -125,20 +138,31 @@ export default function TripDashboardPage() {
     fetchTripDetails();
   }, [fetchTripDetails]);
 
-  const handleDeleteExpense = React.useCallback(async (expenseId: string) => {
-    if (!confirm('Are you sure you want to delete this expense?')) return;
+  const performDeleteExpense = React.useCallback(async (expenseId: string) => {
     try {
       const res = await fetch(`/api/expenses/${expenseId}`, { method: 'DELETE' });
       const data = await res.json();
       if (!res.ok) {
-        alert(data.error || 'Failed to delete expense');
+        showToast(data.error || 'Failed to delete expense', 'error', 'Error');
         return;
       }
+      showToast('✓ Expense deleted successfully', 'success', 'Expense Deleted');
       fetchTripDetails();
     } catch (err: any) {
-      alert(err.message);
+      showToast(err.message || 'Failed to delete expense', 'error', 'Error');
     }
-  }, [fetchTripDetails]);
+  }, [fetchTripDetails, showToast]);
+
+  const handleDeleteExpense = React.useCallback((expenseId: string) => {
+    setConfirmModalConfig({
+      isOpen: true,
+      title: 'Delete Expense',
+      message: 'Are you sure you want to delete this expense? This action will update group balance calculations.',
+      confirmText: 'Delete',
+      variant: 'danger',
+      onConfirm: () => performDeleteExpense(expenseId),
+    });
+  }, [performDeleteExpense]);
 
   const handleApproveExpense = React.useCallback(async (expenseId: string) => {
     try {
@@ -148,29 +172,29 @@ export default function TripDashboardPage() {
         body: JSON.stringify({ action: 'APPROVE' }),
       });
       if (!res.ok) throw new Error('Failed to approve expense');
+      showToast('✓ Expense Approved', 'success', 'Approved');
       fetchTripDetails();
     } catch (err: any) {
-      alert(err.message);
+      showToast(err.message || 'Failed to approve expense', 'error', 'Error');
     }
-  }, [fetchTripDetails]);
+  }, [fetchTripDetails, showToast]);
 
   const handleRejectExpense = React.useCallback(async (expenseId: string) => {
-    const reason = prompt('Rejection note / reason (optional):');
     try {
       const res = await fetch(`/api/expenses/${expenseId}/approval`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'REJECT', reason: reason ? reason.trim() : undefined }),
+        body: JSON.stringify({ action: 'REJECT' }),
       });
       if (!res.ok) throw new Error('Failed to reject expense');
+      showToast('Expense Request Rejected', 'info', 'Rejected');
       fetchTripDetails();
     } catch (err: any) {
-      alert(err.message);
+      showToast(err.message || 'Failed to reject expense', 'error', 'Error');
     }
-  }, [fetchTripDetails]);
+  }, [fetchTripDetails, showToast]);
 
-  const handleRequestDeleteExpense = React.useCallback(async (expenseId: string) => {
-    if (!confirm('Submit a delete request for this approved expense to the Super Host?')) return;
+  const performRequestDeleteExpense = React.useCallback(async (expenseId: string) => {
     try {
       const res = await fetch(`/api/expenses/${expenseId}/edit-request`, {
         method: 'POST',
@@ -178,12 +202,23 @@ export default function TripDashboardPage() {
         body: JSON.stringify({ requestType: 'DELETE' }),
       });
       if (!res.ok) throw new Error('Failed to submit delete request');
-      alert('Delete request submitted! Super Host / Admin will verify.');
+      showToast('✓ Delete request submitted to Super Host', 'info', 'Request Submitted');
       fetchTripDetails();
     } catch (err: any) {
-      alert(err.message);
+      showToast(err.message || 'Failed to submit delete request', 'error', 'Error');
     }
-  }, [fetchTripDetails]);
+  }, [fetchTripDetails, showToast]);
+
+  const handleRequestDeleteExpense = React.useCallback((expenseId: string) => {
+    setConfirmModalConfig({
+      isOpen: true,
+      title: 'Request Expense Deletion',
+      message: 'Submit a delete request for this approved expense to the Super Host?',
+      confirmText: 'Submit Request',
+      variant: 'warning',
+      onConfirm: () => performRequestDeleteExpense(expenseId),
+    });
+  }, [performRequestDeleteExpense]);
 
   const handleMarkSettled = React.useCallback(async (tx: SettlementTransaction) => {
     try {
@@ -198,11 +233,12 @@ export default function TripDashboardPage() {
         }),
       });
       if (!res.ok) throw new Error('Failed to record settlement');
+      showToast('✓ Settlement request submitted', 'success', 'Settlement Requested');
       fetchTripDetails();
     } catch (err: any) {
-      alert(err.message);
+      showToast(err.message || 'Failed to record settlement', 'error', 'Error');
     }
-  }, [tripId, fetchTripDetails]);
+  }, [tripId, fetchTripDetails, showToast]);
 
   const pendingExpenses = React.useMemo(() => {
     if (!trip) return [];
@@ -725,6 +761,17 @@ export default function TripDashboardPage() {
         currentApprovalMode={trip.approvalMode}
         currentBudget={trip.budget}
         onSettingsUpdated={fetchTripDetails}
+      />
+
+      {/* Confirmation & Alert Modal */}
+      <ConfirmModal
+        isOpen={confirmModalConfig.isOpen}
+        onClose={() => setConfirmModalConfig((prev) => ({ ...prev, isOpen: false }))}
+        title={confirmModalConfig.title}
+        message={confirmModalConfig.message}
+        confirmText={confirmModalConfig.confirmText}
+        variant={confirmModalConfig.variant}
+        onConfirm={confirmModalConfig.onConfirm}
       />
 
       <BottomNav />
