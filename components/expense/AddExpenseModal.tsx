@@ -155,12 +155,6 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
       setError('Please enter a valid amount');
       return;
     }
-    if (paymentMode === 'WALLET' && numAmount > payerWalletBalance + 0.01) {
-      setError(
-        `Insufficient advance balance in ${paidById === currentUserId ? 'your' : `${payerName}'s`} personal wallet. Available: ${formatCurrency(payerWalletBalance, currency)}, required: ${formatCurrency(numAmount, currency)}.`
-      );
-      return;
-    }
     if (splitBetween.length === 0) {
       setError('Select at least one member to split with');
       return;
@@ -303,46 +297,6 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
                 </button>
               );
             })}
-          </div>
-        </div>
-
-        {/* Payment Source Selection */}
-        <div>
-          <label className="block text-xs font-semibold text-slate-700 tracking-wide uppercase mb-1.5">
-            Payment Source
-          </label>
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={() => setPaymentMode('PERSONALLY')}
-              className={`p-3 rounded-2xl border flex flex-col items-start transition-all ${
-                paymentMode === 'PERSONALLY'
-                  ? 'bg-emerald-600 text-white border-emerald-600 shadow-md'
-                  : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
-              }`}
-            >
-              <div className="flex items-center gap-1.5 font-bold text-xs">
-                <CreditCard className="w-4 h-4" /> Personal Money
-              </div>
-              <span className="text-[10px] opacity-80 mt-0.5">Out of pocket payment</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setPaymentMode('WALLET')}
-              className={`p-3 rounded-2xl border flex flex-col items-start transition-all ${
-                paymentMode === 'WALLET'
-                  ? 'bg-emerald-600 text-white border-emerald-600 shadow-md'
-                  : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
-              }`}
-            >
-              <div className="flex items-center gap-1.5 font-bold text-xs">
-                <Wallet className="w-4 h-4" /> Advance Wallet
-              </div>
-              <span className="text-[10px] opacity-80 mt-0.5">
-                Avail: {formatCurrency(payerWalletBalance, currency)}
-              </span>
-            </button>
           </div>
         </div>
 

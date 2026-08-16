@@ -1110,15 +1110,6 @@ export const dbStore = {
       throw new Error('Trip is locked by the organizer. New expenses cannot be added.');
     }
 
-    if (paymentMode === 'WALLET') {
-      const payerWallet = await this.getOrCreateUserWallet(paidById, tripId);
-      if (payerWallet.balance < amount - 0.01) {
-        throw new Error(
-          `Insufficient advance balance in ${paidById === createdById ? 'your' : 'payer\'s'} personal wallet. Available: ${trip.currency}${payerWallet.balance}, required: ${trip.currency}${amount}.`
-        );
-      }
-    }
-
     const shareAmount = participantUserIds.length > 0 ? amount / participantUserIds.length : 0;
     const expenseObjectId = generateObjectId();
 
@@ -1129,44 +1120,6 @@ export const dbStore = {
     const status = trip.approvalMode && !isCreatorAdmin ? 'PENDING_APPROVAL' : 'APPROVED';
 
     const result = await prisma.$transaction(async (tx) => {
-      let walletTxId: string | null = null;
-      if (paymentMode === 'WALLET') {
-        const freshWallet = await tx.userWallet.findUnique({
-          where: { userId_tripId: { userId: paidById, tripId } },
-        });
-        if (!freshWallet || freshWallet.balance < amount - 0.01) {
-          throw new Error('Insufficient wallet balance.');
-        }
-
-        const walletTx = await tx.walletTransaction.create({
-          data: {
-            id: generateObjectId(),
-            walletId: freshWallet.id,
-            type: 'EXPENSE_DEBIT',
-            amount,
-            description: `Used for expense: ${title}`,
-            expenseId: expenseObjectId,
-            createdById,
-          },
-        });
-        walletTxId = walletTx.id;
-
-        const walletUpdate = await tx.userWallet.updateMany({
-          where: {
-            id: freshWallet.id,
-            balance: { gte: amount - 0.01 },
-          },
-          data: {
-            balance: { decrement: amount },
-            totalSpent: { increment: amount },
-          },
-        });
-
-        if (walletUpdate.count === 0) {
-          throw new Error('Insufficient wallet balance or concurrent wallet transaction detected.');
-        }
-      }
-
       const expense = await tx.expense.create({
         data: {
           id: expenseObjectId,
@@ -1177,8 +1130,7 @@ export const dbStore = {
           paidById,
           createdById,
           status,
-          paymentMode,
-          walletTransactionId: walletTxId,
+          paymentMode: 'PERSONALLY',
           receiptUrl: receiptUrl || null,
           date: new Date(),
           participants: {
@@ -1190,9 +1142,11 @@ export const dbStore = {
           },
         },
         include: {
-          paidBy: true,
-          createdBy: true,
-          participants: { include: { user: true } },
+          paidBy: { select: { id: true, name: true, email: true } },
+          createdBy: { select: { id: true, name: true, email: true } },
+          participants: {
+            include: { user: { select: { id: true, name: true, email: true } } },
+          },
         },
       });
 
@@ -1270,97 +1224,9 @@ export const dbStore = {
       throw new Error('Trip is locked by the organizer. Expenses cannot be updated.');
     }
 
-    const oldMode = (existingExpense.paymentMode as 'PERSONALLY' | 'WALLET') || 'PERSONALLY';
-    const oldAmount = existingExpense.amount;
     const shareAmount = participantUserIds.length > 0 ? amount / participantUserIds.length : 0;
 
     const updated = await prisma.$transaction(async (tx) => {
-      let walletTxId = existingExpense.walletTransactionId;
-
-      if (oldMode === 'WALLET' && paymentMode === 'WALLET') {
-        const diff = amount - oldAmount;
-        if (diff !== 0) {
-          const wallet = await tx.userWallet.findUnique({
-            where: { userId_tripId: { userId: paidById, tripId: existingExpense.tripId } },
-          });
-          if (diff > 0 && (!wallet || wallet.balance < diff - 0.01)) {
-            throw new Error(`Insufficient personal wallet balance for updated amount.`);
-          }
-          if (wallet) {
-            await tx.userWallet.update({
-              where: { id: wallet.id },
-              data: {
-                balance: { decrement: diff },
-                totalSpent: { increment: diff },
-              },
-            });
-            const adjTx = await tx.walletTransaction.create({
-              data: {
-                id: generateObjectId(),
-                walletId: wallet.id,
-                type: 'ADJUSTMENT',
-                amount: Math.abs(diff),
-                description: `Adjustment for expense: ${title} (${diff > 0 ? '+' : '-'}${existingExpense.trip.currency}${Math.abs(diff)})`,
-                expenseId,
-                createdById: currentUserId,
-              },
-            });
-            walletTxId = adjTx.id;
-          }
-        }
-      } else if (oldMode === 'PERSONALLY' && paymentMode === 'WALLET') {
-        const wallet = await tx.userWallet.findUnique({
-          where: { userId_tripId: { userId: paidById, tripId: existingExpense.tripId } },
-        });
-        if (!wallet || wallet.balance < amount - 0.01) {
-          throw new Error(`Insufficient personal wallet balance to switch payment source to Advance Wallet.`);
-        }
-        await tx.userWallet.update({
-          where: { id: wallet.id },
-          data: {
-            balance: { decrement: amount },
-            totalSpent: { increment: amount },
-          },
-        });
-        const wTx = await tx.walletTransaction.create({
-          data: {
-            id: generateObjectId(),
-            walletId: wallet.id,
-            type: 'EXPENSE_DEBIT',
-            amount,
-            description: `Used for expense: ${title}`,
-            expenseId,
-            createdById: currentUserId,
-          },
-        });
-        walletTxId = wTx.id;
-      } else if (oldMode === 'WALLET' && paymentMode === 'PERSONALLY') {
-        const wallet = await tx.userWallet.findUnique({
-          where: { userId_tripId: { userId: existingExpense.paidById, tripId: existingExpense.tripId } },
-        });
-        if (wallet) {
-          await tx.userWallet.update({
-            where: { id: wallet.id },
-            data: {
-              balance: { increment: oldAmount },
-              totalSpent: { decrement: oldAmount },
-            },
-          });
-          await tx.walletTransaction.create({
-            data: {
-              id: generateObjectId(),
-              walletId: wallet.id,
-              type: 'REFUND',
-              amount: oldAmount,
-              description: `Reversal for expense switched to personal money: ${title}`,
-              expenseId,
-              createdById: currentUserId,
-            },
-          });
-        }
-        walletTxId = null;
-      }
-
       await tx.expenseParticipant.deleteMany({ where: { expenseId } });
 
       const updatedExp = await tx.expense.update({
@@ -1370,8 +1236,7 @@ export const dbStore = {
           amount,
           category,
           paidById,
-          paymentMode,
-          walletTransactionId: walletTxId,
+          paymentMode: 'PERSONALLY',
           lastUpdatedById: currentUserId,
           receiptUrl: receiptUrl !== undefined ? receiptUrl : existingExpense.receiptUrl,
           participants: {
@@ -1396,7 +1261,7 @@ export const dbStore = {
       existingExpense.tripId,
       currentUserId,
       'EXPENSE_UPDATED',
-      `${currentUser.name} updated expense "${title}" (${existingExpense.trip.currency}${oldAmount} → ${existingExpense.trip.currency}${amount})`,
+      `${currentUser.name} updated expense "${title}" (${existingExpense.trip.currency}${existingExpense.amount} → ${existingExpense.trip.currency}${amount})`,
       amount,
       category
     );
