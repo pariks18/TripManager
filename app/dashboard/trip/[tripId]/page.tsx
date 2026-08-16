@@ -27,6 +27,8 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { BottomNav } from '@/components/ui/BottomNav';
 import { TripBudgetCard } from '@/components/trip/TripBudgetCard';
 import { TripSettingsModal } from '@/components/trip/TripSettingsModal';
+import { ConfirmModal } from '@/components/ui/ConfirmModal';
+import { useToast } from '@/components/ui/Toast';
 
 import {
   ArrowLeft,
@@ -112,9 +114,6 @@ export default function TripDashboardPage() {
   useEffect(() => {
     if (tripId) fetchTripDetails();
   }, [tripId, fetchTripDetails]);
-
-import { ConfirmModal } from '@/components/ui/ConfirmModal';
-import { useToast } from '@/components/ui/Toast';
 
   const { showToast } = useToast();
   const [confirmModalConfig, setConfirmModalConfig] = useState<{

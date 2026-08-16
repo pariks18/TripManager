@@ -2,6 +2,7 @@
 
 import React, { useState, useRef } from 'react';
 import { UserDocumentDetail, DocumentType } from '@/types';
+import { Modal } from '@/components/ui/Modal';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { useToast } from '@/components/ui/Toast';
 import { Button } from '@/components/ui/Button';
@@ -42,6 +43,7 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
   onBack,
   onRefreshDocs,
 }) => {
+  const { showToast } = useToast();
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedType, setSelectedType] = useState<DocumentType>('AADHAAR');

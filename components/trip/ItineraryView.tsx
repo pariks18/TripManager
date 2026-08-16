@@ -415,6 +415,9 @@ export const ItineraryView: React.FC<ItineraryViewProps> = React.memo(({
               </Button>
             </div>
           </form>
+        </Modal>
+      )}
+
       {deletingItemId && (
         <ConfirmModal
           isOpen={!!deletingItemId}

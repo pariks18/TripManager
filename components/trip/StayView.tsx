@@ -435,6 +435,9 @@ export const StayView: React.FC<StayViewProps> = React.memo(({
               </Button>
             </div>
           </form>
+        </Modal>
+      )}
+
       {deletingStayId && (
         <ConfirmModal
           isOpen={!!deletingStayId}

@@ -6,6 +6,8 @@ import { ChangePasswordModal } from './ChangePasswordModal';
 import { PhoneVerificationModal } from './PhoneVerificationModal';
 import { RecoveryEmailModal } from './RecoveryEmailModal';
 import { VerificationModal } from './VerificationModal';
+import { ConfirmModal } from '@/components/ui/ConfirmModal';
+import { useToast } from '@/components/ui/Toast';
 import {
   ArrowLeft,
   ShieldCheck,
@@ -37,9 +39,6 @@ export const AccountSecurityView: React.FC<AccountSecurityViewProps> = ({
   const [isChangePhoneMode, setIsChangePhoneMode] = useState(false);
   const [verificationType, setVerificationType] = useState<'EMAIL' | null>(null);
   const [isRemovingRecovery, setIsRemovingRecovery] = useState(false);
-
-import { ConfirmModal } from '@/components/ui/ConfirmModal';
-import { useToast } from '@/components/ui/Toast';
 
   const { showToast } = useToast();
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);

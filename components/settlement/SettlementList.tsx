@@ -734,6 +734,9 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
               </button>
             </div>
           </div>
+        </div>
+      )}
+
       {/* Cancel Settlement Confirmation Modal */}
       {cancellingSettlementId && (
         <ConfirmModal
