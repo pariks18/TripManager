@@ -724,18 +724,6 @@ export default function TripDashboardPage() {
         )}
       </main>
 
-      {/* Floating Action Button (FAB) */}
-      <button
-        onClick={() => {
-          setEditingExpense(null);
-          setIsAddExpenseOpen(true);
-        }}
-        className="fixed right-5 bottom-20 z-40 w-14 h-14 bg-gradient-to-tr from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white rounded-full flex items-center justify-center shadow-float active:scale-95 transition-all"
-        aria-label="Add Expense"
-      >
-        <Plus className="w-7 h-7" />
-      </button>
-
       {/* Add / Edit Expense Modal */}
       <AddExpenseModal
         isOpen={isAddExpenseOpen}
