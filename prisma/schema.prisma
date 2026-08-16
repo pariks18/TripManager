@@ -42,6 +42,7 @@ model User {
   walletTransactions    WalletTransaction[]  @relation("TransactionCreatedBy")
   userWallets           UserWallet[]
   locations             MemberLocation[]
+  otpVerifications      OtpVerification[]
 }
 
 model Trip {
@@ -355,4 +356,19 @@ model MemberLocation {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([tripId, userId])
+}
+
+model OtpVerification {
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  userId      String    @db.ObjectId
+  phoneNumber String?
+  purpose     String    // 'PHONE_REGISTRATION' | 'PHONE_CHANGE' | 'PASSWORD_CHANGE'
+  otpHash     String
+  expiresAt   DateTime
+  attempts    Int       @default(0)
+  verifiedAt  DateTime?
+  usedAt      DateTime?
+  createdAt   DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

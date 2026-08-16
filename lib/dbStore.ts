@@ -1151,13 +1151,20 @@ export const dbStore = {
         });
         walletTxId = walletTx.id;
 
-        await tx.userWallet.update({
-          where: { id: freshWallet.id },
+        const walletUpdate = await tx.userWallet.updateMany({
+          where: {
+            id: freshWallet.id,
+            balance: { gte: amount - 0.01 },
+          },
           data: {
             balance: { decrement: amount },
             totalSpent: { increment: amount },
           },
         });
+
+        if (walletUpdate.count === 0) {
+          throw new Error('Insufficient wallet balance or concurrent wallet transaction detected.');
+        }
       }
 
       const expense = await tx.expense.create({

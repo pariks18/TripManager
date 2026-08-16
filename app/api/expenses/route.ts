@@ -10,9 +10,11 @@ export async function POST(request: Request) {
   }
 
   try {
-    const { tripId, title, amount, category, paidById, splitBetween, receiptUrl, paymentMode } = await request.json();
+    const body = await request.json();
+    const { tripId, title, amount, category, paidById, splitBetween, participantUserIds, receiptUrl, paymentMode } = body;
+    const participants = splitBetween || participantUserIds;
 
-    if (!tripId || !title || !amount || amount <= 0 || !paidById || !splitBetween || splitBetween.length === 0) {
+    if (!tripId || !title || !amount || amount <= 0 || !paidById || !participants || participants.length === 0) {
       return NextResponse.json({ error: 'Please fill in all required fields' }, { status: 400 });
     }
 
@@ -23,7 +25,7 @@ export async function POST(request: Request) {
       (category as CategoryType) || 'Miscellaneous',
       paidById,
       user.id, // createdById for security ownership
-      splitBetween,
+      participants,
       receiptUrl,
       paymentMode === 'WALLET' ? 'WALLET' : 'PERSONALLY'
     );

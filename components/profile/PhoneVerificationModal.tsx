@@ -5,30 +5,27 @@ import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { useToast } from '@/components/ui/Toast';
-import { Lock, ShieldCheck, AlertCircle, RefreshCw, Smartphone } from 'lucide-react';
+import { Smartphone, ShieldCheck, AlertCircle, CheckCircle2, RefreshCw } from 'lucide-react';
 
-interface ChangePasswordModalProps {
+interface PhoneVerificationModalProps {
   isOpen: boolean;
   onClose: () => void;
-  isMobileVerified: boolean;
-  userMobile?: string | null;
-  onOpenPhoneModal: () => void;
+  currentMobile?: string | null;
+  isChangeMode?: boolean;
   onSuccess: () => void;
 }
 
-export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
+export const PhoneVerificationModal: React.FC<PhoneVerificationModalProps> = ({
   isOpen,
   onClose,
-  isMobileVerified,
-  userMobile,
-  onOpenPhoneModal,
+  currentMobile,
+  isChangeMode = false,
   onSuccess,
 }) => {
   const { showToast } = useToast();
-  const [step, setStep] = useState<'CONFIRM_SEND' | 'VERIFY_AND_CHANGE'>('CONFIRM_SEND');
+  const [step, setStep] = useState<'INPUT_PHONE' | 'VERIFY_OTP'>('INPUT_PHONE');
+  const [mobileNumber, setMobileNumber] = useState('');
   const [otp, setOtp] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
   const [maskedPhone, setMaskedPhone] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
@@ -36,12 +33,15 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
   const [debugOtp, setDebugOtp] = useState<string | null>(null);
 
   useEffect(() => {
-    setStep('CONFIRM_SEND');
+    if (currentMobile && !isChangeMode) {
+      setMobileNumber(currentMobile);
+    } else {
+      setMobileNumber('');
+    }
+    setStep('INPUT_PHONE');
     setOtp('');
-    setNewPassword('');
-    setConfirmPassword('');
     setError('');
-  }, [isOpen]);
+  }, [isOpen, currentMobile, isChangeMode]);
 
   useEffect(() => {
     let timer: any;
@@ -51,24 +51,33 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
     return () => clearInterval(timer);
   }, [cooldown]);
 
-  const handleRequestPasswordOtp = async () => {
+  const handleRequestOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
     setError('');
+
+    const cleaned = mobileNumber.replace(/\D/g, '');
+    if (cleaned.length < 10) {
+      setError('Please enter a valid 10-digit mobile number.');
+      return;
+    }
+
     setIsLoading(true);
 
     try {
-      const res = await fetch('/api/user/password/request-otp', {
+      const res = await fetch('/api/user/phone/request-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mobileNumber }),
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to request password-change OTP');
+      if (!res.ok) throw new Error(data.error || 'Failed to send OTP');
 
-      setMaskedPhone(data.maskedPhone || userMobile || 'your verified mobile number');
+      setMaskedPhone(data.maskedPhone || mobileNumber);
       if (data.debugOtp) setDebugOtp(data.debugOtp);
 
-      showToast(data.message || `✓ OTP sent to ${data.maskedPhone}`, 'info', 'OTP Sent');
-      setStep('VERIFY_AND_CHANGE');
+      showToast(data.message || `✓ OTP sent to ${data.maskedPhone || mobileNumber}`, 'info', 'OTP Sent');
+      setStep('VERIFY_OTP');
       setCooldown(60);
     } catch (err: any) {
       setError(err.message);
@@ -78,74 +87,46 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
     }
   };
 
-  const handlePasswordSubmit = async (e: React.FormEvent) => {
+  const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
     if (!otp || otp.trim().length < 6) {
-      setError('Please enter the 6-digit OTP code.');
-      return;
-    }
-
-    if (newPassword.length < 6) {
-      setError('New password must be at least 6 characters long.');
-      return;
-    }
-
-    if (newPassword !== confirmPassword) {
-      setError('New password and confirmation do not match.');
+      setError('Please enter the full 6-digit OTP code.');
       return;
     }
 
     setIsLoading(true);
 
     try {
-      const res = await fetch('/api/user/security/password', {
+      const res = await fetch('/api/user/phone/verify-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ otp, newPassword }),
+        body: JSON.stringify({ mobileNumber, otp }),
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to change password');
+      if (!res.ok) throw new Error(data.error || 'Failed to verify OTP');
 
-      showToast('✓ Password changed successfully', 'success', 'Password Changed');
+      showToast(data.message || '✓ Mobile number verified successfully', 'success', 'Phone Verified');
       onSuccess();
       onClose();
     } catch (err: any) {
       setError(err.message);
-      showToast(err.message, 'error', 'Password Change Failed');
+      showToast(err.message, 'error', 'Verification Failed');
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Change Password">
-      {!isMobileVerified ? (
-        <div className="space-y-4 py-1">
-          <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl space-y-2 text-xs text-amber-950">
-            <div className="flex items-center gap-2 font-bold text-amber-900">
-              <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
-              <span>Phone Number Not Registered</span>
-            </div>
-            <p className="text-[11px] text-amber-800 leading-relaxed">
-              Register and verify your mobile number first to enable OTP-based password changes.
-            </p>
-          </div>
-
-          <Button
-            onClick={() => {
-              onClose();
-              onOpenPhoneModal();
-            }}
-            className="w-full font-bold py-3 text-xs flex items-center justify-center gap-2"
-          >
-            <Smartphone className="w-4 h-4" /> Register Phone Number
-          </Button>
-        </div>
-      ) : step === 'CONFIRM_SEND' ? (
-        <div className="space-y-4">
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={isChangeMode ? 'Change Mobile Number' : 'Register Mobile Number'}
+    >
+      {step === 'INPUT_PHONE' ? (
+        <form onSubmit={handleRequestOtp} className="space-y-4">
           {error && (
             <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-2xl text-xs font-medium text-rose-700 flex items-start gap-2">
               <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
@@ -153,17 +134,34 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
             </div>
           )}
 
-          <div className="p-4 bg-blue-50/80 border border-blue-200/80 rounded-2xl space-y-1.5 text-xs text-blue-950">
-            <div className="flex items-center gap-1.5 font-bold text-blue-900">
-              <ShieldCheck className="w-4 h-4 text-blue-600" />
-              <span>OTP Verification Required</span>
+          <div className="p-4 bg-purple-50/70 border border-purple-200/80 rounded-2xl space-y-1.5 text-xs text-purple-950">
+            <div className="flex items-center gap-1.5 font-bold text-purple-900">
+              <Smartphone className="w-4 h-4 text-purple-600" />
+              <span>{isChangeMode ? 'Update Mobile Number' : 'Mobile Verification Required'}</span>
             </div>
-            <p className="text-[11px] text-blue-800 leading-relaxed">
-              A 6-digit password verification OTP will be sent to your registered mobile number:
+            <p className="text-[11px] text-purple-800 leading-relaxed">
+              Enter your mobile number to receive a 6-digit OTP code for verification. Verified mobile numbers are required for account security and password changes.
             </p>
-            <p className="text-xs font-black text-slate-900 pt-1">
-              {userMobile ? userMobile : 'Registered Mobile Number'}
-            </p>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 tracking-wide uppercase mb-1.5">
+              Mobile Number
+            </label>
+            <div className="flex items-center gap-2">
+              <span className="px-3.5 py-3 bg-slate-100 border border-slate-200 text-slate-700 text-sm font-bold rounded-2xl">
+                +91
+              </span>
+              <Input
+                type="tel"
+                placeholder="9876543210"
+                value={mobileNumber}
+                onChange={(e) => setMobileNumber(e.target.value)}
+                maxLength={10}
+                required
+                className="flex-1 text-sm font-semibold"
+              />
+            </div>
           </div>
 
           <div className="pt-2 flex gap-3">
@@ -174,18 +172,13 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
             >
               Cancel
             </button>
-            <Button
-              type="button"
-              onClick={handleRequestPasswordOtp}
-              isLoading={isLoading}
-              className="flex-1 text-xs font-bold py-3"
-            >
+            <Button type="submit" isLoading={isLoading} className="flex-1 text-xs font-bold py-3">
               Send OTP
             </Button>
           </div>
-        </div>
+        </form>
       ) : (
-        <form onSubmit={handlePasswordSubmit} className="space-y-4">
+        <form onSubmit={handleVerifyOtp} className="space-y-4">
           {error && (
             <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-2xl text-xs font-medium text-rose-700 flex items-start gap-2">
               <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
@@ -199,7 +192,7 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
               <span>Enter OTP sent to {maskedPhone}</span>
             </div>
             <p className="text-[11px] text-emerald-800 leading-relaxed">
-              Enter the 6-digit verification code and your new password.
+              We sent a 6-digit verification code to <strong>{maskedPhone}</strong>. OTP expires in 5 minutes.
             </p>
           </div>
 
@@ -211,7 +204,7 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
 
           <div>
             <label className="block text-xs font-semibold text-slate-700 tracking-wide uppercase mb-1.5">
-              6-Digit Verification OTP
+              6-Digit OTP Code
             </label>
             <input
               type="text"
@@ -224,25 +217,15 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
             />
           </div>
 
-          <Input
-            type="password"
-            label="New Password"
-            placeholder="At least 6 characters"
-            value={newPassword}
-            onChange={(e) => setNewPassword(e.target.value)}
-            required
-          />
-
-          <Input
-            type="password"
-            label="Confirm New Password"
-            placeholder="Re-enter new password"
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            required
-          />
-
           <div className="flex items-center justify-between text-xs text-slate-500 pt-1">
+            <button
+              type="button"
+              onClick={() => setStep('INPUT_PHONE')}
+              className="font-semibold text-slate-600 hover:text-slate-900 underline"
+            >
+              Change Mobile Number
+            </button>
+
             {cooldown > 0 ? (
               <span className="text-[11px] font-bold text-slate-400">
                 Resend OTP in {cooldown}s
@@ -250,7 +233,7 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
             ) : (
               <button
                 type="button"
-                onClick={handleRequestPasswordOtp}
+                onClick={handleRequestOtp}
                 className="font-bold text-emerald-700 hover:text-emerald-800 flex items-center gap-1"
               >
                 <RefreshCw className="w-3 h-3" /> Resend OTP
@@ -267,7 +250,7 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
               Cancel
             </button>
             <Button type="submit" isLoading={isLoading} className="flex-1 text-xs font-bold py-3">
-              Change Password
+              Verify OTP
             </Button>
           </div>
         </form>

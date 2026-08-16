@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { UserProfileDetail } from '@/types';
 import { ChangePasswordModal } from './ChangePasswordModal';
+import { PhoneVerificationModal } from './PhoneVerificationModal';
 import { VerificationModal } from './VerificationModal';
 import {
   ArrowLeft,
@@ -29,13 +30,18 @@ export const AccountSecurityView: React.FC<AccountSecurityViewProps> = ({
   onUpdateProfile,
 }) => {
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
-  const [verificationType, setVerificationType] = useState<'EMAIL' | 'MOBILE' | null>(null);
+  const [isPhoneModalOpen, setIsPhoneModalOpen] = useState(false);
+  const [isChangePhoneMode, setIsChangePhoneMode] = useState(false);
+  const [verificationType, setVerificationType] = useState<'EMAIL' | null>(null);
+
+  const handlePhoneSuccess = async () => {
+    // Refresh profile state
+    window.location.reload();
+  };
 
   const handleVerifySuccess = async () => {
     if (verificationType === 'EMAIL') {
       await onUpdateProfile({ isEmailVerified: true });
-    } else if (verificationType === 'MOBILE') {
-      await onUpdateProfile({ isMobileVerified: true });
     }
     setVerificationType(null);
   };
@@ -63,7 +69,7 @@ export const AccountSecurityView: React.FC<AccountSecurityViewProps> = ({
             </div>
             <div>
               <h3 className="text-base font-bold">Account Security Center</h3>
-              <p className="text-xs text-slate-300">Protected with TripSplit JWT Authentication</p>
+              <p className="text-xs text-slate-300">Protected with OTP & JWT Authentication</p>
             </div>
           </div>
           <span className="text-xs font-extrabold bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 px-3 py-1 rounded-full">
@@ -86,7 +92,7 @@ export const AccountSecurityView: React.FC<AccountSecurityViewProps> = ({
                 <Mail className="w-4 h-4" />
               </div>
               <div>
-                <span className="text-xs font-bold text-slate-900 block">Email Verification</span>
+                <span className="text-xs font-bold text-slate-900 block">Email Address</span>
                 <span className="text-[11px] text-slate-500">{profile.email}</span>
               </div>
             </div>
@@ -113,27 +119,44 @@ export const AccountSecurityView: React.FC<AccountSecurityViewProps> = ({
                 <Smartphone className="w-4 h-4" />
               </div>
               <div>
-                <span className="text-xs font-bold text-slate-900 block">Mobile Verification</span>
-                <span className="text-[11px] text-slate-500">{profile.mobile || 'No mobile added'}</span>
+                <span className="text-xs font-bold text-slate-900 block">Mobile Number</span>
+                <span className="text-[11px] text-slate-500">
+                  {profile.mobile && profile.isMobileVerified
+                    ? profile.mobile
+                    : profile.mobile
+                    ? `${profile.mobile} (Unverified)`
+                    : 'Not registered'}
+                </span>
               </div>
             </div>
 
-            {profile.isMobileVerified ? (
-              <span className="text-xs font-extrabold text-emerald-800 bg-emerald-100 px-3 py-1 rounded-full flex items-center gap-1">
-                <CheckCircle2 className="w-3.5 h-3.5" /> Verified
-              </span>
-            ) : profile.mobile ? (
+            {profile.isMobileVerified && profile.mobile ? (
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-extrabold text-emerald-800 bg-emerald-100 px-3 py-1 rounded-full flex items-center gap-1">
+                  <CheckCircle2 className="w-3.5 h-3.5" /> Verified
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsChangePhoneMode(true);
+                    setIsPhoneModalOpen(true);
+                  }}
+                  className="text-xs font-bold text-slate-600 hover:text-slate-900 underline"
+                >
+                  Change
+                </button>
+              </div>
+            ) : (
               <button
                 type="button"
-                onClick={() => setVerificationType('MOBILE')}
-                className="text-xs font-bold text-amber-900 bg-amber-100 hover:bg-amber-200 px-3 py-1 rounded-full border border-amber-200 transition-colors"
+                onClick={() => {
+                  setIsChangePhoneMode(false);
+                  setIsPhoneModalOpen(true);
+                }}
+                className="text-xs font-bold text-purple-900 bg-purple-100 hover:bg-purple-200 px-3.5 py-1.5 rounded-full border border-purple-200 transition-colors"
               >
-                Verify Now
+                Register Phone Number
               </button>
-            ) : (
-              <span className="text-[11px] font-medium text-slate-400 bg-slate-100 px-3 py-1 rounded-full">
-                Add Mobile First
-              </span>
             )}
           </div>
         </div>
@@ -157,7 +180,11 @@ export const AccountSecurityView: React.FC<AccountSecurityViewProps> = ({
               </div>
               <div>
                 <span className="text-xs font-bold text-slate-900 block">Change Password</span>
-                <span className="text-[11px] text-slate-400">Update your account login password</span>
+                <span className="text-[11px] text-slate-400">
+                  {profile.isMobileVerified
+                    ? 'OTP verification sent to your verified mobile number'
+                    : 'Requires verified mobile number'}
+                </span>
               </div>
             </div>
             <ChevronRight className="w-4 h-4 text-slate-400" />
@@ -186,7 +213,23 @@ export const AccountSecurityView: React.FC<AccountSecurityViewProps> = ({
         <ChangePasswordModal
           isOpen={isPasswordModalOpen}
           onClose={() => setIsPasswordModalOpen(false)}
+          isMobileVerified={!!profile.isMobileVerified}
+          userMobile={profile.mobile}
+          onOpenPhoneModal={() => {
+            setIsChangePhoneMode(false);
+            setIsPhoneModalOpen(true);
+          }}
           onSuccess={() => setIsPasswordModalOpen(false)}
+        />
+      )}
+
+      {isPhoneModalOpen && (
+        <PhoneVerificationModal
+          isOpen={isPhoneModalOpen}
+          onClose={() => setIsPhoneModalOpen(false)}
+          currentMobile={profile.mobile}
+          isChangeMode={isChangePhoneMode}
+          onSuccess={handlePhoneSuccess}
         />
       )}
 
@@ -195,7 +238,7 @@ export const AccountSecurityView: React.FC<AccountSecurityViewProps> = ({
           isOpen={!!verificationType}
           onClose={() => setVerificationType(null)}
           targetType={verificationType}
-          targetValue={verificationType === 'EMAIL' ? profile.email || '' : profile.mobile || ''}
+          targetValue={profile.email || ''}
           onVerified={handleVerifySuccess}
         />
       )}
