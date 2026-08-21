@@ -9,16 +9,15 @@ export async function POST(request: Request) {
   }
 
   try {
-    const { otp, newPassword } = await request.json();
+    const { currentPassword, otp, newPassword } = await request.json();
 
-    if (!otp || typeof otp !== 'string' || !newPassword || typeof newPassword !== 'string') {
+    if (!newPassword || typeof newPassword !== 'string') {
       return NextResponse.json(
-        { error: 'Valid 6-digit OTP and new password are required' },
+        { error: 'New password is required' },
         { status: 400 }
       );
     }
 
-    const cleanOtp = otp.trim();
     if (newPassword.length < 6) {
       return NextResponse.json(
         { error: 'New password must be at least 6 characters long' },
@@ -31,89 +30,109 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
-    if (!user.isMobileVerified || !user.mobile) {
-      return NextResponse.json(
-        {
-          error:
-            'Phone number not registered. Register and verify your mobile number first to enable OTP-based password changes.',
-        },
-        { status: 400 }
-      );
-    }
+    // Path A: Normal password update with Current Password
+    if (currentPassword && typeof currentPassword === 'string') {
+      const isCurrentValid = await comparePassword(currentPassword, user.password);
+      if (!isCurrentValid) {
+        return NextResponse.json(
+          { error: 'Current password is incorrect. Please try again.' },
+          { status: 400 }
+        );
+      }
 
-    // Fetch active password-change OTP record
-    const otpRecord = await prisma.otpVerification.findFirst({
-      where: {
-        userId: sessionUser.id,
-        purpose: 'PASSWORD_CHANGE',
-        usedAt: null,
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+      const newPasswordHash = await hashPassword(newPassword);
 
-    if (!otpRecord) {
-      return NextResponse.json(
-        { error: 'No active password-change OTP found. Please request a new OTP.' },
-        { status: 400 }
-      );
-    }
-
-    // Expiry Check (5 mins)
-    if (otpRecord.expiresAt < new Date()) {
-      return NextResponse.json(
-        { error: 'This OTP has expired. Please request a new one.' },
-        { status: 400 }
-      );
-    }
-
-    // Attempt Limit Check
-    if (otpRecord.attempts >= 5) {
-      return NextResponse.json(
-        { error: 'Maximum OTP verification attempts exceeded. Please request a new OTP.' },
-        { status: 400 }
-      );
-    }
-
-    // OTP Hash Match Check
-    const isOtpValid = await comparePassword(cleanOtp, otpRecord.otpHash);
-    if (!isOtpValid) {
-      await prisma.otpVerification.update({
-        where: { id: otpRecord.id },
-        data: { attempts: { increment: 1 } },
-      });
-      return NextResponse.json(
-        { error: 'Invalid OTP. Please check the code and try again.' },
-        { status: 400 }
-      );
-    }
-
-    // Hash the new password using project standard hashPassword
-    const newPasswordHash = await hashPassword(newPassword);
-
-    // Transaction: Mark OTP as used and update User password
-    await prisma.$transaction([
-      prisma.otpVerification.update({
-        where: { id: otpRecord.id },
-        data: {
-          usedAt: new Date(),
-          verifiedAt: new Date(),
-        },
-      }),
-      prisma.user.update({
+      await prisma.user.update({
         where: { id: sessionUser.id },
         data: {
           password: newPasswordHash,
           updatedAt: new Date(),
         },
-      }),
-    ]);
+      });
 
-    return NextResponse.json({
-      success: true,
-      message: '✓ Password changed successfully',
-    });
+      return NextResponse.json({
+        success: true,
+        message: '✓ Password updated successfully',
+      });
+    }
+
+    // Path B: Password change with OTP
+    if (otp && typeof otp === 'string') {
+      const cleanOtp = otp.trim();
+
+      const otpRecord = await prisma.otpVerification.findFirst({
+        where: {
+          userId: sessionUser.id,
+          purpose: { in: ['PASSWORD_CHANGE', 'PASSWORD_RESET_RECOVERY_EMAIL', 'PASSWORD_RESET'] },
+          usedAt: null,
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      if (!otpRecord) {
+        return NextResponse.json(
+          { error: 'No active verification code found. Please request a new code.' },
+          { status: 400 }
+        );
+      }
+
+      if (otpRecord.expiresAt < new Date()) {
+        return NextResponse.json(
+          { error: 'This verification code has expired. Please request a new one.' },
+          { status: 400 }
+        );
+      }
+
+      if (otpRecord.attempts >= 5) {
+        return NextResponse.json(
+          { error: 'Maximum verification attempts exceeded. Please request a new code.' },
+          { status: 400 }
+        );
+      }
+
+      const isOtpValid = await comparePassword(cleanOtp, otpRecord.otpHash);
+      if (!isOtpValid) {
+        await prisma.otpVerification.update({
+          where: { id: otpRecord.id },
+          data: { attempts: { increment: 1 } },
+        });
+        return NextResponse.json(
+          { error: 'Invalid verification code. Please check the code and try again.' },
+          { status: 400 }
+        );
+      }
+
+      const newPasswordHash = await hashPassword(newPassword);
+
+      await prisma.$transaction([
+        prisma.otpVerification.update({
+          where: { id: otpRecord.id },
+          data: {
+            usedAt: new Date(),
+            verifiedAt: new Date(),
+          },
+        }),
+        prisma.user.update({
+          where: { id: sessionUser.id },
+          data: {
+            password: newPasswordHash,
+            updatedAt: new Date(),
+          },
+        }),
+      ]);
+
+      return NextResponse.json({
+        success: true,
+        message: '✓ Password changed successfully',
+      });
+    }
+
+    return NextResponse.json(
+      { error: 'Either current password or verification code is required' },
+      { status: 400 }
+    );
   } catch (error: any) {
     console.error('[API /api/user/security/password error]:', error);
-    return NextResponse.json({ error: error.message || 'Failed to change password' }, { status: 400 });
+    return NextResponse.json({ error: error.message || 'Failed to update password' }, { status: 400 });
   }
 }

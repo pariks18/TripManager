@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { getSessionUser, hashPassword } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { sendEmailOtp } from '@/lib/email';
-import { generateOtpCode } from '@/lib/sms';
+import { generateOtpCode, sendSmsOtp } from '@/lib/sms';
 import { generateObjectId } from '@/lib/utils';
 
 export async function POST() {
@@ -17,23 +17,13 @@ export async function POST() {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
-    if (!user.isRecoveryEmailVerified || !user.recoveryEmail) {
-      return NextResponse.json(
-        {
-          error: 'No verified recovery email found. Register and verify a recovery email first to enable password recovery.',
-          code: 'RECOVERY_EMAIL_NOT_VERIFIED',
-        },
-        { status: 400 }
-      );
-    }
-
     const purpose = 'PASSWORD_RESET_RECOVERY_EMAIL';
 
     // Rate limit cooldown check (60s)
     const recentOtp = await prisma.otpVerification.findFirst({
       where: {
         userId: sessionUser.id,
-        purpose,
+        purpose: { in: ['PASSWORD_RESET_RECOVERY_EMAIL', 'PASSWORD_RESET', 'PASSWORD_CHANGE'] },
         createdAt: { gte: new Date(Date.now() - 60 * 1000) },
       },
       orderBy: { createdAt: 'desc' },
@@ -47,6 +37,18 @@ export async function POST() {
       );
     }
 
+    let targetRecipient: string;
+    let isSms = false;
+
+    if (user.isRecoveryEmailVerified && user.recoveryEmail) {
+      targetRecipient = user.recoveryEmail;
+    } else if (user.isMobileVerified && user.mobile) {
+      targetRecipient = user.mobile;
+      isSms = true;
+    } else {
+      targetRecipient = user.email;
+    }
+
     const rawOtp = generateOtpCode();
     const otpHash = await hashPassword(rawOtp);
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5-minute expiry
@@ -55,7 +57,7 @@ export async function POST() {
       data: {
         id: generateObjectId(),
         userId: sessionUser.id,
-        phoneNumber: user.recoveryEmail, // Target recovery email address
+        phoneNumber: targetRecipient,
         purpose,
         otpHash,
         expiresAt,
@@ -63,12 +65,20 @@ export async function POST() {
       },
     });
 
-    const { maskedEmail } = await sendEmailOtp(user.recoveryEmail, rawOtp, purpose);
+    let maskedRecipient: string;
+    if (isSms) {
+      const res = await sendSmsOtp(targetRecipient, rawOtp, 'PASSWORD_CHANGE');
+      maskedRecipient = res.maskedPhone;
+    } else {
+      const res = await sendEmailOtp(targetRecipient, rawOtp, 'PASSWORD_RESET_RECOVERY_EMAIL');
+      maskedRecipient = res.maskedEmail;
+    }
 
     return NextResponse.json({
       success: true,
-      maskedEmail,
-      message: `✓ Password reset code sent to ${maskedEmail}`,
+      maskedEmail: maskedRecipient,
+      maskedPhone: isSms ? maskedRecipient : undefined,
+      message: `✓ Password reset code sent to ${maskedRecipient}`,
       debugOtp: process.env.NODE_ENV !== 'production' ? rawOtp : undefined,
     });
   } catch (error: any) {

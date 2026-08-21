@@ -1,15 +1,18 @@
 import { NextResponse } from 'next/server';
-import { comparePassword, getSessionUser, hashPassword } from '@/lib/auth';
+import { comparePassword, hashPassword } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { sanitizePhoneNumber } from '@/lib/sms';
 
 export async function POST(request: Request) {
-  const sessionUser = await getSessionUser();
-  if (!sessionUser) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
   try {
-    const { otp, newPassword } = await request.json();
+    const { emailOrPhone, otp, newPassword } = await request.json();
+
+    if (!emailOrPhone || typeof emailOrPhone !== 'string') {
+      return NextResponse.json(
+        { error: 'Email address or mobile number is required' },
+        { status: 400 }
+      );
+    }
 
     if (!otp || typeof otp !== 'string' || !newPassword || typeof newPassword !== 'string') {
       return NextResponse.json(
@@ -18,7 +21,11 @@ export async function POST(request: Request) {
       );
     }
 
+    const cleanInput = emailOrPhone.trim();
+    const cleanEmail = cleanInput.toLowerCase();
+    const sanitizedPhone = sanitizePhoneNumber(cleanInput);
     const cleanOtp = otp.trim();
+
     if (newPassword.length < 6) {
       return NextResponse.json(
         { error: 'New password must be at least 6 characters long' },
@@ -26,15 +33,27 @@ export async function POST(request: Request) {
       );
     }
 
-    const user = await prisma.user.findUnique({ where: { id: sessionUser.id } });
+    const user = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { email: cleanEmail },
+          { recoveryEmail: cleanEmail },
+          { mobile: sanitizedPhone },
+        ],
+      },
+    });
+
     if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+      return NextResponse.json(
+        { error: 'No account found matching the provided email or mobile number.' },
+        { status: 404 }
+      );
     }
 
     const otpRecord = await prisma.otpVerification.findFirst({
       where: {
-        userId: sessionUser.id,
-        purpose: { in: ['PASSWORD_RESET_RECOVERY_EMAIL', 'PASSWORD_RESET', 'PASSWORD_CHANGE'] },
+        userId: user.id,
+        purpose: { in: ['PASSWORD_RESET', 'PASSWORD_RESET_RECOVERY_EMAIL', 'PASSWORD_CHANGE'] },
         usedAt: null,
       },
       orderBy: { createdAt: 'desc' },
@@ -84,7 +103,7 @@ export async function POST(request: Request) {
         },
       }),
       prisma.user.update({
-        where: { id: sessionUser.id },
+        where: { id: user.id },
         data: {
           password: newPasswordHash,
           updatedAt: new Date(),
@@ -94,10 +113,13 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       success: true,
-      message: '✓ Password reset successfully',
+      message: '✓ Password reset successfully. You can now sign in with your new password.',
     });
   } catch (error: any) {
-    console.error('[API /api/user/password/reset-with-otp error]:', error);
-    return NextResponse.json({ error: error.message || 'Failed to reset password' }, { status: 400 });
+    console.error('[API /api/auth/forgot-password/reset-with-otp error]:', error);
+    return NextResponse.json(
+      { error: error.message || 'Failed to reset password' },
+      { status: 500 }
+    );
   }
 }

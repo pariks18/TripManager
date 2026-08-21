@@ -5,51 +5,46 @@ import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { useToast } from '@/components/ui/Toast';
-import { ShieldCheck, AlertCircle, RefreshCw, Mail, HelpCircle, ArrowLeft } from 'lucide-react';
+import { Lock, ShieldCheck, AlertCircle, RefreshCw, Mail, ArrowLeft } from 'lucide-react';
 
-interface ChangePasswordModalProps {
+interface ForgotPasswordModalProps {
   isOpen: boolean;
   onClose: () => void;
-  isRecoveryEmailVerified?: boolean;
-  userRecoveryEmail?: string | null;
-  onOpenRecoveryEmailModal: () => void;
-  onSuccess: () => void;
+  onSuccess: (email: string) => void;
+  initialEmail?: string;
 }
 
-export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
+export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
   isOpen,
   onClose,
-  isRecoveryEmailVerified = false,
-  userRecoveryEmail,
-  onOpenRecoveryEmailModal,
   onSuccess,
+  initialEmail = '',
 }) => {
   const { showToast } = useToast();
-  const [view, setView] = useState<'NORMAL_CHANGE' | 'FORGOT_PASSWORD_CONFIRM' | 'FORGOT_PASSWORD_VERIFY'>('NORMAL_CHANGE');
-  
-  // Normal change state
-  const [currentPassword, setCurrentPassword] = useState('');
-  
-  // Reset state
+  const [step, setStep] = useState<1 | 2>(1);
+
+  const [emailOrPhone, setEmailOrPhone] = useState(initialEmail);
   const [otp, setOtp] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [maskedEmail, setMaskedEmail] = useState('');
-  
+
+  const [maskedRecipient, setMaskedRecipient] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [cooldown, setCooldown] = useState(0);
   const [debugOtp, setDebugOtp] = useState<string | null>(null);
 
   useEffect(() => {
-    setView('NORMAL_CHANGE');
-    setCurrentPassword('');
-    setOtp('');
-    setNewPassword('');
-    setConfirmPassword('');
-    setError('');
-    setDebugOtp(null);
-  }, [isOpen]);
+    if (isOpen) {
+      setStep(1);
+      setEmailOrPhone(initialEmail);
+      setOtp('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setError('');
+      setDebugOtp(null);
+    }
+  }, [isOpen, initialEmail]);
 
   useEffect(() => {
     let timer: any;
@@ -59,66 +54,32 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
     return () => clearInterval(timer);
   }, [cooldown]);
 
-  const handleNormalSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleRequestOtp = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     setError('');
 
-    if (!currentPassword) {
-      setError('Please enter your current password.');
-      return;
-    }
-
-    if (newPassword.length < 6) {
-      setError('New password must be at least 6 characters long.');
-      return;
-    }
-
-    if (newPassword !== confirmPassword) {
-      setError('New password and confirmation do not match.');
+    if (!emailOrPhone || !emailOrPhone.trim()) {
+      setError('Please enter your email address or mobile number.');
       return;
     }
 
     setIsLoading(true);
 
     try {
-      const res = await fetch('/api/user/security/password', {
+      const res = await fetch('/api/auth/forgot-password/request-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ currentPassword, newPassword }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to update password');
-
-      showToast(data.message || '✓ Password updated successfully', 'success', 'Password Updated');
-      onSuccess();
-      onClose();
-    } catch (err: any) {
-      setError(err.message);
-      showToast(err.message, 'error', 'Error');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleRequestResetOtp = async () => {
-    setError('');
-    setIsLoading(true);
-
-    try {
-      const res = await fetch('/api/user/password/reset-request-otp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ emailOrPhone: emailOrPhone.trim() }),
       });
 
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to send password reset code');
 
-      setMaskedEmail(data.maskedEmail || data.maskedPhone || userRecoveryEmail || 'your email');
+      setMaskedRecipient(data.maskedRecipient);
       if (data.debugOtp) setDebugOtp(data.debugOtp);
 
-      showToast(data.message || `✓ Password reset code sent to ${data.maskedEmail}`, 'info', 'Code Sent');
-      setView('FORGOT_PASSWORD_VERIFY');
+      showToast(data.message || `✓ Reset code sent to ${data.maskedRecipient}`, 'info', 'Code Sent');
+      setStep(2);
       setCooldown(60);
     } catch (err: any) {
       setError(err.message);
@@ -150,17 +111,17 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
     setIsLoading(true);
 
     try {
-      const res = await fetch('/api/user/password/reset-with-otp', {
+      const res = await fetch('/api/auth/forgot-password/reset-with-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ otp, newPassword }),
+        body: JSON.stringify({ emailOrPhone: emailOrPhone.trim(), otp: otp.trim(), newPassword }),
       });
 
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to reset password');
 
-      showToast(data.message || '✓ Password reset successfully!', 'success', 'Password Reset');
-      onSuccess();
+      showToast('✓ Password reset successfully! You can now log in with your new password.', 'success', 'Password Reset');
+      onSuccess(emailOrPhone);
       onClose();
     } catch (err: any) {
       setError(err.message);
@@ -171,13 +132,9 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
   };
 
   return (
-    <Modal
-      isOpen={isOpen}
-      onClose={onClose}
-      title={view === 'NORMAL_CHANGE' ? 'Change Password' : 'Password Recovery'}
-    >
-      {view === 'NORMAL_CHANGE' ? (
-        <form onSubmit={handleNormalSubmit} className="space-y-4">
+    <Modal isOpen={isOpen} onClose={onClose} title="Reset Password">
+      {step === 1 ? (
+        <form onSubmit={handleRequestOtp} className="space-y-4">
           {error && (
             <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-2xl text-xs font-medium text-rose-700 flex items-start gap-2">
               <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
@@ -185,43 +142,27 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
             </div>
           )}
 
-          <Input
-            type="password"
-            label="Current Password"
-            placeholder="••••••••"
-            value={currentPassword}
-            onChange={(e) => setCurrentPassword(e.target.value)}
-          />
+          <div className="p-4 bg-slate-50 border border-slate-200/80 rounded-2xl space-y-1 text-xs text-slate-700">
+            <div className="flex items-center gap-1.5 font-bold text-slate-900">
+              <Mail className="w-4 h-4 text-emerald-600" />
+              <span>Enter your Email or Mobile Number</span>
+            </div>
+            <p className="text-[11px] text-slate-500 leading-relaxed">
+              We will send a 6-digit verification code to your registered email address or mobile phone.
+            </p>
+          </div>
 
-          <Input
-            type="password"
-            label="New Password"
-            placeholder="At least 6 characters"
-            value={newPassword}
-            onChange={(e) => setNewPassword(e.target.value)}
-            required
-          />
-
-          <Input
-            type="password"
-            label="Confirm New Password"
-            placeholder="Re-enter new password"
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            required
-          />
-
-          <div className="flex justify-end pt-1">
-            <button
-              type="button"
-              onClick={() => {
-                setError('');
-                setView('FORGOT_PASSWORD_CONFIRM');
-              }}
-              className="text-xs font-bold text-emerald-700 hover:text-emerald-800 flex items-center gap-1 hover:underline"
-            >
-              <HelpCircle className="w-3.5 h-3.5" /> Forgot Password?
-            </button>
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
+              Email or Mobile Number
+            </label>
+            <Input
+              type="text"
+              placeholder="you@example.com or +91XXXXXXXXXX"
+              value={emailOrPhone}
+              onChange={(e) => setEmailOrPhone(e.target.value)}
+              required
+            />
           </div>
 
           <div className="pt-2 flex gap-3">
@@ -233,50 +174,10 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
               Cancel
             </button>
             <Button type="submit" isLoading={isLoading} className="flex-1 text-xs font-bold py-3">
-              Update Password
+              Send Reset Code
             </Button>
           </div>
         </form>
-      ) : view === 'FORGOT_PASSWORD_CONFIRM' ? (
-        <div className="space-y-4">
-          {error && (
-            <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-2xl text-xs font-medium text-rose-700 flex items-start gap-2">
-              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
-              <span>{error}</span>
-            </div>
-          )}
-
-          <div className="p-4 bg-purple-50/80 border border-purple-200/80 rounded-2xl space-y-1.5 text-xs text-purple-950">
-            <div className="flex items-center gap-1.5 font-bold text-purple-900">
-              <ShieldCheck className="w-4 h-4 text-purple-600" />
-              <span>Recovery Verification Code Required</span>
-            </div>
-            <p className="text-[11px] text-purple-800 leading-relaxed">
-              A password reset verification code will be sent to your registered email address or phone:
-            </p>
-            <p className="text-xs font-black text-slate-900 pt-1">
-              {isRecoveryEmailVerified && userRecoveryEmail ? userRecoveryEmail : 'Primary Email / Verified Contact'}
-            </p>
-          </div>
-
-          <div className="pt-2 flex gap-3">
-            <button
-              type="button"
-              onClick={() => setView('NORMAL_CHANGE')}
-              className="flex-1 py-3 px-4 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-colors flex items-center justify-center gap-1"
-            >
-              <ArrowLeft className="w-3.5 h-3.5" /> Back
-            </button>
-            <Button
-              type="button"
-              onClick={handleRequestResetOtp}
-              isLoading={isLoading}
-              className="flex-1 text-xs font-bold py-3"
-            >
-              Send Verification Code
-            </Button>
-          </div>
-        </div>
       ) : (
         <form onSubmit={handleResetSubmit} className="space-y-4">
           {error && (
@@ -289,10 +190,10 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
           <div className="p-4 bg-emerald-50/70 border border-emerald-200/80 rounded-2xl space-y-1 text-xs text-emerald-950">
             <div className="flex items-center gap-1.5 font-bold text-emerald-900">
               <ShieldCheck className="w-4 h-4 text-emerald-600" />
-              <span>Enter verification code sent to {maskedEmail}</span>
+              <span>Enter verification code sent to {maskedRecipient}</span>
             </div>
             <p className="text-[11px] text-emerald-800 leading-relaxed">
-              Enter the 6-digit code and your new password.
+              Check your inbox or SMS for the 6-digit code.
             </p>
           </div>
 
@@ -336,6 +237,14 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
           />
 
           <div className="flex items-center justify-between text-xs text-slate-500 pt-1">
+            <button
+              type="button"
+              onClick={() => setStep(1)}
+              className="text-[11px] font-bold text-slate-500 hover:text-slate-800 flex items-center gap-1"
+            >
+              <ArrowLeft className="w-3 h-3" /> Change Email/Phone
+            </button>
+
             {cooldown > 0 ? (
               <span className="text-[11px] font-bold text-slate-400">
                 Resend code in {cooldown}s
@@ -343,7 +252,7 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
             ) : (
               <button
                 type="button"
-                onClick={handleRequestResetOtp}
+                onClick={() => handleRequestOtp()}
                 className="font-bold text-emerald-700 hover:text-emerald-800 flex items-center gap-1"
               >
                 <RefreshCw className="w-3 h-3" /> Resend Code
