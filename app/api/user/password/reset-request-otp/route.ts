@@ -2,16 +2,19 @@ import { NextResponse } from 'next/server';
 import { getSessionUser, hashPassword } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { sendEmailOtp } from '@/lib/email';
-import { generateOtpCode, sendSmsOtp } from '@/lib/sms';
+import { generateOtpCode } from '@/lib/sms';
 import { generateObjectId } from '@/lib/utils';
 
-export async function POST() {
+export async function POST(request: Request) {
   const sessionUser = await getSessionUser();
   if (!sessionUser) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   try {
+    const body = await request.json().catch(() => ({}));
+    const targetChoice = body?.targetEmail || 'PRIMARY';
+
     const user = await prisma.user.findUnique({ where: { id: sessionUser.id } });
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
@@ -38,13 +41,9 @@ export async function POST() {
     }
 
     let targetRecipient: string;
-    let isSms = false;
 
-    if (user.isRecoveryEmailVerified && user.recoveryEmail) {
+    if (targetChoice === 'RECOVERY' && user.isRecoveryEmailVerified && user.recoveryEmail) {
       targetRecipient = user.recoveryEmail;
-    } else if (user.isMobileVerified && user.mobile) {
-      targetRecipient = user.mobile;
-      isSms = true;
     } else {
       targetRecipient = user.email;
     }
@@ -65,20 +64,12 @@ export async function POST() {
       },
     });
 
-    let maskedRecipient: string;
-    if (isSms) {
-      const res = await sendSmsOtp(targetRecipient, rawOtp, 'PASSWORD_CHANGE');
-      maskedRecipient = res.maskedPhone;
-    } else {
-      const res = await sendEmailOtp(targetRecipient, rawOtp, 'PASSWORD_RESET_RECOVERY_EMAIL');
-      maskedRecipient = res.maskedEmail;
-    }
+    const { maskedEmail } = await sendEmailOtp(targetRecipient, rawOtp, purpose);
 
     return NextResponse.json({
       success: true,
-      maskedEmail: maskedRecipient,
-      maskedPhone: isSms ? maskedRecipient : undefined,
-      message: `✓ Password reset code sent to ${maskedRecipient}`,
+      maskedEmail,
+      message: `✓ Password reset code sent to ${maskedEmail}`,
       debugOtp: process.env.NODE_ENV !== 'production' ? rawOtp : undefined,
     });
   } catch (error: any) {

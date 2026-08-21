@@ -5,7 +5,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { useToast } from '@/components/ui/Toast';
-import { ShieldCheck, AlertCircle, RefreshCw, Mail, HelpCircle, ArrowLeft } from 'lucide-react';
+import { ShieldCheck, AlertCircle, RefreshCw, Mail, HelpCircle, ArrowLeft, CheckCircle2 } from 'lucide-react';
 
 interface ChangePasswordModalProps {
   isOpen: boolean;
@@ -31,6 +31,7 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
   const [currentPassword, setCurrentPassword] = useState('');
   
   // Reset state
+  const [targetEmailChoice, setTargetEmailChoice] = useState<'PRIMARY' | 'RECOVERY'>('PRIMARY');
   const [otp, setOtp] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -49,7 +50,8 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
     setConfirmPassword('');
     setError('');
     setDebugOtp(null);
-  }, [isOpen]);
+    setTargetEmailChoice(isRecoveryEmailVerified && userRecoveryEmail ? 'RECOVERY' : 'PRIMARY');
+  }, [isOpen, isRecoveryEmailVerified, userRecoveryEmail]);
 
   useEffect(() => {
     let timer: any;
@@ -109,12 +111,13 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
       const res = await fetch('/api/user/password/reset-request-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetEmail: targetEmailChoice }),
       });
 
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to send password reset code');
 
-      setMaskedEmail(data.maskedEmail || data.maskedPhone || userRecoveryEmail || 'your email');
+      setMaskedEmail(data.maskedEmail || 'your email');
       if (data.debugOtp) setDebugOtp(data.debugOtp);
 
       showToast(data.message || `✓ Password reset code sent to ${data.maskedEmail}`, 'info', 'Code Sent');
@@ -246,17 +249,66 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
             </div>
           )}
 
-          <div className="p-4 bg-purple-50/80 border border-purple-200/80 rounded-2xl space-y-1.5 text-xs text-purple-950">
+          <div className="p-4 bg-purple-50/80 border border-purple-200/80 rounded-2xl space-y-2 text-xs text-purple-950">
             <div className="flex items-center gap-1.5 font-bold text-purple-900">
               <ShieldCheck className="w-4 h-4 text-purple-600" />
-              <span>Recovery Verification Code Required</span>
+              <span>Choose Destination Email for Verification Code</span>
             </div>
             <p className="text-[11px] text-purple-800 leading-relaxed">
-              A password reset verification code will be sent to your registered email address or phone:
+              Select which email address you would like us to send the 6-digit password reset code to:
             </p>
-            <p className="text-xs font-black text-slate-900 pt-1">
-              {isRecoveryEmailVerified && userRecoveryEmail ? userRecoveryEmail : 'Primary Email / Verified Contact'}
-            </p>
+
+            <div className="space-y-2 pt-1">
+              <label
+                onClick={() => setTargetEmailChoice('PRIMARY')}
+                className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all ${
+                  targetEmailChoice === 'PRIMARY'
+                    ? 'bg-purple-100/90 border-purple-400 font-bold text-purple-950 shadow-sm'
+                    : 'bg-white/80 border-purple-200 text-purple-900 hover:bg-purple-100/40'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <Mail className="w-4 h-4 text-purple-600" />
+                  <div>
+                    <span className="text-xs block">Primary Login Email</span>
+                  </div>
+                </div>
+                {targetEmailChoice === 'PRIMARY' && <CheckCircle2 className="w-4 h-4 text-purple-700" />}
+              </label>
+
+              {isRecoveryEmailVerified && userRecoveryEmail ? (
+                <label
+                  onClick={() => setTargetEmailChoice('RECOVERY')}
+                  className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all ${
+                    targetEmailChoice === 'RECOVERY'
+                      ? 'bg-purple-100/90 border-purple-400 font-bold text-purple-950 shadow-sm'
+                      : 'bg-white/80 border-purple-200 text-purple-900 hover:bg-purple-100/40'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <Mail className="w-4 h-4 text-purple-600" />
+                    <div>
+                      <span className="text-xs block">Recovery Email ({userRecoveryEmail})</span>
+                    </div>
+                  </div>
+                  {targetEmailChoice === 'RECOVERY' && <CheckCircle2 className="w-4 h-4 text-purple-700" />}
+                </label>
+              ) : (
+                <div className="p-2.5 bg-amber-50/80 border border-amber-200 rounded-xl text-[11px] text-amber-900 flex items-center justify-between">
+                  <span>No recovery email verified.</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClose();
+                      onOpenRecoveryEmailModal();
+                    }}
+                    className="font-bold underline hover:text-amber-950"
+                  >
+                    Add Recovery Email
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="pt-2 flex gap-3">
