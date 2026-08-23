@@ -20,13 +20,12 @@ export async function POST(request: Request) {
     const otpRecord = await prisma.otpVerification.findFirst({
       where: {
         userId: sessionUser.id,
-        purpose: { in: ['PRIMARY_EMAIL_VERIFICATION', 'RECOVERY_EMAIL_VERIFICATION', 'PASSWORD_RESET', 'PASSWORD_RESET_RECOVERY_EMAIL'] },
-        usedAt: null,
+        OR: [{ usedAt: null }, { usedAt: { isSet: false } }],
       },
       orderBy: { createdAt: 'desc' },
     });
 
-    if (!otpRecord) {
+    if (!otpRecord || otpRecord.usedAt) {
       console.warn(`[VERIFY OTP 400]: No active unused OTP found for user ${sessionUser.id}`);
       return NextResponse.json(
         { error: 'No active verification code found. Please click "Resend Code" to get a new code.' },

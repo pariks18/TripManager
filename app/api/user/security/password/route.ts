@@ -63,13 +63,13 @@ export async function POST(request: Request) {
       const otpRecord = await prisma.otpVerification.findFirst({
         where: {
           userId: sessionUser.id,
-          purpose: { in: ['PASSWORD_CHANGE', 'PASSWORD_RESET_RECOVERY_EMAIL', 'PASSWORD_RESET'] },
-          usedAt: null,
+          OR: [{ usedAt: null }, { usedAt: { isSet: false } }],
         },
         orderBy: { createdAt: 'desc' },
       });
 
-      if (!otpRecord) {
+      if (!otpRecord || otpRecord.usedAt) {
+        console.warn(`[SECURITY PASSWORD 400]: No active unused OTP found for user ${sessionUser.id}`);
         return NextResponse.json(
           { error: 'No active verification code found. Please request a new code.' },
           { status: 400 }
@@ -77,6 +77,7 @@ export async function POST(request: Request) {
       }
 
       if (otpRecord.expiresAt < new Date()) {
+        console.warn(`[SECURITY PASSWORD 400]: OTP expired at ${otpRecord.expiresAt}`);
         return NextResponse.json(
           { error: 'This verification code has expired. Please request a new one.' },
           { status: 400 }
@@ -84,6 +85,7 @@ export async function POST(request: Request) {
       }
 
       if (otpRecord.attempts >= 5) {
+        console.warn(`[SECURITY PASSWORD 400]: Max attempts exceeded (${otpRecord.attempts})`);
         return NextResponse.json(
           { error: 'Maximum verification attempts exceeded. Please request a new code.' },
           { status: 400 }
@@ -96,6 +98,7 @@ export async function POST(request: Request) {
           where: { id: otpRecord.id },
           data: { attempts: { increment: 1 } },
         });
+        console.warn(`[SECURITY PASSWORD 400]: Invalid code entered by user ${sessionUser.id}`);
         return NextResponse.json(
           { error: 'Invalid verification code. Please check the code and try again.' },
           { status: 400 }
@@ -121,6 +124,7 @@ export async function POST(request: Request) {
         }),
       ]);
 
+      console.log(`[SECURITY PASSWORD SUCCESS]: Password updated for user ${sessionUser.id}`);
       return NextResponse.json({
         success: true,
         message: '✓ Password changed successfully',

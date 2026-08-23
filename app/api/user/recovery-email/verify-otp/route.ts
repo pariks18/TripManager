@@ -10,24 +10,24 @@ export async function POST(request: Request) {
 
   try {
     const { recoveryEmail, otp } = await request.json();
-    if (!recoveryEmail || !otp || typeof otp !== 'string') {
-      return NextResponse.json({ error: 'Recovery email and 6-digit code are required' }, { status: 400 });
+    if (!otp || typeof otp !== 'string') {
+      return NextResponse.json({ error: 'Valid 6-digit verification code is required' }, { status: 400 });
     }
 
-    const cleanEmail = recoveryEmail.trim().toLowerCase();
+    const cleanEmail = recoveryEmail ? recoveryEmail.trim().toLowerCase() : '';
     const cleanOtp = otp.trim();
 
+    // Fetch latest active unused OTP for this user
     const otpRecord = await prisma.otpVerification.findFirst({
       where: {
         userId: sessionUser.id,
-        phoneNumber: cleanEmail,
-        purpose: 'RECOVERY_EMAIL_VERIFICATION',
-        usedAt: null,
+        OR: [{ usedAt: null }, { usedAt: { isSet: false } }],
       },
       orderBy: { createdAt: 'desc' },
     });
 
-    if (!otpRecord) {
+    if (!otpRecord || otpRecord.usedAt) {
+      console.warn(`[RECOVERY EMAIL VERIFY 400]: No active unused OTP found for user ${sessionUser.id}`);
       return NextResponse.json(
         { error: 'No active verification code found. Please request a new code.' },
         { status: 400 }
@@ -35,13 +35,15 @@ export async function POST(request: Request) {
     }
 
     if (otpRecord.expiresAt < new Date()) {
+      console.warn(`[RECOVERY EMAIL VERIFY 400]: OTP expired at ${otpRecord.expiresAt}`);
       return NextResponse.json(
-        { error: 'This verification code has expired. Please request a new one.' },
+        { error: 'This verification code has expired. Please request a new code.' },
         { status: 400 }
       );
     }
 
     if (otpRecord.attempts >= 5) {
+      console.warn(`[RECOVERY EMAIL VERIFY 400]: Max attempts exceeded (${otpRecord.attempts})`);
       return NextResponse.json(
         { error: 'Maximum verification attempts exceeded. Please request a new code.' },
         { status: 400 }
@@ -54,11 +56,14 @@ export async function POST(request: Request) {
         where: { id: otpRecord.id },
         data: { attempts: { increment: 1 } },
       });
+      console.warn(`[RECOVERY EMAIL VERIFY 400]: Invalid code entered by user ${sessionUser.id}`);
       return NextResponse.json(
-        { error: 'Invalid verification code. Please check and try again.' },
+        { error: 'Invalid verification code. Please check the code and try again.' },
         { status: 400 }
       );
     }
+
+    const targetRecoveryEmail = cleanEmail || otpRecord.phoneNumber || sessionUser.email;
 
     // Mark OTP as used and update User recoveryEmail
     await prisma.$transaction([
@@ -72,13 +77,14 @@ export async function POST(request: Request) {
       prisma.user.update({
         where: { id: sessionUser.id },
         data: {
-          recoveryEmail: cleanEmail,
+          recoveryEmail: targetRecoveryEmail,
           isRecoveryEmailVerified: true,
           updatedAt: new Date(),
         },
       }),
     ]);
 
+    console.log(`[RECOVERY EMAIL VERIFY SUCCESS]: User ${sessionUser.id} recovery email ${targetRecoveryEmail} verified!`);
     return NextResponse.json({
       success: true,
       message: '✓ Recovery email verified successfully',

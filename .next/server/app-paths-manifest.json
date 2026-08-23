@@ -1,5 +1,14 @@
 {
+  "/page": "app/page.js",
+  "/dashboard/page": "app/dashboard/page.js",
+  "/api/auth/me/route": "app/api/auth/me/route.js",
+  "/api/user/documents/route": "app/api/user/documents/route.js",
+  "/api/user/profile/route": "app/api/user/profile/route.js",
   "/dashboard/profile/page": "app/dashboard/profile/page.js",
-  "/api/user/recovery-email/verify-otp/route": "app/api/user/recovery-email/verify-otp/route.js",
-  "/api/user/recovery-email/request-otp/route": "app/api/user/recovery-email/request-otp/route.js"
+  "/api/trips/route": "app/api/trips/route.js",
+  "/api/user/password/reset-request-otp/route": "app/api/user/password/reset-request-otp/route.js",
+  "/api/user/password/reset-with-otp/route": "app/api/user/password/reset-with-otp/route.js",
+  "/api/auth/logout/route": "app/api/auth/logout/route.js",
+  "/api/auth/login/route": "app/api/auth/login/route.js",
+  "/(auth)/login/page": "app/(auth)/login/page.js"
 }

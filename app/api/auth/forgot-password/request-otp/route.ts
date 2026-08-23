@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 import { hashPassword } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { sendEmailOtp, maskEmail } from '@/lib/email';
-import { generateOtpCode, sanitizePhoneNumber, sendSmsOtp, maskPhoneNumber } from '@/lib/sms';
+import { sendEmailOtp } from '@/lib/email';
+import { generateOtpCode } from '@/lib/sms';
 import { generateObjectId } from '@/lib/utils';
 
 export async function POST(request: Request) {
@@ -11,29 +11,27 @@ export async function POST(request: Request) {
 
     if (!emailOrPhone || typeof emailOrPhone !== 'string') {
       return NextResponse.json(
-        { error: 'Email address or mobile number is required' },
+        { error: 'Email address is required' },
         { status: 400 }
       );
     }
 
     const cleanInput = emailOrPhone.trim();
     const cleanEmail = cleanInput.toLowerCase();
-    const sanitizedPhone = sanitizePhoneNumber(cleanInput);
 
-    // Find user by primary email, recovery email, or mobile number
+    // Find user by primary email or recovery email
     const user = await prisma.user.findFirst({
       where: {
         OR: [
           { email: cleanEmail },
           { recoveryEmail: cleanEmail },
-          { mobile: sanitizedPhone },
         ],
       },
     });
 
     if (!user) {
       return NextResponse.json(
-        { error: 'No account found matching the provided email or mobile number.' },
+        { error: 'No account found matching the provided email address.' },
         { status: 404 }
       );
     }
@@ -44,7 +42,7 @@ export async function POST(request: Request) {
     const recentOtp = await prisma.otpVerification.findFirst({
       where: {
         userId: user.id,
-        purpose,
+        purpose: { in: ['PASSWORD_RESET', 'PASSWORD_RESET_RECOVERY_EMAIL', 'PASSWORD_CHANGE'] },
         createdAt: { gte: new Date(Date.now() - 60 * 1000) },
       },
       orderBy: { createdAt: 'desc' },
@@ -62,18 +60,7 @@ export async function POST(request: Request) {
     const otpHash = await hashPassword(rawOtp);
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5-minute expiry
 
-    // Determine target recipient (email vs sms)
-    let targetRecipient: string;
-    let isSms = false;
-
-    if (cleanInput.replace(/\D/g, '').length >= 10 && user.mobile && user.isMobileVerified) {
-      targetRecipient = user.mobile;
-      isSms = true;
-    } else if (user.recoveryEmail && user.isRecoveryEmailVerified) {
-      targetRecipient = user.recoveryEmail;
-    } else {
-      targetRecipient = user.email;
-    }
+    const targetRecipient = user.recoveryEmail && user.isRecoveryEmailVerified ? user.recoveryEmail : user.email;
 
     await prisma.otpVerification.create({
       data: {
@@ -84,24 +71,17 @@ export async function POST(request: Request) {
         otpHash,
         expiresAt,
         attempts: 0,
+        usedAt: null,
       },
     });
 
-    let maskedRecipient: string;
-    if (isSms) {
-      const res = await sendSmsOtp(targetRecipient, rawOtp, 'PASSWORD_CHANGE');
-      maskedRecipient = res.maskedPhone;
-    } else {
-      const res = await sendEmailOtp(targetRecipient, rawOtp, 'PASSWORD_RESET_RECOVERY_EMAIL');
-      maskedRecipient = res.maskedEmail;
-    }
+    const { maskedEmail } = await sendEmailOtp(targetRecipient, rawOtp, purpose);
 
     return NextResponse.json({
       success: true,
-      maskedRecipient,
+      maskedRecipient: maskedEmail,
       userId: user.id,
-      message: `✓ Verification code sent to ${maskedRecipient}`,
-      debugOtp: process.env.NODE_ENV !== 'production' ? rawOtp : undefined,
+      message: `✓ Verification code sent to ${maskedEmail}`,
     });
   } catch (error: any) {
     console.error('[API /api/auth/forgot-password/request-otp error]:', error);

@@ -18,7 +18,6 @@ export async function POST(request: Request) {
     }
 
     const cleanEmail = recoveryEmail.trim().toLowerCase();
-
     const purpose = 'RECOVERY_EMAIL_VERIFICATION';
 
     // Rate limiting: 60-second cooldown
@@ -47,11 +46,12 @@ export async function POST(request: Request) {
       data: {
         id: generateObjectId(),
         userId: sessionUser.id,
-        phoneNumber: cleanEmail, // Reusing phoneNumber field as target address
+        phoneNumber: cleanEmail,
         purpose,
         otpHash,
         expiresAt,
         attempts: 0,
+        usedAt: null,
       },
     });
 
@@ -61,7 +61,6 @@ export async function POST(request: Request) {
       success: true,
       maskedEmail,
       message: `✓ Verification code sent to ${maskedEmail}`,
-      debugOtp: process.env.NODE_ENV !== 'production' ? rawOtp : undefined,
     });
   } catch (error: any) {
     console.error('[API /api/user/recovery-email/request-otp error]:', error);

@@ -61,6 +61,7 @@ export async function POST(request: Request) {
         otpHash,
         expiresAt,
         attempts: 0,
+        usedAt: null,
       },
     });
 
@@ -70,7 +71,6 @@ export async function POST(request: Request) {
       success: true,
       maskedEmail,
       message: `✓ Password reset code sent to ${maskedEmail}`,
-      debugOtp: process.env.NODE_ENV !== 'production' ? rawOtp : undefined,
     });
   } catch (error: any) {
     console.error('[API /api/user/password/reset-request-otp error]:', error);

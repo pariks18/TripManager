@@ -45,11 +45,12 @@ export async function POST() {
       data: {
         id: generateObjectId(),
         userId: sessionUser.id,
-        phoneNumber: user.email, // Reusing phoneNumber field as target address
+        phoneNumber: user.email,
         purpose,
         otpHash,
         expiresAt,
         attempts: 0,
+        usedAt: null,
       },
     });
 

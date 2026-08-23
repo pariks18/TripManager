@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { comparePassword, hashPassword } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { sanitizePhoneNumber } from '@/lib/sms';
 
 export async function POST(request: Request) {
   try {
@@ -9,7 +8,7 @@ export async function POST(request: Request) {
 
     if (!emailOrPhone || typeof emailOrPhone !== 'string') {
       return NextResponse.json(
-        { error: 'Email address or mobile number is required' },
+        { error: 'Email address is required' },
         { status: 400 }
       );
     }
@@ -23,7 +22,6 @@ export async function POST(request: Request) {
 
     const cleanInput = emailOrPhone.trim();
     const cleanEmail = cleanInput.toLowerCase();
-    const sanitizedPhone = sanitizePhoneNumber(cleanInput);
     const cleanOtp = otp.trim();
 
     if (newPassword.length < 6) {
@@ -38,14 +36,13 @@ export async function POST(request: Request) {
         OR: [
           { email: cleanEmail },
           { recoveryEmail: cleanEmail },
-          { mobile: sanitizedPhone },
         ],
       },
     });
 
     if (!user) {
       return NextResponse.json(
-        { error: 'No account found matching the provided email or mobile number.' },
+        { error: 'No account found matching the provided email address.' },
         { status: 404 }
       );
     }
@@ -53,13 +50,13 @@ export async function POST(request: Request) {
     const otpRecord = await prisma.otpVerification.findFirst({
       where: {
         userId: user.id,
-        purpose: { in: ['PASSWORD_RESET', 'PASSWORD_RESET_RECOVERY_EMAIL', 'PASSWORD_CHANGE'] },
-        usedAt: null,
+        OR: [{ usedAt: null }, { usedAt: { isSet: false } }],
       },
       orderBy: { createdAt: 'desc' },
     });
 
-    if (!otpRecord) {
+    if (!otpRecord || otpRecord.usedAt) {
+      console.warn(`[PUBLIC FORGOT PASSWORD 400]: No active unused OTP found for user ${user.id}`);
       return NextResponse.json(
         { error: 'No active password reset verification code found. Please request a new code.' },
         { status: 400 }
@@ -67,6 +64,7 @@ export async function POST(request: Request) {
     }
 
     if (otpRecord.expiresAt < new Date()) {
+      console.warn(`[PUBLIC FORGOT PASSWORD 400]: OTP expired at ${otpRecord.expiresAt}`);
       return NextResponse.json(
         { error: 'This verification code has expired. Please request a new one.' },
         { status: 400 }
@@ -74,6 +72,7 @@ export async function POST(request: Request) {
     }
 
     if (otpRecord.attempts >= 5) {
+      console.warn(`[PUBLIC FORGOT PASSWORD 400]: Max attempts exceeded (${otpRecord.attempts})`);
       return NextResponse.json(
         { error: 'Maximum verification attempts exceeded. Please request a new code.' },
         { status: 400 }
@@ -86,6 +85,7 @@ export async function POST(request: Request) {
         where: { id: otpRecord.id },
         data: { attempts: { increment: 1 } },
       });
+      console.warn(`[PUBLIC FORGOT PASSWORD 400]: Invalid code entered by user ${user.id}`);
       return NextResponse.json(
         { error: 'Invalid verification code. Please check the code and try again.' },
         { status: 400 }
@@ -111,6 +111,7 @@ export async function POST(request: Request) {
       }),
     ]);
 
+    console.log(`[PUBLIC FORGOT PASSWORD SUCCESS]: User ${user.id} password reset successfully!`);
     return NextResponse.json({
       success: true,
       message: '✓ Password reset successfully. You can now sign in with your new password.',
