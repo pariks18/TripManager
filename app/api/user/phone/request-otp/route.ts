@@ -85,8 +85,6 @@ export async function POST(request: Request) {
       maskedPhone,
       purpose,
       message: `✓ OTP sent to ${maskedPhone}`,
-      // Pass OTP in dev mode for UI demo testing
-      debugOtp: process.env.NODE_ENV !== 'production' ? rawOtp : undefined,
     });
   } catch (error: any) {
     console.error('[API /api/user/phone/request-otp error]:', error);

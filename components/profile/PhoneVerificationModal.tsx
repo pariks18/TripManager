@@ -5,7 +5,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { useToast } from '@/components/ui/Toast';
-import { Smartphone, ShieldCheck, AlertCircle, CheckCircle2, RefreshCw } from 'lucide-react';
+import { Smartphone, ShieldCheck, AlertCircle, RefreshCw } from 'lucide-react';
 
 interface PhoneVerificationModalProps {
   isOpen: boolean;
@@ -30,11 +30,10 @@ export const PhoneVerificationModal: React.FC<PhoneVerificationModalProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [cooldown, setCooldown] = useState(0);
-  const [debugOtp, setDebugOtp] = useState<string | null>(null);
 
   useEffect(() => {
     if (currentMobile && !isChangeMode) {
-      setMobileNumber(currentMobile);
+      setMobileNumber(currentMobile.replace(/\D/g, '').slice(-10));
     } else {
       setMobileNumber('');
     }
@@ -73,8 +72,7 @@ export const PhoneVerificationModal: React.FC<PhoneVerificationModalProps> = ({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to send OTP');
 
-      setMaskedPhone(data.maskedPhone || mobileNumber);
-      if (data.debugOtp) setDebugOtp(data.debugOtp);
+      setMaskedPhone(data.maskedPhone || `+91 ${mobileNumber}`);
 
       showToast(data.message || `✓ OTP sent to ${data.maskedPhone || mobileNumber}`, 'info', 'OTP Sent');
       setStep('VERIFY_OTP');
@@ -140,7 +138,7 @@ export const PhoneVerificationModal: React.FC<PhoneVerificationModalProps> = ({
               <span>{isChangeMode ? 'Update Mobile Number' : 'Mobile Verification Required'}</span>
             </div>
             <p className="text-[11px] text-purple-800 leading-relaxed">
-              Enter your mobile number to receive a 6-digit OTP code for verification. Verified mobile numbers are required for account security and password changes.
+              Enter your mobile number to receive a 6-digit OTP code via SMS. Verified mobile numbers enhance account security.
             </p>
           </div>
 
@@ -192,15 +190,9 @@ export const PhoneVerificationModal: React.FC<PhoneVerificationModalProps> = ({
               <span>Enter OTP sent to {maskedPhone}</span>
             </div>
             <p className="text-[11px] text-emerald-800 leading-relaxed">
-              We sent a 6-digit verification code to <strong>{maskedPhone}</strong>. OTP expires in 5 minutes.
+              We sent a 6-digit verification code to <strong>{maskedPhone}</strong>. Code expires in 5 minutes.
             </p>
           </div>
-
-          {debugOtp && (
-            <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-xl text-[11px] font-mono text-amber-800 text-center">
-              Dev Mode Helper — Your OTP: <strong>{debugOtp}</strong>
-            </div>
-          )}
 
           <div>
             <label className="block text-xs font-semibold text-slate-700 tracking-wide uppercase mb-1.5">

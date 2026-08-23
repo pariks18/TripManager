@@ -33,11 +33,43 @@ export async function sendSmsOtp(
   purpose: 'PHONE_REGISTRATION' | 'PHONE_CHANGE' | 'PASSWORD_CHANGE'
 ): Promise<{ success: boolean; maskedPhone: string }> {
   const maskedPhone = maskPhoneNumber(phoneNumber);
+  const fast2smsApiKey = process.env.FAST2SMS_API_KEY;
 
-  // Secure server-side delivery logging (disabled in production logs)
+  const sanitizedPhone = sanitizePhoneNumber(phoneNumber);
+  const cleanDigits = sanitizedPhone.replace(/\D/g, '');
+  const tenDigitPhone = cleanDigits.length >= 10 ? cleanDigits.slice(-10) : cleanDigits;
+
+  // Real SMS Delivery via Fast2SMS (Free Trial / Indian +91 SMS Gateway)
+  if (fast2smsApiKey) {
+    try {
+      const response = await fetch('https://www.fast2sms.com/dev/bulkV2', {
+        method: 'POST',
+        headers: {
+          'authorization': fast2smsApiKey,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          route: 'otp',
+          variables_values: otpCode,
+          numbers: tenDigitPhone,
+        }),
+      });
+
+      const resData = await response.json().catch(() => ({}));
+      if (!response.ok || !resData.return) {
+        console.error('[SMS GATEWAY ERROR] Failed to send SMS via Fast2SMS:', resData);
+      } else {
+        console.log(`[SMS GATEWAY SUCCESS] Real SMS sent to +91 ${tenDigitPhone}`);
+      }
+    } catch (err: any) {
+      console.error('[SMS GATEWAY EXCEPTION]:', err.message || err);
+    }
+  }
+
+  // Development Fallback Log
   if (process.env.NODE_ENV !== 'production') {
     console.log(
-      `[SMS GATEWAY] OTP sent to ${phoneNumber} (${maskedPhone}) for purpose '${purpose}': ${otpCode}`
+      `[DEV SMS GATEWAY LOG] Real OTP code for +91 ${tenDigitPhone} (${purpose}): ${otpCode}`
     );
   }
 

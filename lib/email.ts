@@ -1,4 +1,4 @@
-import { Resend } from 'resend';
+import nodemailer from 'nodemailer';
 
 export function maskEmail(email?: string | null): string {
   if (!email) return 'c***@domain.com';
@@ -17,16 +17,23 @@ export async function sendEmailOtp(
   purpose: string
 ): Promise<{ success: boolean; maskedEmail: string }> {
   const maskedEmail = maskEmail(email);
-  const resendApiKey = process.env.RESEND_API_KEY;
+  const gmailUser = process.env.GMAIL_USER;
+  const gmailAppPassword = process.env.GMAIL_APP_PASSWORD;
 
-  if (resendApiKey) {
+  if (gmailUser && gmailAppPassword) {
     try {
-      const resend = new Resend(resendApiKey);
-      const fromEmail = process.env.RESEND_FROM_EMAIL || 'TripManager <onboarding@resend.dev>';
+      const transporter = nodemailer.createTransport({
+        service: 'gmail',
+        auth: {
+          user: gmailUser,
+          pass: gmailAppPassword,
+        },
+      });
+
       const purposeTitle = purpose.replace(/_/g, ' ');
 
-      const response = await resend.emails.send({
-        from: fromEmail,
+      await transporter.sendMail({
+        from: `TripManager <${gmailUser}>`,
         to: email,
         subject: `🔐 Your TripManager Verification Code: ${otpCode}`,
         html: `
@@ -54,14 +61,14 @@ export async function sendEmailOtp(
         `,
       });
 
-      console.log(`[RESEND GATEWAY] Sent real email to ${email} (ID: ${response.data?.id})`);
+      console.log(`[GMAIL SMTP SUCCESS] Real email sent to ${email}`);
     } catch (err: any) {
-      console.error('[RESEND GATEWAY ERROR]: Failed to send email via Resend:', err);
+      console.error('[GMAIL SMTP ERROR] Failed to send email via Nodemailer:', err.message || err);
     }
   } else {
     if (process.env.NODE_ENV !== 'production') {
       console.log(
-        `[SIMULATED EMAIL GATEWAY] OTP sent to ${email} (${maskedEmail}) for purpose '${purpose}': ${otpCode}`
+        `[SIMULATED EMAIL GATEWAY LOG] OTP code for ${email} (${maskedEmail}): ${otpCode}`
       );
     }
   }

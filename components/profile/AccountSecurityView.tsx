@@ -3,7 +3,6 @@
 import React, { useState } from 'react';
 import { UserProfileDetail } from '@/types';
 import { ChangePasswordModal } from './ChangePasswordModal';
-import { PhoneVerificationModal } from './PhoneVerificationModal';
 import { RecoveryEmailModal } from './RecoveryEmailModal';
 import { VerificationModal } from './VerificationModal';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
@@ -13,12 +12,9 @@ import {
   ShieldCheck,
   Lock,
   Mail,
-  Smartphone,
   KeyRound,
   CheckCircle2,
-  AlertCircle,
   ChevronRight,
-  ShieldAlert,
   Trash2,
 } from 'lucide-react';
 
@@ -34,18 +30,12 @@ export const AccountSecurityView: React.FC<AccountSecurityViewProps> = ({
   onUpdateProfile,
 }) => {
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
-  const [isPhoneModalOpen, setIsPhoneModalOpen] = useState(false);
   const [isRecoveryEmailModalOpen, setIsRecoveryEmailModalOpen] = useState(false);
-  const [isChangePhoneMode, setIsChangePhoneMode] = useState(false);
-  const [verificationType, setVerificationType] = useState<'EMAIL' | null>(null);
+  const [isVerifyPrimaryEmailOpen, setIsVerifyPrimaryEmailOpen] = useState(false);
   const [isRemovingRecovery, setIsRemovingRecovery] = useState(false);
 
   const { showToast } = useToast();
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
-
-  const handlePhoneSuccess = async () => {
-    window.location.reload();
-  };
 
   const handleRecoveryEmailSuccess = async () => {
     window.location.reload();
@@ -68,11 +58,9 @@ export const AccountSecurityView: React.FC<AccountSecurityViewProps> = ({
     }
   };
 
-  const handleVerifySuccess = async () => {
-    if (verificationType === 'EMAIL') {
-      await onUpdateProfile({ isEmailVerified: true });
-    }
-    setVerificationType(null);
+  const handlePrimaryEmailVerified = async () => {
+    await onUpdateProfile({ isEmailVerified: true });
+    window.location.reload();
   };
 
   return (
@@ -98,7 +86,7 @@ export const AccountSecurityView: React.FC<AccountSecurityViewProps> = ({
             </div>
             <div>
               <h3 className="text-base font-bold">Account Security Center</h3>
-              <p className="text-xs text-slate-300">Protected with Recovery Email & OTP Verification</p>
+              <p className="text-xs text-slate-300">Protected with Gmail OTP & Recovery Email</p>
             </div>
           </div>
           <span className="text-xs font-extrabold bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 px-3 py-1 rounded-full">
@@ -133,7 +121,7 @@ export const AccountSecurityView: React.FC<AccountSecurityViewProps> = ({
             ) : (
               <button
                 type="button"
-                onClick={() => setVerificationType('EMAIL')}
+                onClick={() => setIsVerifyPrimaryEmailOpen(true)}
                 className="text-xs font-bold text-amber-900 bg-amber-100 hover:bg-amber-200 px-3 py-1 rounded-full border border-amber-200 transition-colors"
               >
                 Verify Now
@@ -196,54 +184,6 @@ export const AccountSecurityView: React.FC<AccountSecurityViewProps> = ({
                 className="text-xs font-bold text-blue-900 bg-blue-100 hover:bg-blue-200 px-3.5 py-1.5 rounded-full border border-blue-200 transition-colors"
               >
                 Add Recovery Email
-              </button>
-            )}
-          </div>
-
-          {/* Mobile Verification */}
-          <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 bg-purple-100 text-purple-700 rounded-xl">
-                <Smartphone className="w-4 h-4" />
-              </div>
-              <div>
-                <span className="text-xs font-bold text-slate-900 block">Mobile Number</span>
-                <span className="text-[11px] text-slate-500">
-                  {profile.mobile && profile.isMobileVerified
-                    ? profile.mobile
-                    : profile.mobile
-                    ? `${profile.mobile} (Unverified)`
-                    : 'Not registered'}
-                </span>
-              </div>
-            </div>
-
-            {profile.isMobileVerified && profile.mobile ? (
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-extrabold text-emerald-800 bg-emerald-100 px-3 py-1 rounded-full flex items-center gap-1">
-                  <CheckCircle2 className="w-3.5 h-3.5" /> Verified
-                </span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsChangePhoneMode(true);
-                    setIsPhoneModalOpen(true);
-                  }}
-                  className="text-xs font-bold text-slate-600 hover:text-slate-900 underline"
-                >
-                  Change
-                </button>
-              </div>
-            ) : (
-              <button
-                type="button"
-                onClick={() => {
-                  setIsChangePhoneMode(false);
-                  setIsPhoneModalOpen(true);
-                }}
-                className="text-xs font-bold text-purple-900 bg-purple-100 hover:bg-purple-200 px-3.5 py-1.5 rounded-full border border-purple-200 transition-colors"
-              >
-                Register Phone Number
               </button>
             )}
           </div>
@@ -315,23 +255,12 @@ export const AccountSecurityView: React.FC<AccountSecurityViewProps> = ({
         />
       )}
 
-      {isPhoneModalOpen && (
-        <PhoneVerificationModal
-          isOpen={isPhoneModalOpen}
-          onClose={() => setIsPhoneModalOpen(false)}
-          currentMobile={profile.mobile}
-          isChangeMode={isChangePhoneMode}
-          onSuccess={handlePhoneSuccess}
-        />
-      )}
-
-      {verificationType && (
+      {isVerifyPrimaryEmailOpen && (
         <VerificationModal
-          isOpen={!!verificationType}
-          onClose={() => setVerificationType(null)}
-          targetType={verificationType}
-          targetValue={profile.email || ''}
-          onVerified={handleVerifySuccess}
+          isOpen={isVerifyPrimaryEmailOpen}
+          onClose={() => setIsVerifyPrimaryEmailOpen(false)}
+          targetEmail={profile.email || ''}
+          onVerified={handlePrimaryEmailVerified}
         />
       )}
 
