@@ -10,8 +10,7 @@ import { BottomNav } from '@/components/ui/BottomNav';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { Button } from '@/components/ui/Button';
 import { formatCurrency } from '@/lib/utils';
-import { Plus, KeyRound, Compass, Sparkles, Search, User, LogOut, Wallet } from 'lucide-react';
-
+import { Plus, KeyRound, Compass, Search, User, LogOut, Wallet, ShieldCheck } from 'lucide-react';
 import { fetchClientSession, clearClientSession } from '@/lib/clientSession';
 
 export default function DashboardPage() {
@@ -81,19 +80,19 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 pb-28 md:pb-12">
-      {/* Top Mobile Header */}
+      {/* Sticky App Header */}
       <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-slate-100 px-4 py-3.5 sm:px-8">
         <div className="max-w-xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-gradient-to-tr from-emerald-500 to-blue-600 rounded-2xl flex items-center justify-center text-white font-extrabold text-sm shadow-md">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 bg-emerald-600 rounded-2xl flex items-center justify-center text-white font-black text-sm shadow-sm">
               TS
             </div>
             <div>
-              <h1 className="text-base font-extrabold text-slate-900 tracking-tight leading-none">
+              <h1 className="text-base font-black text-slate-900 tracking-tight leading-none">
                 TripSplit
               </h1>
-              <p className="text-[11px] text-slate-400 mt-0.5 font-medium">
-                Hello, <span className="text-slate-700 font-semibold">{user?.name || 'Explorer'}</span>
+              <p className="text-[11px] text-slate-500 mt-0.5 font-medium">
+                Hello, <span className="text-slate-800 font-bold">{user?.name || 'Explorer'}</span>
               </p>
             </div>
           </div>
@@ -101,21 +100,21 @@ export default function DashboardPage() {
           <div className="flex items-center gap-2">
             <button
               onClick={() => router.push('/dashboard/profile')}
-              className="flex items-center gap-1.5 text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/80 hover:bg-emerald-100 px-3 py-2 rounded-2xl transition-colors"
-              title="View Profile & Documents"
+              className="flex items-center gap-1.5 text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-2xl transition-colors"
+              title="View Profile"
             >
-              <User className="w-4 h-4 text-emerald-600" />
+              <User className="w-4 h-4 text-slate-600" />
               <span className="hidden sm:inline">Profile</span>
             </button>
             <button
               onClick={() => setIsJoinOpen(true)}
-              className="hidden sm:inline-flex items-center gap-1.5 text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-2xl transition-colors"
+              className="hidden sm:inline-flex items-center gap-1.5 text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-2xl transition-colors"
             >
-              <KeyRound className="w-3.5 h-3.5" /> Join Trip
+              <KeyRound className="w-3.5 h-3.5" /> Join Code
             </button>
             <button
               onClick={() => setIsCreateOpen(true)}
-              className="hidden sm:inline-flex items-center gap-1.5 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-2 rounded-2xl transition-colors shadow-sm"
+              className="hidden sm:inline-flex items-center gap-1.5 text-xs font-extrabold bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-2 rounded-2xl transition-colors shadow-sm"
             >
               <Plus className="w-4 h-4" /> New Trip
             </button>
@@ -132,35 +131,32 @@ export default function DashboardPage() {
 
       {/* Main Content Container */}
       <main className="max-w-xl mx-auto px-4 py-5 sm:px-8 space-y-6">
-        {/* Total Overview Header Card */}
-        <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-emerald-950 text-white rounded-3xl p-6 shadow-xl relative overflow-hidden space-y-4">
-          <div className="absolute -top-16 -right-16 w-48 h-48 bg-emerald-500/20 rounded-full blur-3xl" />
-
-          <div className="relative z-10 flex items-center justify-between">
-            <div>
-              <span className="text-xs font-semibold text-emerald-400 uppercase tracking-wider block">
-                Total Expenses Managed
-              </span>
-              <h2 className="text-3xl font-extrabold mt-1 tracking-tight">
-                {formatCurrency(totalSpentAcrossTrips, '₹')}
-              </h2>
-            </div>
-            <div className="p-3 bg-white/10 backdrop-blur-md border border-white/10 rounded-2xl text-emerald-400">
-              <Wallet className="w-6 h-6" />
-            </div>
+        {/* Total Overview Card */}
+        <div className="bg-white rounded-3xl p-6 border border-slate-100/90 shadow-sm space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">
+              Total Expenses Managed
+            </span>
+            <span className="bg-emerald-50 text-emerald-700 border border-emerald-200/80 text-[10px] font-extrabold px-2.5 py-0.5 rounded-full flex items-center gap-1">
+              <ShieldCheck className="w-3 h-3 text-emerald-600" /> Auto-Balanced
+            </span>
           </div>
 
-          <div className="relative z-10 flex items-center justify-between pt-3 border-t border-white/10 text-xs text-slate-300">
+          <h2 className="text-3xl font-black text-slate-900 tracking-tight">
+            {formatCurrency(totalSpentAcrossTrips, '₹')}
+          </h2>
+
+          <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500 font-medium">
             <span>{trips.length} active trip{trips.length !== 1 ? 's' : ''}</span>
-            <span className="font-semibold text-emerald-400">Auto-balanced</span>
+            <span>All debts consolidated</span>
           </div>
         </div>
 
-        {/* Action Button Bar for Mobile */}
+        {/* Mobile Quick Action Buttons */}
         <div className="grid grid-cols-2 gap-3 sm:hidden">
           <button
             onClick={() => setIsCreateOpen(true)}
-            className="flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white py-3 px-4 rounded-2xl font-bold text-xs shadow-md shadow-emerald-200 transition-all active:scale-[0.98]"
+            className="flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white py-3 px-4 rounded-2xl font-bold text-xs shadow-sm transition-all active:scale-[0.98]"
           >
             <Plus className="w-4 h-4" /> Create Trip
           </button>
@@ -172,12 +168,12 @@ export default function DashboardPage() {
           </button>
         </div>
 
-        {/* Trips Header & Search */}
+        {/* Trips Header & Search Bar */}
         <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h3 className="text-lg font-bold text-slate-900">My Trips</h3>
+          <div className="flex items-center justify-between px-1">
+            <h3 className="text-base font-bold text-slate-900">My Trips</h3>
             <span className="text-xs text-slate-400 font-medium">
-              Showing {filteredTrips.length} trip{filteredTrips.length !== 1 ? 's' : ''}
+              {filteredTrips.length} {filteredTrips.length === 1 ? 'trip' : 'trips'}
             </span>
           </div>
 
@@ -198,8 +194,8 @@ export default function DashboardPage() {
         {/* Trips Cards List */}
         {isLoading ? (
           <div className="space-y-4">
-            <Skeleton className="h-36 w-full" />
-            <Skeleton className="h-36 w-full" />
+            <Skeleton className="h-32 w-full rounded-3xl" />
+            <Skeleton className="h-32 w-full rounded-3xl" />
           </div>
         ) : filteredTrips.length > 0 ? (
           <div className="space-y-4">
@@ -208,13 +204,13 @@ export default function DashboardPage() {
             ))}
           </div>
         ) : (
-          <div className="bg-white rounded-3xl p-8 border border-slate-100 text-center space-y-4 apple-shadow">
+          <div className="bg-white rounded-3xl p-8 border border-slate-100 text-center space-y-4 shadow-sm">
             <div className="w-14 h-14 bg-emerald-50 text-emerald-600 rounded-3xl flex items-center justify-center mx-auto shadow-inner">
               <Compass className="w-7 h-7" />
             </div>
             <div className="space-y-1">
               <h4 className="text-base font-bold text-slate-900">No Trips Found</h4>
-              <p className="text-xs text-slate-500 max-w-xs mx-auto">
+              <p className="text-xs text-slate-500 max-w-xs mx-auto leading-relaxed">
                 {searchQuery
                   ? 'No trip matches your search query.'
                   : 'You are not part of any trip yet. Create a new trip or join using a trip code!'}
@@ -236,7 +232,7 @@ export default function DashboardPage() {
       {/* Floating Action Button (FAB) on Mobile */}
       <button
         onClick={() => setIsCreateOpen(true)}
-        className="fixed right-5 bottom-20 z-40 w-14 h-14 bg-gradient-to-tr from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white rounded-full flex items-center justify-center shadow-float active:scale-95 transition-all sm:hidden"
+        className="fixed right-5 bottom-20 z-40 w-14 h-14 bg-emerald-600 hover:bg-emerald-700 text-white rounded-full flex items-center justify-center shadow-lg active:scale-95 transition-all sm:hidden"
         aria-label="Create Trip"
       >
         <Plus className="w-7 h-7" />

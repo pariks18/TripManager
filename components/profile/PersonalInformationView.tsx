@@ -117,18 +117,6 @@ export const PersonalInformationView: React.FC<PersonalInformationViewProps> = (
 
   return (
     <div className="space-y-6">
-      {/* Header Bar */}
-      <div className="flex items-center justify-between pt-1 pb-2">
-        <button
-          onClick={onBack}
-          className="flex items-center gap-1.5 text-xs font-bold text-slate-700 hover:text-slate-900 bg-white px-3 py-1.5 rounded-xl border border-slate-200 apple-shadow transition-all"
-        >
-          <ArrowLeft className="w-4 h-4" /> Back to Profile
-        </button>
-        <h2 className="text-sm font-extrabold text-slate-900">Personal Information</h2>
-        <div className="w-16" />
-      </div>
-
       {/* Avatar Header Card */}
       <div className="bg-white rounded-3xl p-6 border border-slate-100 apple-shadow text-center space-y-3">
         <div className="relative inline-block">

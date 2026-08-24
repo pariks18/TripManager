@@ -24,18 +24,6 @@ export const AppInfoView: React.FC<AppInfoViewProps> = ({ onBack }) => {
 
   return (
     <div className="space-y-6">
-      {/* Header Bar */}
-      <div className="flex items-center justify-between pt-1 pb-2">
-        <button
-          onClick={onBack}
-          className="flex items-center gap-1.5 text-xs font-bold text-slate-700 hover:text-slate-900 bg-white px-3 py-1.5 rounded-xl border border-slate-200 apple-shadow transition-all"
-        >
-          <ArrowLeft className="w-4 h-4" /> Back to Profile
-        </button>
-        <h2 className="text-sm font-extrabold text-slate-900">Application Information</h2>
-        <div className="w-16" />
-      </div>
-
       {/* Hero Header */}
       <div className="bg-white rounded-3xl p-6 border border-slate-100 apple-shadow text-center space-y-3">
         <div className="w-14 h-14 bg-emerald-100 text-emerald-600 rounded-3xl flex items-center justify-center mx-auto shadow-sm">

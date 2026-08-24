@@ -142,18 +142,6 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Header Bar */}
-      <div className="flex items-center justify-between pt-1 pb-2">
-        <button
-          onClick={onBack}
-          className="flex items-center gap-1.5 text-xs font-bold text-slate-700 hover:text-slate-900 bg-white px-3 py-1.5 rounded-xl border border-slate-200 apple-shadow transition-all"
-        >
-          <ArrowLeft className="w-4 h-4" /> Back to Profile
-        </button>
-        <h2 className="text-sm font-extrabold text-slate-900">Documents & ID Proofs</h2>
-        <div className="w-16" />
-      </div>
-
       {/* Privacy Guarantee Header Card */}
       <div className="bg-emerald-50/80 border border-emerald-200/80 rounded-3xl p-5 space-y-3 apple-shadow">
         <div className="flex items-center justify-between">

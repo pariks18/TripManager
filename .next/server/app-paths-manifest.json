@@ -1,8 +1,10 @@
 {
-  "/dashboard/page": "app/dashboard/page.js",
+  "/_not-found/page": "app/_not-found/page.js",
   "/api/auth/me/route": "app/api/auth/me/route.js",
   "/api/trips/route": "app/api/trips/route.js",
   "/api/trips/[tripId]/route": "app/api/trips/[tripId]/route.js",
-  "/api/trips/[tripId]/members/[userId]/documents/route": "app/api/trips/[tripId]/members/[userId]/documents/route.js",
+  "/dashboard/page": "app/dashboard/page.js",
+  "/api/trips/[tripId]/polls/route": "app/api/trips/[tripId]/polls/route.js",
+  "/page": "app/page.js",
   "/dashboard/trip/[tripId]/page": "app/dashboard/trip/[tripId]/page.js"
 }

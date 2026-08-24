@@ -24,18 +24,6 @@ export const PrivacyPermissionsView: React.FC<PrivacyPermissionsViewProps> = ({
 }) => {
   return (
     <div className="space-y-6">
-      {/* Header Bar */}
-      <div className="flex items-center justify-between pt-1 pb-2">
-        <button
-          onClick={onBack}
-          className="flex items-center gap-1.5 text-xs font-bold text-slate-700 hover:text-slate-900 bg-white px-3 py-1.5 rounded-xl border border-slate-200 apple-shadow transition-all"
-        >
-          <ArrowLeft className="w-4 h-4" /> Back to Profile
-        </button>
-        <h2 className="text-sm font-extrabold text-slate-900">Privacy & Permissions</h2>
-        <div className="w-16" />
-      </div>
-
       {/* Hero Banner */}
       <div className="bg-slate-900 text-white rounded-3xl p-6 border border-slate-800 apple-shadow space-y-3">
         <div className="flex items-center gap-3">

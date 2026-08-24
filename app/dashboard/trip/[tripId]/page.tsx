@@ -57,6 +57,7 @@ import {
   Radio,
   MapPin,
   Wallet,
+  Compass,
 } from 'lucide-react';
 
 export default function TripDashboardPage() {
@@ -67,7 +68,7 @@ export default function TripDashboardPage() {
   const [user, setUser] = useState<UserSession | null>(null);
   const [trip, setTrip] = useState<TripSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'overview' | 'polls' | 'location' | 'expenses' | 'itinerary' | 'stay' | 'approvals' | 'wallet' | 'settlement' | 'timeline' | 'analytics'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'trip' | 'polls' | 'location' | 'expenses' | 'itinerary' | 'stay' | 'approvals' | 'wallet' | 'settlement' | 'timeline' | 'analytics'>('overview');
   const [copiedCode, setCopiedCode] = useState(false);
 
   // Expense modal state
@@ -359,140 +360,89 @@ export default function TripDashboardPage() {
 
       {/* Main Workspace */}
       <main className="max-w-xl mx-auto px-4 py-4 sm:px-8 space-y-5">
-        {/* Navigation Sub-Tabs */}
-        <div className="flex items-center p-1 bg-slate-200/60 rounded-2xl text-xs font-bold text-slate-600 no-scrollbar overflow-x-auto">
+        {/* Primary 4 Navigation Tabs */}
+        <div className="flex items-center p-1 bg-slate-200/60 rounded-2xl text-xs font-bold text-slate-600">
           <button
             onClick={() => setActiveTab('overview')}
-            className={`flex-1 py-2.5 px-3 rounded-xl transition-all flex items-center justify-center gap-1 whitespace-nowrap ${
+            className={`flex-1 py-2.5 px-3 rounded-xl transition-all flex items-center justify-center gap-1.5 whitespace-nowrap ${
               activeTab === 'overview'
-                ? 'bg-white text-slate-900 shadow-sm'
+                ? 'bg-white text-slate-900 shadow-sm font-extrabold'
                 : 'hover:text-slate-900'
             }`}
           >
-            <LayoutDashboard className="w-3.5 h-3.5 text-emerald-600" /> Summary
-          </button>
-
-          <button
-            onClick={() => setActiveTab('polls')}
-            className={`flex-1 py-2.5 px-3 rounded-xl transition-all flex items-center justify-center gap-1 whitespace-nowrap ${
-              activeTab === 'polls'
-                ? 'bg-white text-slate-900 shadow-sm'
-                : 'hover:text-slate-900'
-            }`}
-          >
-            <Vote className="w-3.5 h-3.5 text-emerald-600" /> Live Polls
-          </button>
-
-          <button
-            onClick={() => setActiveTab('location')}
-            className={`flex-1 py-2.5 px-3 rounded-xl transition-all flex items-center justify-center gap-1 whitespace-nowrap ${
-              activeTab === 'location'
-                ? 'bg-white text-slate-900 shadow-sm'
-                : 'hover:text-slate-900'
-            }`}
-          >
-            <Radio className="w-3.5 h-3.5 text-indigo-600 animate-pulse" /> Live Map
+            <LayoutDashboard className="w-4 h-4 text-emerald-600" /> Summary
           </button>
 
           <button
             onClick={() => setActiveTab('expenses')}
-            className={`flex-1 py-2.5 px-3 rounded-xl transition-all flex items-center justify-center gap-1 whitespace-nowrap ${
+            className={`flex-1 py-2.5 px-3 rounded-xl transition-all flex items-center justify-center gap-1.5 whitespace-nowrap ${
               activeTab === 'expenses'
-                ? 'bg-white text-slate-900 shadow-sm'
+                ? 'bg-white text-slate-900 shadow-sm font-extrabold'
                 : 'hover:text-slate-900'
             }`}
           >
-            <Receipt className="w-3.5 h-3.5 text-blue-600" /> Expenses ({trip.expenses.length})
-          </button>
-
-          <button
-            onClick={() => setActiveTab('itinerary')}
-            className={`flex-1 py-2.5 px-3 rounded-xl transition-all flex items-center justify-center gap-1 whitespace-nowrap ${
-              activeTab === 'itinerary'
-                ? 'bg-white text-slate-900 shadow-sm'
-                : 'hover:text-slate-900'
-            }`}
-          >
-            <Calendar className="w-3.5 h-3.5 text-indigo-600" /> Itinerary
-          </button>
-
-          <button
-            onClick={() => setActiveTab('stay')}
-            className={`flex-1 py-2.5 px-3 rounded-xl transition-all flex items-center justify-center gap-1 whitespace-nowrap ${
-              activeTab === 'stay'
-                ? 'bg-white text-slate-900 shadow-sm'
-                : 'hover:text-slate-900'
-            }`}
-          >
-            <Hotel className="w-3.5 h-3.5 text-pink-600" /> Stay
-          </button>
-
-          {isAdmin && (
-            <button
-              onClick={() => setActiveTab('approvals')}
-              className={`flex-1 py-2.5 px-3 rounded-xl transition-all flex items-center justify-center gap-1.5 whitespace-nowrap ${
-                activeTab === 'approvals'
-                  ? 'bg-white text-slate-900 shadow-sm'
-                  : 'hover:text-slate-900'
-              }`}
-            >
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" /> Approvals
-              {totalPendingCount > 0 && (
-                <span className="bg-amber-500 text-white text-[10px] font-extrabold px-1.5 py-0.2 rounded-full animate-pulse">
-                  {totalPendingCount}
-                </span>
-              )}
-            </button>
-          )}
-
-          <button
-            onClick={() => setActiveTab('wallet')}
-            className={`flex-1 py-2.5 px-3 rounded-xl transition-all flex items-center justify-center gap-1 whitespace-nowrap ${
-              activeTab === 'wallet'
-                ? 'bg-white text-slate-900 shadow-sm'
-                : 'hover:text-slate-900'
-            }`}
-          >
-            <Wallet className="w-3.5 h-3.5 text-emerald-600" /> Wallet
+            <Receipt className="w-4 h-4 text-emerald-600" /> Expenses
           </button>
 
           <button
             onClick={() => setActiveTab('settlement')}
-            className={`flex-1 py-2.5 px-3 rounded-xl transition-all flex items-center justify-center gap-1 whitespace-nowrap ${
+            className={`flex-1 py-2.5 px-3 rounded-xl transition-all flex items-center justify-center gap-1.5 whitespace-nowrap ${
               activeTab === 'settlement'
-                ? 'bg-white text-slate-900 shadow-sm'
+                ? 'bg-white text-slate-900 shadow-sm font-extrabold'
                 : 'hover:text-slate-900'
             }`}
           >
-            <ArrowLeftRight className="w-3.5 h-3.5 text-purple-600" /> Settlement
+            <ArrowLeftRight className="w-4 h-4 text-emerald-600" /> Settle
           </button>
 
           <button
-            onClick={() => setActiveTab('timeline')}
-            className={`flex-1 py-2.5 px-3 rounded-xl transition-all flex items-center justify-center gap-1 whitespace-nowrap ${
-              activeTab === 'timeline'
-                ? 'bg-white text-slate-900 shadow-sm'
+            onClick={() => setActiveTab('trip')}
+            className={`flex-1 py-2.5 px-3 rounded-xl transition-all flex items-center justify-center gap-1.5 whitespace-nowrap ${
+              activeTab === 'trip' || ['polls', 'location', 'itinerary', 'stay', 'approvals', 'wallet', 'timeline', 'analytics'].includes(activeTab)
+                ? 'bg-white text-slate-900 shadow-sm font-extrabold'
                 : 'hover:text-slate-900'
             }`}
           >
-            <History className="w-3.5 h-3.5 text-amber-600" /> Audit Log
-          </button>
-
-          <button
-            onClick={() => setActiveTab('analytics')}
-            className={`flex-1 py-2.5 px-3 rounded-xl transition-all flex items-center justify-center gap-1 whitespace-nowrap ${
-              activeTab === 'analytics'
-                ? 'bg-white text-slate-900 shadow-sm'
-                : 'hover:text-slate-900'
-            }`}
-          >
-            <PieChart className="w-3.5 h-3.5 text-teal-600" /> Analytics
+            <Compass className="w-4 h-4 text-emerald-600" /> Trip Details
           </button>
         </div>
 
         {/* TAB 1: OVERVIEW & PERSONAL DASHBOARD */}
         {activeTab === 'overview' && (
-          <div className="space-y-5">
+          <PersonalDashboard
+            currentUserId={user.id}
+            currency={trip.currency}
+            totalPaid={userTotalPaid}
+            totalShare={userTotalShare}
+            netBalance={userNetBalance}
+            settlements={settlements}
+            onMarkSettled={handleMarkSettled}
+            memberBalances={balances}
+            myWallet={trip.myWallet}
+            allWallets={trip.allWallets}
+            members={trip.members}
+            expenses={trip.expenses}
+            tripId={trip.id}
+            isAdmin={isAdmin}
+            onMemberRemoved={fetchTripDetails}
+            onNavigateTab={(tab) => setActiveTab(tab as any)}
+            onAddExpense={() => {
+              setEditingExpense(null);
+              setIsAddExpenseOpen(true);
+            }}
+            onEditExpense={(exp) => {
+              setEditingExpense(exp);
+              setIsAddExpenseOpen(true);
+            }}
+            onDeleteExpense={handleDeleteExpense}
+            onApproveExpense={handleApproveExpense}
+            onRejectExpense={handleRejectExpense}
+          />
+        )}
+
+        {/* TAB: TRIP DETAILS & FEATURES HUB */}
+        {activeTab === 'trip' && (
+          <div className="space-y-6">
             <TripBudgetCard
               tripId={trip.id}
               currency={trip.currency}
@@ -504,23 +454,165 @@ export default function TripDashboardPage() {
               onOpenSettings={() => setIsSettingsOpen(true)}
             />
 
-            <PersonalDashboard
-              currentUserId={user.id}
-              currency={trip.currency}
-              totalPaid={userTotalPaid}
-              totalShare={userTotalShare}
-              netBalance={userNetBalance}
-              settlements={settlements}
-              onMarkSettled={handleMarkSettled}
-              memberBalances={balances}
-              myWallet={trip.myWallet}
-              allWallets={trip.allWallets}
-              members={trip.members}
-              expenses={trip.expenses}
-              tripId={trip.id}
-              isAdmin={isAdmin}
-              onMemberRemoved={fetchTripDetails}
-            />
+            {/* Trip Features Grid */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between px-1">
+                <h4 className="text-sm font-bold text-slate-900">Trip Tools & Features</h4>
+                <span className="text-xs text-slate-400 font-medium">8 Features</span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                {/* 1. Itinerary */}
+                <div
+                  onClick={() => setActiveTab('itinerary')}
+                  className="bg-white rounded-2xl p-4 border border-slate-100/90 shadow-sm hover:shadow-md cursor-pointer transition-all space-y-2 group active:scale-[0.98]"
+                >
+                  <div className="p-2.5 bg-indigo-50 text-indigo-600 rounded-xl w-fit group-hover:scale-105 transition-transform">
+                    <Calendar className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h5 className="text-xs font-bold text-slate-900">Itinerary Schedule</h5>
+                    <p className="text-[10px] text-slate-400 mt-0.5 leading-tight">Day plans & events</p>
+                  </div>
+                </div>
+
+                {/* 2. Stay */}
+                <div
+                  onClick={() => setActiveTab('stay')}
+                  className="bg-white rounded-2xl p-4 border border-slate-100/90 shadow-sm hover:shadow-md cursor-pointer transition-all space-y-2 group active:scale-[0.98]"
+                >
+                  <div className="p-2.5 bg-pink-50 text-pink-600 rounded-xl w-fit group-hover:scale-105 transition-transform">
+                    <Hotel className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h5 className="text-xs font-bold text-slate-900">Stay & Hotel</h5>
+                    <p className="text-[10px] text-slate-400 mt-0.5 leading-tight">Bookings & locations</p>
+                  </div>
+                </div>
+
+                {/* 3. Live Polls */}
+                <div
+                  onClick={() => setActiveTab('polls')}
+                  className="bg-white rounded-2xl p-4 border border-slate-100/90 shadow-sm hover:shadow-md cursor-pointer transition-all space-y-2 group active:scale-[0.98]"
+                >
+                  <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-xl w-fit group-hover:scale-105 transition-transform">
+                    <Vote className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h5 className="text-xs font-bold text-slate-900">Live Decision Polls</h5>
+                    <p className="text-[10px] text-slate-400 mt-0.5 leading-tight">Group voting & choices</p>
+                  </div>
+                </div>
+
+                {/* 4. Live Map */}
+                <div
+                  onClick={() => setActiveTab('location')}
+                  className="bg-white rounded-2xl p-4 border border-slate-100/90 shadow-sm hover:shadow-md cursor-pointer transition-all space-y-2 group active:scale-[0.98]"
+                >
+                  <div className="p-2.5 bg-blue-50 text-blue-600 rounded-xl w-fit group-hover:scale-105 transition-transform">
+                    <Radio className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h5 className="text-xs font-bold text-slate-900">Live Map</h5>
+                    <p className="text-[10px] text-slate-400 mt-0.5 leading-tight">Member GPS sharing</p>
+                  </div>
+                </div>
+
+                {/* 5. Wallet */}
+                <div
+                  onClick={() => setActiveTab('wallet')}
+                  className="bg-white rounded-2xl p-4 border border-slate-100/90 shadow-sm hover:shadow-md cursor-pointer transition-all space-y-2 group active:scale-[0.98]"
+                >
+                  <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-xl w-fit group-hover:scale-105 transition-transform">
+                    <Wallet className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h5 className="text-xs font-bold text-slate-900">Advance Wallet</h5>
+                    <p className="text-[10px] text-slate-400 mt-0.5 leading-tight">Pre-funded trip pool</p>
+                  </div>
+                </div>
+
+                {/* 6. Host Approvals */}
+                {isAdmin && (
+                  <div
+                    onClick={() => setActiveTab('approvals')}
+                    className="bg-white rounded-2xl p-4 border border-slate-100/90 shadow-sm hover:shadow-md cursor-pointer transition-all space-y-2 group active:scale-[0.98] relative"
+                  >
+                    <div className="p-2.5 bg-amber-50 text-amber-600 rounded-xl w-fit group-hover:scale-105 transition-transform">
+                      <ShieldCheck className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <h5 className="text-xs font-bold text-slate-900">Host Approvals</h5>
+                        {totalPendingCount > 0 && (
+                          <span className="bg-amber-500 text-white text-[9px] font-black px-1.5 py-0.2 rounded-full">
+                            {totalPendingCount}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[10px] text-slate-400 mt-0.5 leading-tight">Verify member expenses</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* 7. Audit Log */}
+                <div
+                  onClick={() => setActiveTab('timeline')}
+                  className="bg-white rounded-2xl p-4 border border-slate-100/90 shadow-sm hover:shadow-md cursor-pointer transition-all space-y-2 group active:scale-[0.98]"
+                >
+                  <div className="p-2.5 bg-purple-50 text-purple-600 rounded-xl w-fit group-hover:scale-105 transition-transform">
+                    <History className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h5 className="text-xs font-bold text-slate-900">Audit Log</h5>
+                    <p className="text-[10px] text-slate-400 mt-0.5 leading-tight">Activity change history</p>
+                  </div>
+                </div>
+
+                {/* 8. Analytics */}
+                <div
+                  onClick={() => setActiveTab('analytics')}
+                  className="bg-white rounded-2xl p-4 border border-slate-100/90 shadow-sm hover:shadow-md cursor-pointer transition-all space-y-2 group active:scale-[0.98]"
+                >
+                  <div className="p-2.5 bg-teal-50 text-teal-600 rounded-xl w-fit group-hover:scale-105 transition-transform">
+                    <PieChart className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h5 className="text-xs font-bold text-slate-900">Analytics</h5>
+                    <p className="text-[10px] text-slate-400 mt-0.5 leading-tight">Spending charts & insights</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Feature Sub-Page Header for Direct Features */}
+        {['polls', 'location', 'itinerary', 'stay', 'approvals', 'wallet', 'timeline', 'analytics'].includes(activeTab) && (
+          <div className="flex items-center justify-between pb-1 border-b border-slate-100">
+            <button
+              onClick={() => setActiveTab('trip')}
+              className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-600 hover:text-slate-900 bg-white px-3 py-1.5 rounded-xl border border-slate-200 shadow-sm transition-all"
+            >
+              <ArrowLeft className="w-4 h-4" /> Back to Trip Tools
+            </button>
+            <span className="text-xs font-black uppercase tracking-wider text-slate-400">
+              {activeTab === 'polls'
+                ? 'Live Polls'
+                : activeTab === 'location'
+                ? 'Live Map'
+                : activeTab === 'itinerary'
+                ? 'Itinerary'
+                : activeTab === 'stay'
+                ? 'Stay'
+                : activeTab === 'approvals'
+                ? 'Host Approvals'
+                : activeTab === 'wallet'
+                ? 'Wallet'
+                : activeTab === 'timeline'
+                ? 'Audit Log'
+                : 'Analytics'}
+            </span>
           </div>
         )}
 
@@ -547,19 +639,8 @@ export default function TripDashboardPage() {
         {/* TAB 2: EXPENSES TIMELINE */}
         {activeTab === 'expenses' && (
           <div className="space-y-4">
-            <TripBudgetCard
-              tripId={trip.id}
-              currency={trip.currency}
-              budget={trip.budget}
-              approvalMode={trip.approvalMode}
-              totalSpent={trip.totalExpense}
-              isAdmin={isAdmin}
-              onBudgetUpdated={fetchTripDetails}
-              onOpenSettings={() => setIsSettingsOpen(true)}
-            />
-
             {/* Expenses Tab Header Bar */}
-            <div className="flex items-center justify-between gap-3 bg-white p-4 rounded-3xl border border-slate-100 apple-shadow">
+            <div className="flex items-center justify-between gap-3 bg-white p-4 rounded-3xl border border-slate-100 shadow-sm">
               <div>
                 <h3 className="text-sm font-extrabold text-slate-900">Trip Expenses ({trip.expenses.length})</h3>
                 <p className="text-[11px] text-slate-400">Record out-of-pocket spending for group splits</p>
@@ -569,7 +650,7 @@ export default function TripDashboardPage() {
                   setEditingExpense(null);
                   setIsAddExpenseOpen(true);
                 }}
-                className="bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-extrabold text-xs px-4 py-2.5 rounded-2xl flex items-center gap-1.5 shadow-md hover:shadow-lg transition-all shrink-0"
+                className="bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-xs px-4 py-2.5 rounded-2xl flex items-center gap-1.5 shadow-sm transition-all shrink-0"
               >
                 <Plus className="w-4 h-4" /> Add Expense
               </button>
