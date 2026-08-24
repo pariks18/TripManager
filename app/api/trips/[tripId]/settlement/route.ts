@@ -22,21 +22,21 @@ export async function GET(
   const balances = calculateMemberBalances(trip.members, trip.expenses, trip.settlementRecords);
   const allSettlements = computeSettlements(trip.members, trip.expenses, trip.settlementRecords);
 
-  // Normal users see ONLY their own actionable debts (where fromUser.id === user.id).
-  // Hosts see their own debts + transfers involving them.
+  // Filter settlements & records strictly from the current logged-in user's perspective.
+  // Users (including hosts) ONLY see transactions that involve them directly.
   const userSettlements = allSettlements.filter(
-    (tx) => tx.fromUser.id === user.id || (isHost && tx.toUser.id === user.id)
+    (tx) => tx.fromUser.id === user.id || tx.toUser.id === user.id
   );
 
   // Settlement history records filtered for user relevance
   const userRecords = (trip.settlementRecords || []).filter(
-    (r) => r.fromUserId === user.id || r.toUserId === user.id || isHost
+    (r) => r.fromUserId === user.id || r.toUserId === user.id
   );
 
   return NextResponse.json({
     tripId: trip.id,
     currency: trip.currency,
-    balances: isHost ? balances : balances.filter((b) => b.user.id === user.id),
+    balances: balances.filter((b) => b.user.id === user.id),
     settlements: userSettlements,
     records: userRecords,
   });

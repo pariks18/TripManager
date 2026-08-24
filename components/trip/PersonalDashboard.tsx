@@ -1,13 +1,14 @@
 'use client';
 
 import React, { useState } from 'react';
-import { MemberBalance, SettlementTransaction, TripMemberDetail, UserSummary, UserWalletDetail } from '@/types';
+import { ExpenseDetail, MemberBalance, SettlementTransaction, TripMemberDetail, UserSummary, UserWalletDetail } from '@/types';
 import { formatCurrency } from '@/lib/utils';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { MemberCard } from '@/components/member/MemberCard';
 import { SettleUpModal } from '@/components/settlement/SettleUpModal';
-import { Wallet, ArrowUpRight, ArrowDownLeft, CheckCircle2, ArrowRight, Sparkles, Users } from 'lucide-react';
+import { ExpenseBreakdownModal } from '@/components/expense/ExpenseBreakdownModal';
+import { Wallet, ArrowUpRight, ArrowDownLeft, CheckCircle2, Receipt, Users } from 'lucide-react';
 
 interface PersonalDashboardProps {
   currentUserId: string;
@@ -21,6 +22,7 @@ interface PersonalDashboardProps {
   myWallet?: UserWalletDetail | null;
   allWallets?: UserWalletDetail[];
   members?: TripMemberDetail[];
+  expenses?: ExpenseDetail[];
   tripId?: string;
   isAdmin?: boolean;
   onMemberRemoved?: () => void;
@@ -38,12 +40,17 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = React.memo(({
   myWallet,
   allWallets = [],
   members = [],
+  expenses = [],
   tripId,
   isAdmin = false,
   onMemberRemoved,
 }) => {
   const [selectedTx, setSelectedTx] = useState<SettlementTransaction | null>(null);
   const [isSettleModalOpen, setIsSettleModalOpen] = useState(false);
+
+  // Expense breakdown modal state
+  const [breakdownMember, setBreakdownMember] = useState<UserSummary | null>(null);
+  const [isBreakdownOpen, setIsBreakdownOpen] = useState(false);
 
   const isNetPositive = netBalance > 0;
   const isNetNegative = netBalance < 0;
@@ -63,6 +70,11 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = React.memo(({
     } else {
       onMarkSettled(tx);
     }
+  };
+
+  const handleOpenBreakdown = (user: UserSummary) => {
+    setBreakdownMember(user);
+    setIsBreakdownOpen(true);
   };
 
   return (
@@ -173,7 +185,7 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = React.memo(({
             {incomingSettlements.map((tx) => (
               <div
                 key={tx.id}
-                className="flex items-center justify-between p-3 rounded-2xl bg-emerald-50/50 border border-emerald-100"
+                className="flex items-center justify-between p-3 rounded-2xl bg-emerald-50/50 border border-emerald-100 flex-wrap gap-2"
               >
                 <div className="flex items-center gap-2.5">
                   <Avatar name={tx.fromUser.name} size="sm" />
@@ -183,9 +195,17 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = React.memo(({
                   </div>
                 </div>
 
-                <span className="text-sm font-extrabold text-emerald-700">
-                  +{formatCurrency(tx.amount, currency).replace('+', '')}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-extrabold text-emerald-700">
+                    +{formatCurrency(tx.amount, currency).replace('+', '')}
+                  </span>
+                  <button
+                    onClick={() => handleOpenBreakdown(tx.fromUser)}
+                    className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-700 bg-white hover:bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-xl shadow-sm transition-colors"
+                  >
+                    <Receipt className="w-3.5 h-3.5 text-emerald-600" /> Expenses
+                  </button>
+                </div>
               </div>
             ))}
           </div>
@@ -219,7 +239,7 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = React.memo(({
             {outgoingSettlements.map((tx) => (
               <div
                 key={tx.id}
-                className="flex items-center justify-between p-3 rounded-2xl bg-rose-50/50 border border-rose-100"
+                className="flex items-center justify-between p-3 rounded-2xl bg-rose-50/50 border border-rose-100 flex-wrap gap-2"
               >
                 <div className="flex items-center gap-2.5">
                   <Avatar name={tx.toUser.name} size="sm" />
@@ -229,10 +249,16 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = React.memo(({
                   </div>
                 </div>
 
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
                   <span className="text-sm font-extrabold text-rose-700">
                     {formatCurrency(-tx.amount, currency)}
                   </span>
+                  <button
+                    onClick={() => handleOpenBreakdown(tx.toUser)}
+                    className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-700 bg-white hover:bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-xl shadow-sm transition-colors"
+                  >
+                    <Receipt className="w-3.5 h-3.5 text-rose-600" /> Expenses
+                  </button>
                   <Button
                     size="sm"
                     onClick={() => handleSettleClick(tx)}
@@ -273,6 +299,7 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = React.memo(({
                 isCurrentAdmin={isAdmin}
                 tripId={tripId}
                 onMemberRemoved={onMemberRemoved}
+                onViewBreakdown={handleOpenBreakdown}
               />
             ))}
           </div>
@@ -295,6 +322,18 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = React.memo(({
           onSuccess={() => {
             if (onMemberRemoved) onMemberRemoved();
           }}
+        />
+      )}
+
+      {/* Expense Breakdown Modal */}
+      {isBreakdownOpen && (
+        <ExpenseBreakdownModal
+          isOpen={isBreakdownOpen}
+          onClose={() => setIsBreakdownOpen(false)}
+          currency={currency}
+          currentUserId={currentUserId}
+          otherMember={breakdownMember}
+          expenses={expenses}
         />
       )}
     </div>

@@ -1,1 +1,56 @@
-{}
+{
+  "app/dashboard/trip/[tripId]/page.tsx -> @/components/expense/PendingApprovalsView": {
+    "id": "app/dashboard/trip/[tripId]/page.tsx -> @/components/expense/PendingApprovalsView",
+    "files": [
+      "static/chunks/_app-pages-browser_components_expense_PendingApprovalsView_tsx.js"
+    ]
+  },
+  "app/dashboard/trip/[tripId]/page.tsx -> @/components/settlement/SettlementList": {
+    "id": "app/dashboard/trip/[tripId]/page.tsx -> @/components/settlement/SettlementList",
+    "files": [
+      "static/chunks/_app-pages-browser_components_settlement_SettlementList_tsx.js"
+    ]
+  },
+  "app/dashboard/trip/[tripId]/page.tsx -> @/components/trip/AnalyticsView": {
+    "id": "app/dashboard/trip/[tripId]/page.tsx -> @/components/trip/AnalyticsView",
+    "files": [
+      "static/chunks/_app-pages-browser_components_trip_AnalyticsView_tsx.js"
+    ]
+  },
+  "app/dashboard/trip/[tripId]/page.tsx -> @/components/trip/ItineraryView": {
+    "id": "app/dashboard/trip/[tripId]/page.tsx -> @/components/trip/ItineraryView",
+    "files": [
+      "static/chunks/_app-pages-browser_components_trip_ItineraryView_tsx.js"
+    ]
+  },
+  "app/dashboard/trip/[tripId]/page.tsx -> @/components/trip/LiveLocationView": {
+    "id": "app/dashboard/trip/[tripId]/page.tsx -> @/components/trip/LiveLocationView",
+    "files": [
+      "static/chunks/_app-pages-browser_components_trip_LiveLocationView_tsx.js"
+    ]
+  },
+  "app/dashboard/trip/[tripId]/page.tsx -> @/components/trip/LivePollsView": {
+    "id": "app/dashboard/trip/[tripId]/page.tsx -> @/components/trip/LivePollsView",
+    "files": [
+      "static/chunks/_app-pages-browser_components_trip_LivePollsView_tsx.js"
+    ]
+  },
+  "app/dashboard/trip/[tripId]/page.tsx -> @/components/trip/StayView": {
+    "id": "app/dashboard/trip/[tripId]/page.tsx -> @/components/trip/StayView",
+    "files": [
+      "static/chunks/_app-pages-browser_components_trip_StayView_tsx.js"
+    ]
+  },
+  "app/dashboard/trip/[tripId]/page.tsx -> @/components/trip/TripTimeline": {
+    "id": "app/dashboard/trip/[tripId]/page.tsx -> @/components/trip/TripTimeline",
+    "files": [
+      "static/chunks/_app-pages-browser_components_trip_TripTimeline_tsx.js"
+    ]
+  },
+  "app/dashboard/trip/[tripId]/page.tsx -> @/components/wallet/WalletView": {
+    "id": "app/dashboard/trip/[tripId]/page.tsx -> @/components/wallet/WalletView",
+    "files": [
+      "static/chunks/_app-pages-browser_components_wallet_WalletView_tsx.js"
+    ]
+  }
+}

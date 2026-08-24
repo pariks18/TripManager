@@ -3,9 +3,8 @@
 import React, { useState } from 'react';
 import { MemberBalance, UserSummary } from '@/types';
 import { Avatar } from '@/components/ui/Avatar';
-import { Badge } from '@/components/ui/Badge';
 import { formatCurrency } from '@/lib/utils';
-import { ShieldCheck, User, FileText, UserX } from 'lucide-react';
+import { FileText, UserX, Receipt } from 'lucide-react';
 import { MemberDocumentsModal } from './MemberDocumentsModal';
 import { RemoveMemberModal } from './RemoveMemberModal';
 
@@ -17,6 +16,7 @@ interface MemberCardProps {
   isCurrentAdmin?: boolean;
   tripId?: string;
   onMemberRemoved?: () => void;
+  onViewBreakdown?: (user: UserSummary) => void;
 }
 
 export const MemberCard: React.FC<MemberCardProps> = React.memo(({
@@ -27,6 +27,7 @@ export const MemberCard: React.FC<MemberCardProps> = React.memo(({
   isCurrentAdmin = false,
   tripId,
   onMemberRemoved,
+  onViewBreakdown,
 }) => {
   const { user, netBalance, paid, share } = memberBalance;
   const [showDocsModal, setShowDocsModal] = useState(false);
@@ -58,9 +59,14 @@ export const MemberCard: React.FC<MemberCardProps> = React.memo(({
               )}
             </div>
             <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-              <p className="text-xs text-slate-400">
-                Paid {formatCurrency(paid, currency)} • Share {formatCurrency(share, currency)}
-              </p>
+              {isCurrentUser ? (
+                <p className="text-xs text-slate-500 font-medium">
+                  Paid {formatCurrency(paid, currency)} • Share {formatCurrency(share, currency)}
+                </p>
+              ) : (
+                <p className="text-xs text-slate-400 font-medium">Trip Member</p>
+              )}
+
               {canViewDocs && (
                 <button
                   onClick={() => setShowDocsModal(true)}
@@ -82,31 +88,44 @@ export const MemberCard: React.FC<MemberCardProps> = React.memo(({
           </div>
         </div>
 
-        {/* Color-coded Balance Pill */}
+        {/* Right side action / status */}
         <div className="text-right shrink-0">
-          {getsBack && (
-            <div className="bg-emerald-50 border border-emerald-200/80 px-3 py-1.5 rounded-2xl">
-              <span className="text-[11px] font-medium text-emerald-600 uppercase tracking-wider block">Gets back</span>
-              <span className="text-sm font-extrabold text-emerald-700 block">
-                +{formatCurrency(netBalance, currency).replace('+', '')}
-              </span>
-            </div>
-          )}
+          {isCurrentUser ? (
+            <>
+              {getsBack && (
+                <div className="bg-emerald-50 border border-emerald-200/80 px-3 py-1 rounded-2xl">
+                  <span className="text-[10px] font-medium text-emerald-600 uppercase tracking-wider block">Gets back</span>
+                  <span className="text-xs font-extrabold text-emerald-700 block">
+                    +{formatCurrency(netBalance, currency).replace('+', '')}
+                  </span>
+                </div>
+              )}
 
-          {owes && (
-            <div className="bg-rose-50 border border-rose-200/80 px-3 py-1.5 rounded-2xl">
-              <span className="text-[11px] font-medium text-rose-600 uppercase tracking-wider block">Owes</span>
-              <span className="text-sm font-extrabold text-rose-700 block">
-                {formatCurrency(netBalance, currency)}
-              </span>
-            </div>
-          )}
+              {owes && (
+                <div className="bg-rose-50 border border-rose-200/80 px-3 py-1 rounded-2xl">
+                  <span className="text-[10px] font-medium text-rose-600 uppercase tracking-wider block">Owes</span>
+                  <span className="text-xs font-extrabold text-rose-700 block">
+                    {formatCurrency(netBalance, currency)}
+                  </span>
+                </div>
+              )}
 
-          {!getsBack && !owes && (
-            <div className="bg-slate-100 border border-slate-200 px-3 py-1.5 rounded-2xl">
-              <span className="text-[11px] font-medium text-slate-500 uppercase tracking-wider block">Settled</span>
-              <span className="text-sm font-bold text-slate-700 block">{currency}0</span>
-            </div>
+              {!getsBack && !owes && (
+                <div className="bg-slate-100 border border-slate-200 px-3 py-1 rounded-2xl">
+                  <span className="text-[10px] font-medium text-slate-500 uppercase tracking-wider block">Settled</span>
+                  <span className="text-xs font-bold text-slate-700 block">{currency}0</span>
+                </div>
+              )}
+            </>
+          ) : (
+            onViewBreakdown && (
+              <button
+                onClick={() => onViewBreakdown(user)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl transition-all shadow-sm"
+              >
+                <Receipt className="w-3.5 h-3.5 text-emerald-600" /> Breakdown
+              </button>
+            )
           )}
         </div>
       </div>
@@ -137,4 +156,3 @@ export const MemberCard: React.FC<MemberCardProps> = React.memo(({
     </>
   );
 });
-

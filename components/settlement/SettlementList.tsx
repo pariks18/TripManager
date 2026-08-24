@@ -1,14 +1,17 @@
 import React, { useState } from 'react';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
-import { SettlementRecordDetail, SettlementTransaction, TripMemberDetail, UserWalletDetail } from '@/types';
+import { ExpenseDetail, SettlementRecordDetail, SettlementTransaction, TripMemberDetail, UserSummary, UserWalletDetail } from '@/types';
 import { Avatar } from '@/components/ui/Avatar';
 import { formatCurrency } from '@/lib/utils';
 import { SettleUpModal } from './SettleUpModal';
+import { ExpenseBreakdownModal } from '@/components/expense/ExpenseBreakdownModal';
 import {
-  ArrowRight,
+  ArrowDownLeft,
+  ArrowUpRight,
   CheckCircle2,
   Clock,
   Copy,
+  Receipt,
   ShieldCheck,
   Sparkles,
   Wallet,
@@ -19,8 +22,8 @@ import {
   AlertTriangle,
   History,
   Plus,
-  FileText,
 } from 'lucide-react';
+import { useToast } from '@/components/ui/Toast';
 
 interface SettlementListProps {
   settlements: SettlementTransaction[];
@@ -28,6 +31,7 @@ interface SettlementListProps {
   currency: string;
   currentUserId: string;
   members?: TripMemberDetail[];
+  expenses?: ExpenseDetail[];
   myWallet?: UserWalletDetail | null;
   allWallets?: UserWalletDetail[];
   isAdmin?: boolean;
@@ -35,14 +39,13 @@ interface SettlementListProps {
   onRefresh?: () => void;
 }
 
-import { useToast } from '@/components/ui/Toast';
-
 export const SettlementList: React.FC<SettlementListProps> = React.memo(({
   settlements,
   settlementRecords = [],
   currency,
   currentUserId,
   members = [],
+  expenses = [],
   myWallet,
   allWallets = [],
   isAdmin = false,
@@ -58,19 +61,48 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
   const [isSettleModalOpen, setIsSettleModalOpen] = useState(false);
   const [settleModalTx, setSettleModalTx] = useState<SettlementTransaction | null>(null);
 
+  // Expense Breakdown Modal State
+  const [breakdownMember, setBreakdownMember] = useState<UserSummary | null>(null);
+  const [isBreakdownOpen, setIsBreakdownOpen] = useState(false);
+
+  // Filter settlements strictly from the logged-in user's perspective
+  const userSettlements = React.useMemo(() => {
+    return settlements.filter((tx) => tx.fromUser.id === currentUserId || tx.toUser.id === currentUserId);
+  }, [settlements, currentUserId]);
+
+  const youOweList = React.useMemo(() => {
+    return userSettlements.filter((tx) => tx.fromUser.id === currentUserId);
+  }, [userSettlements, currentUserId]);
+
+  const youReceiveList = React.useMemo(() => {
+    return userSettlements.filter((tx) => tx.toUser.id === currentUserId);
+  }, [userSettlements, currentUserId]);
+
+  // Filter settlement history records strictly involving the current user
   const userSettlementRecords = React.useMemo(() => {
     return settlementRecords.filter(
-      (r) => r.fromUserId === currentUserId || r.toUserId === currentUserId || isAdmin
+      (r) => r.fromUserId === currentUserId || r.toUserId === currentUserId
     );
-  }, [settlementRecords, currentUserId, isAdmin]);
+  }, [settlementRecords, currentUserId]);
 
   const pendingRecords = React.useMemo(() => userSettlementRecords.filter((r) => r.status === 'PENDING'), [userSettlementRecords]);
   const rollbackRecords = React.useMemo(() => userSettlementRecords.filter((r) => r.status === 'ROLLBACK_REQUESTED'), [userSettlementRecords]);
   const confirmedRecords = React.useMemo(() => userSettlementRecords.filter((r) => r.status === 'CONFIRMED' || r.status === 'SETTLED' || r.status === 'PARTIALLY_SETTLED' || r.status === 'COMPLETED'), [userSettlementRecords]);
   const historyRecords = React.useMemo(() => userSettlementRecords.filter((r) => r.status !== 'PENDING' && r.status !== 'ROLLBACK_REQUESTED'), [userSettlementRecords]);
 
-  const handleCopyUPI = (fromName: string, toName: string, amount: number, id: string) => {
-    const text = `Hey ${fromName}, please pay ${formatCurrency(amount, currency)} to ${toName} for the trip settlement.`;
+  // Financial totals
+  const totalOwed = React.useMemo(() => youOweList.reduce((sum, tx) => sum + tx.amount, 0), [youOweList]);
+  const totalReceivable = React.useMemo(() => youReceiveList.reduce((sum, tx) => sum + tx.amount, 0), [youReceiveList]);
+
+  const handleCopyPayInfo = (toName: string, amount: number, id: string) => {
+    const text = `Hey ${toName}, I am sending ${formatCurrency(amount, currency)} to settle up my share for the trip.`;
+    navigator.clipboard.writeText(text);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  const handleCopyReceiveInfo = (fromName: string, amount: number, id: string) => {
+    const text = `Hey ${fromName}, please send ${formatCurrency(amount, currency)} to me to settle up our trip expenses.`;
     navigator.clipboard.writeText(text);
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2000);
@@ -79,6 +111,11 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
   const handleOpenSettleModal = (tx: SettlementTransaction | null) => {
     setSettleModalTx(tx);
     setIsSettleModalOpen(true);
+  };
+
+  const handleOpenBreakdown = (user: UserSummary) => {
+    setBreakdownMember(user);
+    setIsBreakdownOpen(true);
   };
 
   const handleApproveSettlement = async (settlementId: string) => {
@@ -115,7 +152,7 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to reject settlement');
 
-      showToast('Settlement Request Rejected by Host', 'info', 'Request Rejected');
+      showToast('Settlement Request Rejected', 'info', 'Request Rejected');
 
       if (onRefresh) onRefresh();
     } catch (err: any) {
@@ -216,9 +253,89 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
     }
   };
 
+  const isAllSettled = youOweList.length === 0 && youReceiveList.length === 0;
+
   return (
-    <div className="space-y-5">
-      {/* 1. Pending Settlement Approval Requests Section */}
+    <div className="space-y-6">
+      {/* 1. Immediate Financial Position Banner */}
+      <div
+        className={`rounded-3xl p-6 border transition-all apple-shadow ${
+          isAllSettled
+            ? 'bg-emerald-50/70 border-emerald-200/80'
+            : totalOwed > 0
+            ? 'bg-rose-50/60 border-rose-200/80'
+            : 'bg-emerald-50/60 border-emerald-200/80'
+        }`}
+      >
+        <div className="flex items-center justify-between gap-4 flex-wrap">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <span
+                className={`text-[10px] font-extrabold uppercase tracking-wider px-2.5 py-0.5 rounded-full ${
+                  isAllSettled
+                    ? 'bg-emerald-100 text-emerald-800'
+                    : totalOwed > 0
+                    ? 'bg-rose-100 text-rose-800'
+                    : 'bg-emerald-100 text-emerald-800'
+                }`}
+              >
+                {isAllSettled
+                  ? 'All Settled Up'
+                  : totalOwed > 0
+                  ? 'Action Required'
+                  : 'You Are Owed'}
+              </span>
+            </div>
+
+            {isAllSettled ? (
+              <div>
+                <h3 className="text-xl font-extrabold text-emerald-950 flex items-center gap-2">
+                  You're all settled up 🎉
+                </h3>
+                <p className="text-xs text-emerald-700 font-medium">
+                  You don't owe money to anyone, and no one owes you.
+                </p>
+              </div>
+            ) : (
+              <div>
+                <h3 className="text-2xl font-black text-slate-900 tracking-tight">
+                  {totalOwed > 0 ? (
+                    <>
+                      You need to pay{' '}
+                      <span className="text-rose-600 font-black">
+                        {formatCurrency(totalOwed, currency)}
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      You will receive{' '}
+                      <span className="text-emerald-600 font-black">
+                        {formatCurrency(totalReceivable, currency)}
+                      </span>
+                    </>
+                  )}
+                </h3>
+                {totalOwed > 0 && totalReceivable > 0 && (
+                  <p className="text-xs font-semibold text-slate-600 mt-0.5">
+                    (You are also owed {formatCurrency(totalReceivable, currency)} from others)
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+
+          {tripId && (
+            <button
+              onClick={() => handleOpenSettleModal(null)}
+              className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 rounded-2xl shadow-sm transition-all shrink-0"
+            >
+              <Plus className="w-4 h-4 text-emerald-600" /> Record Settlement / Advance
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* 2. Pending Settlement Approval Requests Section */}
       {pendingRecords.length > 0 && (
         <div className="bg-amber-50/70 border border-amber-200/80 rounded-3xl p-5 space-y-3 apple-shadow">
           <div className="flex items-center justify-between">
@@ -227,7 +344,7 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
               Pending Settlement Requests ({pendingRecords.length})
             </h4>
             <span className="text-[10px] font-bold text-amber-700 bg-amber-100 px-2.5 py-0.5 rounded-full">
-              Requires Approval
+              Requires Action
             </span>
           </div>
 
@@ -243,24 +360,30 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
                   className="bg-white rounded-2xl p-4 border border-amber-200/80 space-y-3 shadow-sm"
                 >
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2.5">
                       <Avatar name={record.fromUser.name} size="sm" />
-                      <span className="text-xs font-bold text-slate-900">
-                        {isPayer ? 'You' : record.fromUser.name}
-                      </span>
+                      <div>
+                        <span className="text-xs font-bold text-slate-900 block">
+                          {isPayer ? 'You' : record.fromUser.name}
+                        </span>
+                        <span className="text-[10px] text-slate-500 font-medium">Payer</span>
+                      </div>
                     </div>
 
                     <div className="flex flex-col items-center px-2">
                       <span className="text-xs font-extrabold text-amber-800 bg-amber-100 px-2.5 py-0.5 rounded-full border border-amber-200">
                         {formatCurrency(record.amount, currency)}
                       </span>
-                      <span className="text-[10px] text-amber-700 font-medium mt-0.5">pays</span>
+                      <span className="text-[10px] text-amber-700 font-medium mt-0.5">paying</span>
                     </div>
 
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-slate-900">
-                        {isReceiver ? 'You' : record.toUser.name}
-                      </span>
+                    <div className="flex items-center gap-2.5 text-right">
+                      <div>
+                        <span className="text-xs font-bold text-slate-900 block">
+                          {isReceiver ? 'You' : record.toUser.name}
+                        </span>
+                        <span className="text-[10px] text-slate-500 font-medium">Recipient</span>
+                      </div>
                       <Avatar name={record.toUser.name} size="sm" />
                     </div>
                   </div>
@@ -311,7 +434,7 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
         </div>
       )}
 
-      {/* 1.5. Pending Rollback Approvals Section */}
+      {/* 2.5. Pending Rollback Approvals Section */}
       {rollbackRecords.length > 0 && (
         <div className="bg-purple-50/80 border border-purple-200/80 rounded-3xl p-5 space-y-3 apple-shadow">
           <div className="flex items-center justify-between">
@@ -321,7 +444,7 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
               </div>
               <div>
                 <h4 className="text-sm font-bold text-purple-950">Rollback Approvals Requested</h4>
-                <p className="text-[11px] text-purple-700">Host requested to reverse payment. Waiting for client approval.</p>
+                <p className="text-[11px] text-purple-700">Host requested to reverse payment. Waiting for approval.</p>
               </div>
             </div>
             <span className="bg-purple-200 text-purple-900 text-xs font-extrabold px-2.5 py-0.5 rounded-full">
@@ -341,7 +464,7 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
                   className="bg-white rounded-2xl p-4 border border-purple-200/80 space-y-3 shadow-sm"
                 >
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2.5">
                       <Avatar name={record.fromUser.name} size="sm" />
                       <span className="text-xs font-bold text-slate-900">
                         {isPayer ? 'You' : record.fromUser.name}
@@ -357,7 +480,7 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2.5 text-right">
                       <span className="text-xs font-bold text-slate-900">
                         {isReceiver ? 'You' : record.toUser.name}
                       </span>
@@ -370,7 +493,7 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
                       <AlertCircle className="w-3.5 h-3.5 text-purple-600 animate-pulse" />
                       {isPayer
                         ? 'Host requested rollback. Please confirm to reverse this settlement.'
-                        : 'Waiting for client approval to reverse settlement'}
+                        : 'Waiting for approval to reverse settlement'}
                     </span>
 
                     {canApproveRollback ? (
@@ -404,39 +527,23 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
         </div>
       )}
 
-      {/* 2. Debt Optimization Header */}
-      <div className="bg-blue-50/70 border border-blue-200/80 rounded-3xl p-4 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <div className="p-2.5 bg-blue-100 text-blue-700 rounded-2xl shrink-0">
-            <Wallet className="w-5 h-5" />
+      {/* 3. Section: "You need to pay" */}
+      {youOweList.length > 0 && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between px-1">
+            <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+              <span className="p-1.5 bg-rose-100 text-rose-700 rounded-xl">
+                <ArrowUpRight className="w-4 h-4" />
+              </span>
+              You need to pay
+            </h4>
+            <span className="text-xs font-semibold text-rose-600 bg-rose-50 px-2.5 py-0.5 rounded-full border border-rose-100">
+              {youOweList.length} {youOweList.length === 1 ? 'person' : 'people'} to pay
+            </span>
           </div>
-          <p className="text-xs text-blue-900 leading-relaxed font-medium">
-            <span className="font-bold">Debt Optimization Engine:</span> We consolidated all expense shares down to <span className="underline font-bold">{settlements.length}</span> minimal transfer{settlements.length > 1 ? 's' : ''}.
-          </p>
-        </div>
 
-        {tripId && (
-          <button
-            onClick={() => handleOpenSettleModal(null)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-white hover:bg-blue-50 text-blue-700 border border-blue-200 rounded-xl shadow-sm transition-all shrink-0"
-          >
-            <Plus className="w-3.5 h-3.5" /> Record Settlement / Advance
-          </button>
-        )}
-      </div>
-
-      {/* 3. Calculated Minimal Transfer List */}
-      {(() => {
-        const userActionableSettlements = settlements.filter((tx) => tx.fromUser.id === currentUserId || (isAdmin && tx.toUser.id === currentUserId));
-        
-        return userActionableSettlements.length > 0 ? (
           <div className="space-y-3">
-            {userActionableSettlements.map((tx) => {
-              const isPayer = tx.fromUser.id === currentUserId;
-              const isReceiver = tx.toUser.id === currentUserId;
-
-              // Check if there is already a pending settlement or rollback request for this pair
-              // Calculate sum of pending settlement requests for this pair
+            {youOweList.map((tx) => {
               const pairPendingRecords = pendingRecords.filter(
                 (r) => r.fromUserId === tx.fromUser.id && r.toUserId === tx.toUser.id
               );
@@ -451,55 +558,32 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
               return (
                 <div
                   key={tx.id}
-                  className={`bg-white rounded-3xl p-4 border transition-all duration-200 apple-shadow space-y-3 ${
-                    pendingSum > 0
-                      ? 'border-amber-200 bg-amber-50/20'
-                      : isPayer
-                      ? 'border-rose-200 ring-1 ring-rose-100'
-                      : isReceiver
-                      ? 'border-emerald-200 ring-1 ring-emerald-100'
-                      : 'border-slate-100'
-                  }`}
+                  className="bg-white rounded-3xl p-5 border border-rose-200/80 ring-1 ring-rose-100 transition-all duration-200 apple-shadow space-y-4"
                 >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Avatar name={tx.fromUser.name} size="sm" />
-                      <span className="text-sm font-bold text-slate-900">
-                        {isPayer ? 'You' : tx.fromUser.name}
-                      </span>
-                    </div>
-
-                    <div className="flex flex-col items-center px-3">
-                      <span className="text-xs font-extrabold text-slate-900 bg-slate-100 px-3 py-1 rounded-full border border-slate-200">
-                        {formatCurrency(tx.amount, currency)}
-                      </span>
-                      <div className="flex items-center text-slate-400 text-xs mt-1 font-medium">
-                        pays <ArrowRight className="w-3.5 h-3.5 ml-1 text-slate-500" />
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <Avatar name={tx.toUser.name} size="md" />
+                      <div>
+                        <h5 className="text-base font-extrabold text-slate-900">
+                          You owe <span className="text-rose-600 font-black">{formatCurrency(tx.amount, currency)}</span> to {tx.toUser.name}
+                        </h5>
+                        <p className="text-xs text-slate-500 font-medium mt-0.5">
+                          Direct debt settlement for trip expenses
+                        </p>
                       </div>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-bold text-slate-900">
-                        {isReceiver ? 'You' : tx.toUser.name}
-                      </span>
-                      <Avatar name={tx.toUser.name} size="sm" />
                     </div>
                   </div>
 
                   {/* Sub-breakdown of pending and remaining amounts */}
                   {pendingSum > 0 && (
-                    <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-2.5 text-xs space-y-1">
-                      <div className="flex justify-between items-center text-slate-600">
-                        <span>Total Debt Owed:</span>
-                        <span className="font-bold text-slate-900">{formatCurrency(tx.amount, currency)}</span>
-                      </div>
-                      <div className="flex justify-between items-center text-amber-800">
-                        <span className="font-semibold">Pending Host Approval:</span>
+                    <div className="bg-amber-50/60 border border-amber-200/80 rounded-2xl p-3 text-xs space-y-1">
+                      <div className="flex justify-between items-center text-amber-900">
+                        <span className="font-semibold">Pending Approval:</span>
                         <span className="font-extrabold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-lg border border-amber-200">
                           {formatCurrency(pendingSum, currency)}
                         </span>
                       </div>
-                      <div className="flex justify-between items-center text-slate-700 pt-1 border-t border-slate-200/60 font-bold">
+                      <div className="flex justify-between items-center text-slate-700 pt-1 border-t border-amber-200/60 font-bold">
                         <span>Remaining Available to Settle:</span>
                         <span className="font-mono text-emerald-700">{formatCurrency(remainingUnsettled, currency)}</span>
                       </div>
@@ -507,33 +591,37 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
                   )}
 
                   {/* Action Buttons */}
-                  <div className="flex items-center justify-between pt-2 border-t border-slate-100">
-                    <button
-                      onClick={() => handleCopyUPI(tx.fromUser.name, tx.toUser.name, remainingUnsettled > 0 ? remainingUnsettled : tx.amount, tx.id)}
-                      className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-700 font-semibold px-2.5 py-1 rounded-xl hover:bg-slate-100 transition-colors"
-                    >
-                      <Copy className="w-3.5 h-3.5" />
-                      {copiedId === tx.id ? 'Copied Details!' : 'Copy Payment Info'}
-                    </button>
+                  <div className="flex items-center justify-between pt-2 border-t border-slate-100 flex-wrap gap-2">
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        onClick={() => handleCopyPayInfo(tx.toUser.name, remainingUnsettled > 0 ? remainingUnsettled : tx.amount, tx.id)}
+                        className="flex items-center gap-1 text-xs text-slate-600 hover:text-slate-900 font-semibold px-2.5 py-1.5 rounded-xl hover:bg-slate-100 transition-colors"
+                      >
+                        <Copy className="w-3.5 h-3.5 text-slate-500" />
+                        {copiedId === tx.id ? 'Copied Note!' : 'Copy Info'}
+                      </button>
 
-                    {isPayer ? (
-                      remainingUnsettled > 0.01 ? (
-                        <button
-                          onClick={() => handleOpenSettleModal(partialTx)}
-                          disabled={submittingId === tx.id}
-                          className="flex items-center gap-1.5 text-xs font-bold px-3.5 py-1.5 rounded-2xl bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm transition-all"
-                        >
-                          <CheckCircle2 className="w-4 h-4" />
-                          Settle {pendingSum > 0 ? formatCurrency(remainingUnsettled, currency) : 'Up'}
-                        </button>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 text-xs font-bold text-amber-800 bg-amber-100 px-3 py-1.5 rounded-2xl">
-                          <Clock className="w-3.5 h-3.5 text-amber-600" /> Pending Approval
-                        </span>
-                      )
+                      <button
+                        onClick={() => handleOpenBreakdown(tx.toUser)}
+                        className="flex items-center gap-1 text-xs text-slate-700 hover:text-slate-900 font-bold px-2.5 py-1.5 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 transition-colors"
+                      >
+                        <Receipt className="w-3.5 h-3.5 text-rose-600" />
+                        View Expenses
+                      </button>
+                    </div>
+
+                    {remainingUnsettled > 0.01 ? (
+                      <button
+                        onClick={() => handleOpenSettleModal(partialTx)}
+                        disabled={submittingId === tx.id}
+                        className="flex items-center gap-1.5 text-xs font-extrabold px-4 py-2 rounded-2xl bg-emerald-600 text-white hover:bg-emerald-700 shadow-md transition-all"
+                      >
+                        <CheckCircle2 className="w-4 h-4" />
+                        Settle Up {pendingSum > 0 ? formatCurrency(remainingUnsettled, currency) : ''}
+                      </button>
                     ) : (
-                      <span className="text-[11px] font-semibold text-slate-500 bg-slate-100 border border-slate-200/80 px-3 py-1.5 rounded-2xl">
-                        {isReceiver ? 'Awaiting payment to you' : `Awaiting ${tx.fromUser.name}'s payment`}
+                      <span className="inline-flex items-center gap-1 text-xs font-bold text-amber-800 bg-amber-100 px-3 py-1.5 rounded-2xl border border-amber-200">
+                        <Clock className="w-3.5 h-3.5 text-amber-600" /> Pending Approval
                       </span>
                     )}
                   </div>
@@ -541,26 +629,112 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
               );
             })}
           </div>
-        ) : (
-          <div className="bg-emerald-50/60 border border-emerald-200/80 rounded-3xl p-8 text-center space-y-3">
-            <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-2xl flex items-center justify-center mx-auto shadow-inner">
-              <Sparkles className="w-6 h-6" />
-            </div>
-            <h4 className="text-lg font-bold text-emerald-900">You're all settled up 🎉</h4>
-            <p className="text-xs text-emerald-700 max-w-xs mx-auto">
-              You have no remaining debts to pay for this trip!
-            </p>
-          </div>
-        );
-      })()}
+        </div>
+      )}
 
-      {/* 4. Confirmed Settlement History Section */}
+      {/* 4. Section: "You will receive" */}
+      {youReceiveList.length > 0 && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between px-1">
+            <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+              <span className="p-1.5 bg-emerald-100 text-emerald-700 rounded-xl">
+                <ArrowDownLeft className="w-4 h-4" />
+              </span>
+              You will receive
+            </h4>
+            <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-100">
+              {youReceiveList.length} {youReceiveList.length === 1 ? 'person' : 'people'} owes you
+            </span>
+          </div>
+
+          <div className="space-y-3">
+            {youReceiveList.map((tx) => {
+              const pairPendingRecords = pendingRecords.filter(
+                (r) => r.fromUserId === tx.fromUser.id && r.toUserId === tx.toUser.id
+              );
+              const pendingSum = pairPendingRecords.reduce((sum, r) => sum + r.amount, 0);
+
+              return (
+                <div
+                  key={tx.id}
+                  className="bg-white rounded-3xl p-5 border border-emerald-200/80 ring-1 ring-emerald-100 transition-all duration-200 apple-shadow space-y-4"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <Avatar name={tx.fromUser.name} size="md" />
+                      <div>
+                        <h5 className="text-base font-extrabold text-slate-900">
+                          {tx.fromUser.name} owes you <span className="text-emerald-600 font-black">{formatCurrency(tx.amount, currency)}</span>
+                        </h5>
+                        <p className="text-xs text-slate-500 font-medium mt-0.5">
+                          Owed to you for trip expenses
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {pendingSum > 0 && (
+                    <div className="bg-amber-50/60 border border-amber-200/80 rounded-2xl p-3 text-xs space-y-1">
+                      <div className="flex justify-between items-center text-amber-900">
+                        <span className="font-semibold">Pending Approval:</span>
+                        <span className="font-extrabold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-lg border border-amber-200">
+                          {formatCurrency(pendingSum, currency)}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Action / Reminder Buttons */}
+                  <div className="flex items-center justify-between pt-2 border-t border-slate-100 flex-wrap gap-2">
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        onClick={() => handleCopyReceiveInfo(tx.fromUser.name, tx.amount, tx.id)}
+                        className="flex items-center gap-1 text-xs text-slate-600 hover:text-slate-900 font-semibold px-2.5 py-1.5 rounded-xl hover:bg-slate-100 transition-colors"
+                      >
+                        <Copy className="w-3.5 h-3.5 text-slate-500" />
+                        {copiedId === tx.id ? 'Copied Request Note!' : 'Copy Request'}
+                      </button>
+
+                      <button
+                        onClick={() => handleOpenBreakdown(tx.fromUser)}
+                        className="flex items-center gap-1 text-xs text-slate-700 hover:text-slate-900 font-bold px-2.5 py-1.5 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 transition-colors"
+                      >
+                        <Receipt className="w-3.5 h-3.5 text-emerald-600" />
+                        View Expenses
+                      </button>
+                    </div>
+
+                    <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-800 bg-emerald-50 px-3 py-1.5 rounded-2xl border border-emerald-200">
+                      Awaiting payment
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* 5. Fully Settled Empty Card (If user owes zero and receives zero) */}
+      {isAllSettled && (
+        <div className="bg-white border border-slate-100 rounded-3xl p-8 text-center space-y-3 apple-shadow">
+          <div className="w-14 h-14 bg-emerald-100 text-emerald-600 rounded-2xl flex items-center justify-center mx-auto shadow-inner">
+            <Sparkles className="w-7 h-7" />
+          </div>
+          <h4 className="text-xl font-extrabold text-slate-900">You're all settled up 🎉</h4>
+          <p className="text-xs text-slate-500 max-w-xs mx-auto leading-relaxed">
+            All your expenses and splits for this trip are completely balanced!
+          </p>
+        </div>
+      )}
+
+      {/* 6. Confirmed Settlement History Section */}
       {confirmedRecords.length > 0 && (
         <div className="bg-white rounded-3xl p-5 border border-slate-100 apple-shadow space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <ShieldCheck className="w-4 h-4 text-emerald-600" />
-              <h4 className="text-sm font-bold text-slate-900">Confirmed Settlement Log</h4>
+              <h4 className="text-sm font-bold text-slate-900">Your Settlement History</h4>
             </div>
             <span className="text-xs text-slate-400 font-medium">
               {confirmedRecords.length} Settled
@@ -569,7 +743,9 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
 
           <div className="space-y-2 pt-1">
             {confirmedRecords.map((rec) => {
-              const canRequestRollback = isAdmin || rec.toUserId === currentUserId;
+              const isPayer = rec.fromUserId === currentUserId;
+              const isReceiver = rec.toUserId === currentUserId;
+              const canRequestRollback = isAdmin || isReceiver;
               const displayAmount = typeof rec.settledAmount === 'number' && rec.settledAmount > 0 ? rec.settledAmount : rec.amount;
 
               return (
@@ -578,9 +754,9 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
                   className="flex items-center justify-between p-3.5 rounded-2xl bg-slate-50 border border-slate-100 text-xs gap-2"
                 >
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-bold text-slate-900">{rec.fromUser.name}</span>
+                    <span className="font-bold text-slate-900">{isPayer ? 'You' : rec.fromUser.name}</span>
                     <span className="text-slate-400">paid</span>
-                    <span className="font-bold text-slate-900">{rec.toUser.name}</span>
+                    <span className="font-bold text-slate-900">{isReceiver ? 'You' : rec.toUser.name}</span>
 
                     {rec.paymentMethod === 'WALLET' ? (
                       <span className="text-[10px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-lg flex items-center gap-1">
@@ -631,13 +807,13 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
         </div>
       )}
 
-      {/* 5. Settlement Audit & History Log */}
+      {/* 7. Settlement Audit History Log */}
       {historyRecords.length > 0 && (
         <div className="bg-white rounded-3xl p-5 border border-slate-100 apple-shadow space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <History className="w-4 h-4 text-slate-600" />
-              <h4 className="text-sm font-bold text-slate-900">Settlement Activity History</h4>
+              <h4 className="text-sm font-bold text-slate-900">Activity & Reversals</h4>
             </div>
             <span className="text-xs text-slate-400 font-medium">
               {historyRecords.length} Records
@@ -645,36 +821,41 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
           </div>
 
           <div className="space-y-2 pt-1">
-            {historyRecords.map((rec) => (
-              <div
-                key={rec.id}
-                className="flex items-center justify-between p-3 rounded-2xl bg-slate-50/70 border border-slate-200 text-xs opacity-75"
-              >
-                <div className="flex items-center gap-2">
-                  <span className="font-bold text-slate-700 line-through">{rec.fromUser.name}</span>
-                  <span className="text-slate-400">paid</span>
-                  <span className="font-bold text-slate-700 line-through">{rec.toUser.name}</span>
-                  {rec.note && (
-                    <span className="text-[10px] text-slate-500 italic">"{rec.note}"</span>
-                  )}
-                </div>
+            {historyRecords.map((rec) => {
+              const isPayer = rec.fromUserId === currentUserId;
+              const isReceiver = rec.toUserId === currentUserId;
 
-                <div className="flex items-center gap-2">
-                  <span className="font-semibold text-slate-500 line-through">
-                    {formatCurrency(rec.amount, currency)}
-                  </span>
-                  <span
-                    className={`font-bold text-[10px] px-2 py-0.5 rounded-full border ${
-                      rec.status === 'ROLLED_BACK'
-                        ? 'bg-purple-100 text-purple-800 border-purple-200'
-                        : 'bg-rose-100 text-rose-800 border-rose-200'
-                    }`}
-                  >
-                    {rec.status === 'ROLLED_BACK' ? 'Rolled Back' : 'Rejected'}
-                  </span>
+              return (
+                <div
+                  key={rec.id}
+                  className="flex items-center justify-between p-3 rounded-2xl bg-slate-50/70 border border-slate-200 text-xs opacity-75"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-slate-700 line-through">{isPayer ? 'You' : rec.fromUser.name}</span>
+                    <span className="text-slate-400">paid</span>
+                    <span className="font-bold text-slate-700 line-through">{isReceiver ? 'You' : rec.toUser.name}</span>
+                    {rec.note && (
+                      <span className="text-[10px] text-slate-500 italic">"{rec.note}"</span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-slate-500 line-through">
+                      {formatCurrency(rec.amount, currency)}
+                    </span>
+                    <span
+                      className={`font-bold text-[10px] px-2 py-0.5 rounded-full border ${
+                        rec.status === 'ROLLED_BACK'
+                          ? 'bg-purple-100 text-purple-800 border-purple-200'
+                          : 'bg-rose-100 text-rose-800 border-rose-200'
+                      }`}
+                    >
+                      {rec.status === 'ROLLED_BACK' ? 'Rolled Back' : 'Rejected'}
+                    </span>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
@@ -698,6 +879,18 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
         />
       )}
 
+      {/* Expense Breakdown Modal */}
+      {isBreakdownOpen && (
+        <ExpenseBreakdownModal
+          isOpen={isBreakdownOpen}
+          onClose={() => setIsBreakdownOpen(false)}
+          currency={currency}
+          currentUserId={currentUserId}
+          otherMember={breakdownMember}
+          expenses={expenses}
+        />
+      )}
+
       {/* Rollback Request Confirmation Modal */}
       {rollbackConfirmId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
@@ -714,7 +907,7 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
 
             <div className="bg-purple-50 border border-purple-200/80 rounded-2xl p-3.5 text-xs text-purple-900 leading-relaxed">
               <p className="font-bold text-purple-950 mb-1">Are you sure you want to request a rollback?</p>
-              A rollback request will be sent to the client (payer). The settlement will only be reversed to unsettled once the client approves.
+              A rollback request will be sent to reverse this settlement.
             </div>
 
             <div className="flex gap-3 pt-2">

@@ -516,6 +516,7 @@ export default function TripDashboardPage() {
               myWallet={trip.myWallet}
               allWallets={trip.allWallets}
               members={trip.members}
+              expenses={trip.expenses}
               tripId={trip.id}
               isAdmin={isAdmin}
               onMemberRemoved={fetchTripDetails}
@@ -705,6 +706,7 @@ export default function TripDashboardPage() {
             currency={trip.currency}
             currentUserId={user.id}
             members={trip.members}
+            expenses={trip.expenses}
             myWallet={trip.myWallet}
             allWallets={trip.allWallets}
             isAdmin={isAdmin}
