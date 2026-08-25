@@ -398,20 +398,9 @@ export default function TripDashboardPage() {
           </button>
 
           <button
-            onClick={() => setActiveTab('chat')}
-            className={`flex-1 py-2.5 px-3 rounded-xl transition-all flex items-center justify-center gap-1.5 whitespace-nowrap ${
-              activeTab === 'chat'
-                ? 'bg-white text-slate-900 shadow-sm font-extrabold'
-                : 'hover:text-slate-900'
-            }`}
-          >
-            <MessageSquare className="w-4 h-4 text-emerald-600" /> Chat
-          </button>
-
-          <button
             onClick={() => setActiveTab('trip')}
             className={`flex-1 py-2.5 px-3 rounded-xl transition-all flex items-center justify-center gap-1.5 whitespace-nowrap ${
-              activeTab === 'trip' || ['polls', 'location', 'itinerary', 'stay', 'approvals', 'wallet', 'timeline', 'analytics'].includes(activeTab)
+              activeTab === 'trip' || ['polls', 'location', 'itinerary', 'stay', 'approvals', 'wallet', 'timeline', 'analytics', 'chat'].includes(activeTab)
                 ? 'bg-white text-slate-900 shadow-sm font-extrabold'
                 : 'hover:text-slate-900'
             }`}
