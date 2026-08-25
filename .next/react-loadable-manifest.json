@@ -1,9 +1,8 @@
 {
   "app/dashboard/trip/[tripId]/page.tsx -> @/components/chat/GroupChatView": {
-    "id": 6725,
+    "id": 571,
     "files": [
-      "static/chunks/876.8de0f0513d8c6739.js",
-      "static/chunks/725.04900cbdabddd12e.js"
+      "static/chunks/571.ac74e177b6d0a13e.js"
     ]
   },
   "app/dashboard/trip/[tripId]/page.tsx -> @/components/expense/PendingApprovalsView": {

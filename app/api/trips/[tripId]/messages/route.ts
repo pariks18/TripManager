@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getSessionUser } from '@/lib/auth';
 import { dbStore } from '@/lib/dbStore';
 import { prisma } from '@/lib/prisma';
+import { broadcastTripMessage } from '@/lib/chatStream';
 
 export async function GET(
   request: Request,
@@ -50,6 +51,9 @@ export async function POST(
     }
 
     const message = await dbStore.saveTripMessage(params.tripId, user.id, content);
+
+    // Real-time instant broadcast to all active SSE subscribers for this trip
+    broadcastTripMessage(params.tripId, message);
 
     return NextResponse.json({ message });
   } catch (error: any) {

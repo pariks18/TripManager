@@ -32,19 +32,12 @@ export const GroupChatView: React.FC<GroupChatViewProps> = React.memo(({ tripId,
   useEffect(() => {
     if (!tripId) return;
 
-    let socket: Socket;
+    let eventSource: EventSource | null = null;
 
     const initChat = async () => {
       setIsLoading(true);
 
-      // 1. Ensure Socket.IO server is initialized on Next.js HTTP server
-      try {
-        await fetch('/api/socket/io');
-      } catch (err) {
-        console.error('Failed to initialize socket route:', err);
-      }
-
-      // 2. Fetch existing messages for initial load
+      // 1. Fetch existing messages for initial load
       try {
         const res = await fetch(`/api/trips/${tripId}/messages`);
         const data = await res.json();
@@ -57,35 +50,55 @@ export const GroupChatView: React.FC<GroupChatViewProps> = React.memo(({ tripId,
         setIsLoading(false);
       }
 
-      // 3. Connect Socket.IO
-      socket = io({
-        path: '/api/socket/io',
-        transports: ['websocket', 'polling'],
-      });
-      socketRef.current = socket;
+      // 2. Connect to real-time Server-Sent Events (SSE) stream for instant push updates
+      try {
+        eventSource = new EventSource(`/api/trips/${tripId}/messages/stream`);
 
-      const joinRoom = () => {
-        socket.emit('join_trip', tripId);
-      };
+        eventSource.onmessage = (event) => {
+          try {
+            if (event.data && event.data.startsWith('{')) {
+              const newMsg: MessageDetail = JSON.parse(event.data);
+              setMessages((prev) => {
+                if (prev.some((m) => m.id === newMsg.id)) return prev;
+                return [...prev, newMsg];
+              });
+            }
+          } catch (e) {
+            console.error('Error parsing real-time message stream event:', e);
+          }
+        };
 
-      if (socket.connected) {
-        joinRoom();
+        eventSource.onerror = (err) => {
+          console.warn('Real-time stream notice: Reconnecting...');
+        };
+      } catch (err) {
+        console.error('Failed to connect real-time stream:', err);
       }
-
-      socket.on('connect', joinRoom);
-
-      socket.on('new_message', (newMsg: MessageDetail) => {
-        setMessages((prev) => {
-          if (prev.some((m) => m.id === newMsg.id)) return prev;
-          return [...prev, newMsg];
-        });
-      });
     };
 
     initChat();
 
+    // 3. Periodic light background sync fallback (every 4 seconds) to guarantee zero missed messages
+    const syncInterval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/trips/${tripId}/messages?limit=20`);
+        const data = await res.json();
+        if (data.messages && data.messages.length > 0) {
+          setMessages((prev) => {
+            const map = new Map();
+            prev.forEach((m) => map.set(m.id, m));
+            data.messages.forEach((m: MessageDetail) => map.set(m.id, m));
+            const merged = Array.from(map.values());
+            merged.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+            return merged;
+          });
+        }
+      } catch (e) {}
+    }, 4000);
+
     return () => {
-      if (socket) socket.disconnect();
+      if (eventSource) eventSource.close();
+      clearInterval(syncInterval);
     };
   }, [tripId]);
 
@@ -95,29 +108,21 @@ export const GroupChatView: React.FC<GroupChatViewProps> = React.memo(({ tripId,
     if (!text) return;
     setInputText('');
 
-    if (socketRef.current && socketRef.current.connected) {
-      socketRef.current.emit('send_message', {
-        tripId,
-        senderId: currentUser.id,
-        message: text,
+    try {
+      const res = await fetch(`/api/trips/${tripId}/messages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: text }),
       });
-    } else {
-      try {
-        const res = await fetch(`/api/trips/${tripId}/messages`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ content: text }),
+      const data = await res.json();
+      if (data.message) {
+        setMessages((prev) => {
+          if (prev.some((m) => m.id === data.message.id)) return prev;
+          return [...prev, data.message];
         });
-        const data = await res.json();
-        if (data.message) {
-          setMessages((prev) => {
-            if (prev.some((m) => m.id === data.message.id)) return prev;
-            return [...prev, data.message];
-          });
-        }
-      } catch (err) {
-        console.error('Failed REST message fallback:', err);
       }
+    } catch (err) {
+      console.error('Failed to send message:', err);
     }
   };
 
