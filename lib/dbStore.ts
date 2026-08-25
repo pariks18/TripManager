@@ -2,7 +2,7 @@ import { prisma } from './prisma';
 import { hashPassword, comparePassword } from './auth';
 import { generateTripCode, generateObjectId } from './utils';
 import { calculateMemberBalances, computeSettlements } from './settlement';
-import { CategoryType, ExpenseDetail, TripSummary, UserSummary, ActivityDetail, SettlementRecordDetail, MemberBalance, MemberAnalytics, DocumentType, UserDocumentDetail, ItineraryItemDetail, StayDetail, PollDetail, PollOptionDetail, PollVoteDetail, MemberLocationDetail, UserWalletDetail, WalletAdvanceDetail, WalletTransactionDetail } from '@/types';
+import { CategoryType, ExpenseDetail, TripSummary, UserSummary, ActivityDetail, SettlementRecordDetail, MemberBalance, MemberAnalytics, DocumentType, UserDocumentDetail, ItineraryItemDetail, StayDetail, PollDetail, PollOptionDetail, PollVoteDetail, MemberLocationDetail, UserWalletDetail, WalletAdvanceDetail, WalletTransactionDetail, MessageDetail } from '@/types';
 
 const SEED_USERS = [
   {
@@ -3428,6 +3428,92 @@ export const dbStore = {
     // Cascades take care of user documents, member locations, etc.
     await prisma.user.delete({ where: { id: userId } });
     return true;
+  },
+
+  async getTripMessages(
+    tripId: string,
+    limit: number = 50,
+    beforeId?: string
+  ): Promise<{ messages: MessageDetail[]; hasMore: boolean }> {
+    await ensureDatabaseSeeded();
+
+    let beforeDate: Date | undefined;
+    if (beforeId) {
+      const refMsg = await prisma.message.findUnique({ where: { id: beforeId } });
+      if (refMsg) beforeDate = refMsg.createdAt;
+    }
+
+    const messages = await prisma.message.findMany({
+      where: {
+        tripId,
+        ...(beforeDate ? { createdAt: { lt: beforeDate } } : {}),
+      },
+      take: limit + 1,
+      orderBy: { createdAt: 'desc' },
+      include: {
+        sender: {
+          select: { id: true, name: true, email: true },
+        },
+      },
+    });
+
+    const hasMore = messages.length > limit;
+    const resultMessages = hasMore ? messages.slice(0, limit) : messages;
+
+    // Return in chronological order (oldest first, newest last)
+    resultMessages.reverse();
+
+    const formattedMessages: MessageDetail[] = resultMessages.map((m) => ({
+      id: m.id,
+      tripId: m.tripId,
+      senderId: m.senderId,
+      sender: { id: m.sender.id, name: m.sender.name, email: m.sender.email },
+      content: m.content,
+      createdAt: m.createdAt.toISOString(),
+      updatedAt: m.updatedAt.toISOString(),
+    }));
+
+    return { messages: formattedMessages, hasMore };
+  },
+
+  async saveTripMessage(
+    tripId: string,
+    senderId: string,
+    content: string
+  ): Promise<MessageDetail> {
+    await ensureDatabaseSeeded();
+
+    const trimmedContent = content.trim();
+    if (!trimmedContent) throw new Error('Message content cannot be empty.');
+
+    const member = await prisma.tripMember.findUnique({
+      where: { tripId_userId: { tripId, userId: senderId } },
+    });
+    if (!member) throw new Error('Forbidden: You are not a member of this trip.');
+
+    const msg = await prisma.message.create({
+      data: {
+        id: generateObjectId(),
+        tripId,
+        senderId,
+        content: trimmedContent,
+      },
+      include: {
+        sender: {
+          select: { id: true, name: true, email: true },
+        },
+      },
+    });
+
+    return {
+      id: msg.id,
+      tripId: msg.tripId,
+      senderId: msg.senderId,
+      sender: { id: msg.sender.id, name: msg.sender.name, email: msg.sender.email },
+      content: msg.content,
+      createdAt: msg.createdAt.toISOString(),
+      updatedAt: msg.updatedAt.toISOString(),
+    };
   },
 };
 

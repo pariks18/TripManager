@@ -45,6 +45,7 @@ model User {
   userWallets           UserWallet[]
   locations             MemberLocation[]
   otpVerifications      OtpVerification[]
+  sentMessages          Message[]            @relation("MessageSender")
 }
 
 model Trip {
@@ -72,6 +73,7 @@ model Trip {
   polls     Poll[]
   locations MemberLocation[]
   userWallets UserWallet[]
+  messages  Message[]
 }
 
 model TripMember {
@@ -373,4 +375,18 @@ model OtpVerification {
   createdAt   DateTime  @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Message {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  tripId    String   @db.ObjectId
+  senderId  String   @db.ObjectId
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  trip   Trip @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  sender User @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@index([tripId, createdAt])
 }

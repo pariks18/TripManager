@@ -360,3 +360,13 @@ export interface MemberAnalytics {
   mostFrequentCategory: string;
   percentageSpending: number;
 }
+
+export interface MessageDetail {
+  id: string;
+  tripId: string;
+  senderId: string;
+  sender: UserSummary;
+  content: string;
+  createdAt: string;
+  updatedAt: string;
+}

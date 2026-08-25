@@ -48,6 +48,16 @@ export function formatDate(dateString: string | Date): string {
   }).format(date);
 }
 
+export function formatTime(dateString: string | Date): string {
+  if (!dateString) return '';
+  const date = new Date(dateString);
+  return new Intl.DateTimeFormat('en-IN', {
+    hour: 'numeric',
+    minute: 'numeric',
+    hour12: true,
+  }).format(date);
+}
+
 export function formatRelativeTime(dateString: string | Date): string {
   if (!dateString) return '';
   const date = new Date(dateString);

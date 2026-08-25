@@ -20,6 +20,7 @@ const ItineraryView = dynamic(() => import('@/components/trip/ItineraryView').th
 const StayView = dynamic(() => import('@/components/trip/StayView').then((m) => m.StayView));
 const LivePollsView = dynamic(() => import('@/components/trip/LivePollsView').then((m) => m.LivePollsView));
 const LiveLocationView = dynamic(() => import('@/components/trip/LiveLocationView').then((m) => m.LiveLocationView));
+const GroupChatView = dynamic(() => import('@/components/chat/GroupChatView').then((m) => m.GroupChatView));
 const WalletView = dynamic(() => import('@/components/wallet/WalletView').then((m) => m.WalletView));
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
@@ -58,6 +59,7 @@ import {
   MapPin,
   Wallet,
   Compass,
+  MessageSquare,
 } from 'lucide-react';
 
 export default function TripDashboardPage() {
@@ -68,7 +70,7 @@ export default function TripDashboardPage() {
   const [user, setUser] = useState<UserSession | null>(null);
   const [trip, setTrip] = useState<TripSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'overview' | 'trip' | 'polls' | 'location' | 'expenses' | 'itinerary' | 'stay' | 'approvals' | 'wallet' | 'settlement' | 'timeline' | 'analytics'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'trip' | 'polls' | 'location' | 'expenses' | 'itinerary' | 'stay' | 'approvals' | 'wallet' | 'settlement' | 'timeline' | 'analytics' | 'chat'>('overview');
   const [copiedCode, setCopiedCode] = useState(false);
 
   // Expense modal state
@@ -396,6 +398,17 @@ export default function TripDashboardPage() {
           </button>
 
           <button
+            onClick={() => setActiveTab('chat')}
+            className={`flex-1 py-2.5 px-3 rounded-xl transition-all flex items-center justify-center gap-1.5 whitespace-nowrap ${
+              activeTab === 'chat'
+                ? 'bg-white text-slate-900 shadow-sm font-extrabold'
+                : 'hover:text-slate-900'
+            }`}
+          >
+            <MessageSquare className="w-4 h-4 text-emerald-600" /> Chat
+          </button>
+
+          <button
             onClick={() => setActiveTab('trip')}
             className={`flex-1 py-2.5 px-3 rounded-xl transition-all flex items-center justify-center gap-1.5 whitespace-nowrap ${
               activeTab === 'trip' || ['polls', 'location', 'itinerary', 'stay', 'approvals', 'wallet', 'timeline', 'analytics'].includes(activeTab)
@@ -530,6 +543,20 @@ export default function TripDashboardPage() {
                   <div>
                     <h5 className="text-xs font-bold text-slate-900">Advance Credit</h5>
                     <p className="text-[10px] text-slate-400 mt-0.5 leading-tight">Excess settlement credit</p>
+                  </div>
+                </div>
+
+                {/* 6. Group Chat */}
+                <div
+                  onClick={() => setActiveTab('chat')}
+                  className="bg-white rounded-2xl p-4 border border-slate-100/90 shadow-sm hover:shadow-md cursor-pointer transition-all space-y-2 group active:scale-[0.98]"
+                >
+                  <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-xl w-fit group-hover:scale-105 transition-transform">
+                    <MessageSquare className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h5 className="text-xs font-bold text-slate-900">Group Chat</h5>
+                    <p className="text-[10px] text-slate-400 mt-0.5 leading-tight">Real-time trip discussion</p>
                   </div>
                 </div>
 
@@ -766,7 +793,14 @@ export default function TripDashboardPage() {
           />
         )}
 
-
+        {/* TAB: REAL-TIME GROUP CHAT */}
+        {activeTab === 'chat' && (
+          <GroupChatView
+            tripId={trip.id}
+            tripName={trip.name}
+            currentUser={user}
+          />
+        )}
 
         {/* TAB 4: SETTLEMENT ENGINE */}
         {activeTab === 'settlement' && (
