@@ -81,8 +81,8 @@ export default function DashboardPage() {
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 pb-28 md:pb-12">
       {/* Sticky App Header */}
-      <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-slate-100 px-4 py-3.5 sm:px-8">
-        <div className="max-w-xl mx-auto flex items-center justify-between">
+      <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-slate-100 px-3 py-3.5 sm:px-6">
+        <div className="w-full max-w-4xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <div className="w-9 h-9 bg-emerald-600 rounded-2xl flex items-center justify-center text-white font-black text-sm shadow-sm">
               TS
@@ -130,7 +130,7 @@ export default function DashboardPage() {
       </header>
 
       {/* Main Content Container */}
-      <main className="max-w-xl mx-auto px-4 py-5 sm:px-8 space-y-6">
+      <main className="w-full max-w-4xl mx-auto px-3 py-4 sm:px-6 space-y-5">
         {/* Total Overview Card */}
         <div className="bg-white rounded-3xl p-6 border border-slate-100/90 shadow-sm space-y-3">
           <div className="flex items-center justify-between">

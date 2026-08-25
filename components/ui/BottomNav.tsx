@@ -14,7 +14,7 @@ export const BottomNav: React.FC = () => {
   const isProfile = pathname === '/dashboard/profile';
 
   return (
-    <nav className="fixed bottom-3 left-1/2 -translate-x-1/2 z-40 bg-white/95 backdrop-blur-md border border-slate-200/90 rounded-full px-8 py-2 shadow-xl flex items-center justify-center gap-8 max-w-xs w-[92%] sm:w-auto">
+    <nav className="fixed bottom-3 left-1/2 -translate-x-1/2 z-40 bg-white/95 backdrop-blur-md border border-slate-200/90 rounded-full px-6 sm:px-8 py-2 shadow-xl flex items-center justify-center gap-6 sm:gap-8 max-w-sm sm:max-w-md w-[92%] sm:w-auto">
       <button
         onClick={() => router.push('/dashboard')}
         className={cn(
