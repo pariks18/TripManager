@@ -90,25 +90,25 @@ export const ExpenseCard: React.FC<ExpenseCardProps> = React.memo(({
     <>
       <div
         onClick={() => setIsDetailOpen(true)}
-        className="bg-white rounded-2xl p-4 border border-slate-100/90 shadow-sm hover:shadow-md hover:border-slate-200 transition-all duration-150 cursor-pointer flex items-center justify-between gap-3 active:scale-[0.99] group"
+        className="bg-white rounded-2xl p-3.5 sm:p-4 border border-slate-100/90 shadow-sm hover:shadow-md hover:border-slate-200 transition-all duration-150 cursor-pointer flex items-center justify-between gap-2.5 sm:gap-3 active:scale-[0.99] group min-w-0"
       >
         {/* Left: Icon & Details */}
-        <div className="flex items-center gap-3 min-w-0">
-          <div className={`p-3 rounded-2xl ${catStyle.bg} shrink-0 group-hover:scale-105 transition-transform`}>
-            <IconComponent className="w-5 h-5 text-slate-700" />
+        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+          <div className={`p-2.5 sm:p-3 rounded-2xl ${catStyle.bg} shrink-0 group-hover:scale-105 transition-transform`}>
+            <IconComponent className="w-4.5 h-4.5 sm:w-5 sm:h-5 text-slate-700" />
           </div>
 
           <div className="min-w-0">
-            <div className="flex items-center gap-1.5">
-              <h4 className="text-sm font-bold text-slate-900 truncate">{expense.title}</h4>
+            <div className="flex items-center gap-1.5 flex-wrap sm:flex-nowrap">
+              <h4 className="text-xs sm:text-sm font-bold text-slate-900 truncate max-w-[120px] sm:max-w-none">{expense.title}</h4>
 
               {isPending && (
-                <span className="bg-amber-100 text-amber-800 text-[9px] font-extrabold px-2 py-0.5 rounded-full shrink-0">
+                <span className="bg-amber-100 text-amber-800 text-[9px] font-extrabold px-1.5 sm:px-2 py-0.5 rounded-full shrink-0">
                   Pending
                 </span>
               )}
               {isRejected && (
-                <span className="bg-rose-100 text-rose-800 text-[9px] font-extrabold px-2 py-0.5 rounded-full shrink-0">
+                <span className="bg-rose-100 text-rose-800 text-[9px] font-extrabold px-1.5 sm:px-2 py-0.5 rounded-full shrink-0">
                   Rejected
                 </span>
               )}
@@ -117,26 +117,23 @@ export const ExpenseCard: React.FC<ExpenseCardProps> = React.memo(({
               )}
             </div>
 
-            <p className="text-xs text-slate-500 mt-0.5 truncate font-medium">
+            <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5 truncate font-medium">
               {payerName} paid · {formatCurrency(expense.amount, currency)}
-              {userParticipant && (
-                <span className="text-slate-400"> (Your share · {formatCurrency(perPersonShare, currency)})</span>
-              )}
             </p>
           </div>
         </div>
 
         {/* Right: Net Status & Arrow */}
-        <div className="flex items-center gap-2.5 shrink-0 text-right">
+        <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0 text-right">
           <div>
-            <span className="text-sm font-black text-slate-900 block">
+            <span className="text-xs sm:text-sm font-black text-slate-900 block">
               {formatCurrency(expense.amount, currency)}
             </span>
-            <span className={`text-[11px] block mt-0.5 ${netColorClass}`}>
+            <span className={`text-[10px] sm:text-[11px] block mt-0.5 ${netColorClass} truncate max-w-[90px] sm:max-w-none`}>
               {netText}
             </span>
           </div>
-          <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-slate-500 group-hover:translate-x-0.5 transition-all" />
+          <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-slate-500 group-hover:translate-x-0.5 transition-all shrink-0" />
         </div>
       </div>
 

@@ -122,7 +122,7 @@ export const GroupChatView: React.FC<GroupChatViewProps> = React.memo(({ tripId,
   };
 
   return (
-    <div className="flex flex-col h-[550px] max-w-2xl mx-auto bg-white rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden">
+    <div className="flex flex-col h-[calc(100vh-13rem)] min-h-[380px] max-h-[600px] max-w-2xl mx-auto bg-white rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden">
       {/* Header */}
       <div className="bg-slate-50 px-5 py-3 border-b border-slate-200 flex items-center gap-3">
         <div className="p-2 bg-emerald-100 text-emerald-700 rounded-xl">

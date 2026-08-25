@@ -362,11 +362,11 @@ export default function TripDashboardPage() {
 
       {/* Main Workspace */}
       <main className="max-w-xl mx-auto px-4 py-4 sm:px-8 space-y-5">
-        {/* Primary 4 Navigation Tabs */}
-        <div className="flex items-center p-1 bg-slate-200/60 rounded-2xl text-xs font-bold text-slate-600">
+        {/* Primary 5 Navigation Tabs */}
+        <div className="flex items-center p-1 bg-slate-200/60 rounded-2xl text-xs font-bold text-slate-600 overflow-x-auto no-scrollbar scroll-smooth whitespace-nowrap min-w-0">
           <button
             onClick={() => setActiveTab('overview')}
-            className={`flex-1 py-2.5 px-3 rounded-xl transition-all flex items-center justify-center gap-1.5 whitespace-nowrap ${
+            className={`flex-shrink-0 sm:flex-1 py-2.5 px-3 rounded-xl transition-all flex items-center justify-center gap-1.5 whitespace-nowrap ${
               activeTab === 'overview'
                 ? 'bg-white text-slate-900 shadow-sm font-extrabold'
                 : 'hover:text-slate-900'
@@ -377,7 +377,7 @@ export default function TripDashboardPage() {
 
           <button
             onClick={() => setActiveTab('expenses')}
-            className={`flex-1 py-2.5 px-3 rounded-xl transition-all flex items-center justify-center gap-1.5 whitespace-nowrap ${
+            className={`flex-shrink-0 sm:flex-1 py-2.5 px-3 rounded-xl transition-all flex items-center justify-center gap-1.5 whitespace-nowrap ${
               activeTab === 'expenses'
                 ? 'bg-white text-slate-900 shadow-sm font-extrabold'
                 : 'hover:text-slate-900'
@@ -388,7 +388,7 @@ export default function TripDashboardPage() {
 
           <button
             onClick={() => setActiveTab('settlement')}
-            className={`flex-1 py-2.5 px-3 rounded-xl transition-all flex items-center justify-center gap-1.5 whitespace-nowrap ${
+            className={`flex-shrink-0 sm:flex-1 py-2.5 px-3 rounded-xl transition-all flex items-center justify-center gap-1.5 whitespace-nowrap ${
               activeTab === 'settlement'
                 ? 'bg-white text-slate-900 shadow-sm font-extrabold'
                 : 'hover:text-slate-900'
@@ -399,7 +399,7 @@ export default function TripDashboardPage() {
 
           <button
             onClick={() => setActiveTab('chat')}
-            className={`flex-1 py-2.5 px-3 rounded-xl transition-all flex items-center justify-center gap-1.5 whitespace-nowrap ${
+            className={`flex-shrink-0 sm:flex-1 py-2.5 px-3 rounded-xl transition-all flex items-center justify-center gap-1.5 whitespace-nowrap ${
               activeTab === 'chat'
                 ? 'bg-white text-slate-900 shadow-sm font-extrabold'
                 : 'hover:text-slate-900'
@@ -410,7 +410,7 @@ export default function TripDashboardPage() {
 
           <button
             onClick={() => setActiveTab('trip')}
-            className={`flex-1 py-2.5 px-3 rounded-xl transition-all flex items-center justify-center gap-1.5 whitespace-nowrap ${
+            className={`flex-shrink-0 sm:flex-1 py-2.5 px-3 rounded-xl transition-all flex items-center justify-center gap-1.5 whitespace-nowrap ${
               activeTab === 'trip' || ['polls', 'location', 'itinerary', 'stay', 'approvals', 'wallet', 'timeline', 'analytics'].includes(activeTab)
                 ? 'bg-white text-slate-900 shadow-sm font-extrabold'
                 : 'hover:text-slate-900'

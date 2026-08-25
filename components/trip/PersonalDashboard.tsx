@@ -204,33 +204,33 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = React.memo(({
       </div>
 
       {/* 2. Three Metric Summary Cards */}
-      <div className="grid grid-cols-3 gap-3">
-        <div className="bg-white rounded-2xl p-3.5 border border-slate-100/90 shadow-sm text-center">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+      <div className="grid grid-cols-3 gap-2 sm:gap-3">
+        <div className="bg-white rounded-2xl p-2.5 sm:p-3.5 border border-slate-100/90 shadow-sm text-center min-w-0">
+          <span className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider block truncate">
             You Paid
           </span>
-          <span className="text-base font-black text-slate-900 mt-0.5 block">
+          <span className="text-xs sm:text-base font-black text-slate-900 mt-0.5 block truncate">
             {formatCurrency(totalPaid, currency)}
           </span>
         </div>
 
-        <div className="bg-white rounded-2xl p-3.5 border border-slate-100/90 shadow-sm text-center">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+        <div className="bg-white rounded-2xl p-2.5 sm:p-3.5 border border-slate-100/90 shadow-sm text-center min-w-0">
+          <span className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider block truncate">
             Your Share
           </span>
-          <span className="text-base font-black text-slate-900 mt-0.5 block">
+          <span className="text-xs sm:text-base font-black text-slate-900 mt-0.5 block truncate">
             {formatCurrency(totalShare, currency)}
           </span>
         </div>
 
         <div
           onClick={() => setIsAdvanceCreditOpen(true)}
-          className="bg-white rounded-2xl p-3.5 border border-slate-100/90 shadow-sm text-center cursor-pointer hover:border-emerald-300 transition-all active:scale-[0.98]"
+          className="bg-white rounded-2xl p-2.5 sm:p-3.5 border border-slate-100/90 shadow-sm text-center cursor-pointer hover:border-emerald-300 transition-all active:scale-[0.98] min-w-0"
         >
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+          <span className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider block truncate">
             Advance Credit
           </span>
-          <span className="text-base font-black text-emerald-600 mt-0.5 block">
+          <span className="text-xs sm:text-base font-black text-emerald-600 mt-0.5 block truncate">
             💰 {formatCurrency(myBalanceRecord?.advanceCredit || 0, currency)}
           </span>
         </div>

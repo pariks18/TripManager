@@ -43,17 +43,17 @@ export const MemberCard: React.FC<MemberCardProps> = React.memo(({
 
   return (
     <>
-      <div className="bg-white rounded-3xl p-4 border border-slate-100 apple-shadow flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
+      <div className="bg-white rounded-3xl p-3.5 sm:p-4 border border-slate-100 apple-shadow flex items-center justify-between gap-2 sm:gap-3 min-w-0">
+        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
           <Avatar name={user.name} size="md" />
 
-          <div>
-            <div className="flex items-center gap-2">
-              <h4 className="text-base font-bold text-slate-900">
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5 flex-wrap sm:flex-nowrap">
+              <h4 className="text-xs sm:text-base font-bold text-slate-900 truncate max-w-[130px] sm:max-w-none">
                 {user.name} {isCurrentUser ? '(You)' : ''}
               </h4>
               {isAdmin && (
-                <span className="bg-amber-50 text-amber-700 text-[10px] font-bold px-2 py-0.5 rounded-full border border-amber-200">
+                <span className="bg-amber-50 text-amber-700 text-[9px] sm:text-[10px] font-bold px-2 py-0.5 rounded-full border border-amber-200 shrink-0">
                   Organizer
                 </span>
               )}
