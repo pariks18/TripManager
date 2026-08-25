@@ -65,7 +65,7 @@ import {
 export default function TripDashboardPage() {
   const router = useRouter();
   const params = useParams();
-  const tripId = params.tripId as string;
+  const tripId = (params?.tripId as string) || '';
 
   const [user, setUser] = useState<UserSession | null>(null);
   const [trip, setTrip] = useState<TripSummary | null>(null);
