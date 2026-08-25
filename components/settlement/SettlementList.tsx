@@ -464,7 +464,7 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
                         className="flex items-center gap-1.5 text-xs font-extrabold px-4 py-2 rounded-2xl bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm transition-all active:scale-[0.98]"
                       >
                         <CheckCircle2 className="w-4 h-4" />
-                        Pay Rahul {pendingSum > 0 ? formatCurrency(remainingUnsettled, currency) : ''}
+                        Pay {tx.toUser.name} {pendingSum > 0 ? formatCurrency(remainingUnsettled, currency) : ''}
                       </button>
                     ) : (
                       <span className="inline-flex items-center gap-1 text-xs font-bold text-amber-800 bg-amber-100 px-3 py-1.5 rounded-2xl border border-amber-200">

@@ -14,7 +14,7 @@
   "app/dashboard/trip/[tripId]/page.tsx -> @/components/settlement/SettlementList": {
     "id": 208,
     "files": [
-      "static/chunks/208.8ea13013f5168fd9.js"
+      "static/chunks/208.1bcdd8f29707582a.js"
     ]
   },
   "app/dashboard/trip/[tripId]/page.tsx -> @/components/trip/AnalyticsView": {
