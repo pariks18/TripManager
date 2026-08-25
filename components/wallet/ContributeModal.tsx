@@ -85,10 +85,10 @@ export const ContributeModal: React.FC<ContributeModalProps> = ({
         <div className="bg-emerald-50/70 border border-emerald-200/80 rounded-2xl p-4 space-y-2">
           <div className="flex items-center gap-2 text-emerald-950 font-bold text-xs">
             <Sparkles className="w-4 h-4 text-emerald-600" />
-            <span>Personal Advance Wallet</span>
+            <span>Advance Credit</span>
           </div>
           <p className="text-xs text-emerald-800 leading-relaxed font-medium">
-            This advance money belongs exclusively to <strong>your personal wallet</strong>. Once the <strong>Host approves it</strong>, you can use your personal wallet balance to pay for expenses during the trip!
+            This advance money belongs exclusively to your <strong>Advance Credit</strong> balance. Once confirmed, your available credit will automatically absorb future trip expense shares!
           </p>
         </div>
 

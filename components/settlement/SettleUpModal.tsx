@@ -127,7 +127,7 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
 
     if (isWalletInsufficient) {
       setError(
-        `Your personal advance wallet balance (${formatCurrency(payerWalletBalance, currency)}) is less than the settlement amount (${formatCurrency(amountToSettle, currency)}). Please select "Pay ${formatCurrency(payerWalletBalance, currency)} from Wallet" or switch to "Personal Money".`
+        `Your available Advance Credit (${formatCurrency(payerWalletBalance, currency)}) is less than the settlement amount (${formatCurrency(amountToSettle, currency)}). Please select "Pay ${formatCurrency(payerWalletBalance, currency)} from Credit" or switch to "Personal Money".`
       );
       return;
     }
@@ -371,10 +371,10 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
             <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-2xl text-xs space-y-2 text-amber-900">
               <div className="flex items-center gap-2 font-bold text-amber-950">
                 <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
-                <span>Your wallet does not have enough balance.</span>
+                <span>Your available Advance Credit is insufficient.</span>
               </div>
               <p className="text-[11px] text-amber-800 leading-relaxed">
-                Total debt owed is <span className="font-bold">{formatCurrency(amountToSettle, currency)}</span>, but your advance wallet has <span className="font-bold">{formatCurrency(payerWalletBalance, currency)}</span>.
+                Total debt owed is <span className="font-bold">{formatCurrency(amountToSettle, currency)}</span>, but your Advance Credit has <span className="font-bold">{formatCurrency(payerWalletBalance, currency)}</span>.
               </p>
               <div className="flex flex-col gap-1.5 pt-1">
                 {payerWalletBalance > 0 && (
@@ -387,7 +387,7 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
                     }}
                     className="w-full py-2 px-3 bg-amber-200/80 hover:bg-amber-300/80 text-amber-950 font-bold rounded-xl text-[11px] transition-colors text-left flex items-center justify-between"
                   >
-                    <span>Pay {formatCurrency(payerWalletBalance, currency)} from Wallet</span>
+                    <span>Pay {formatCurrency(payerWalletBalance, currency)} from Credit</span>
                     <span className="text-[10px] text-amber-800 font-mono">(Remaining {formatCurrency(Math.max(0, outstandingAmount - payerWalletBalance), currency)} via Personal Money)</span>
                   </button>
                 )}
