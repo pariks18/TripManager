@@ -64,6 +64,10 @@ export const GroupChatView: React.FC<GroupChatViewProps> = React.memo(({ tripId,
       });
       socketRef.current = socket;
 
+      if (socket.connected) {
+        socket.emit('join_trip', tripId);
+      }
+
       socket.on('connect', () => {
         socket.emit('join_trip', tripId);
       });
@@ -83,10 +87,11 @@ export const GroupChatView: React.FC<GroupChatViewProps> = React.memo(({ tripId,
     };
   }, [tripId]);
 
-  const handleSend = (e: React.FormEvent) => {
+  const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
     const text = inputText.trim();
     if (!text) return;
+    setInputText('');
 
     if (socketRef.current) {
       socketRef.current.emit('send_message', {
@@ -96,7 +101,22 @@ export const GroupChatView: React.FC<GroupChatViewProps> = React.memo(({ tripId,
       });
     }
 
-    setInputText('');
+    try {
+      const res = await fetch(`/api/trips/${tripId}/messages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: text }),
+      });
+      const data = await res.json();
+      if (data.message) {
+        setMessages((prev) => {
+          if (prev.some((m) => m.id === data.message.id)) return prev;
+          return [...prev, data.message];
+        });
+      }
+    } catch (err) {
+      console.error('Failed REST message fallback:', err);
+    }
   };
 
   return (
