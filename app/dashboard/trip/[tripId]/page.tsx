@@ -21,7 +21,7 @@ const StayView = dynamic(() => import('@/components/trip/StayView').then((m) => 
 const LivePollsView = dynamic(() => import('@/components/trip/LivePollsView').then((m) => m.LivePollsView));
 const LiveLocationView = dynamic(() => import('@/components/trip/LiveLocationView').then((m) => m.LiveLocationView));
 const GroupChatView = dynamic(() => import('@/components/chat/GroupChatView').then((m) => m.GroupChatView));
-const WalletView = dynamic(() => import('@/components/wallet/WalletView').then((m) => m.WalletView));
+const AdvanceCreditModal = dynamic(() => import('@/components/wallet/AdvanceCreditModal').then((m) => m.AdvanceCreditModal));
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/Skeleton';
@@ -73,10 +73,11 @@ export default function TripDashboardPage() {
   const [activeTab, setActiveTab] = useState<'overview' | 'trip' | 'polls' | 'location' | 'expenses' | 'itinerary' | 'stay' | 'approvals' | 'wallet' | 'settlement' | 'timeline' | 'analytics' | 'chat'>('overview');
   const [copiedCode, setCopiedCode] = useState(false);
 
-  // Expense modal state
+  // Expense & Advance Credit modal state
   const [isAddExpenseOpen, setIsAddExpenseOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState<ExpenseDetail | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isAdvanceCreditOpen, setIsAdvanceCreditOpen] = useState(false);
 
   // Search & Filters
   const [searchQuery, setSearchQuery] = useState('');
@@ -302,6 +303,7 @@ export default function TripDashboardPage() {
   const userTotalPaid = currentUserBalanceRecord?.paid || 0;
   const userTotalShare = currentUserBalanceRecord?.share || 0;
   const userNetBalance = currentUserBalanceRecord?.netBalance || 0;
+  const userAdvanceCredit = Math.max(0, currentUserBalanceRecord?.advanceCredit || 0);
 
   const categories: string[] = ['ALL', 'Food', 'Travel', 'Fuel', 'Stay', 'Entertainment', 'Shopping', 'Miscellaneous'];
 
@@ -333,15 +335,11 @@ export default function TripDashboardPage() {
               </button>
             )}
             <button
-              onClick={() => {
-                setEditingExpense(null);
-                setIsAddExpenseOpen(true);
-              }}
-              className="flex items-center gap-1 text-[11px] font-bold bg-emerald-600 text-white border border-emerald-600 px-2.5 sm:px-3 py-1 rounded-xl hover:bg-emerald-700 transition-colors shadow-sm"
+              onClick={() => setIsAdvanceCreditOpen(true)}
+              className="flex items-center gap-1 text-[11px] font-extrabold bg-emerald-50 text-emerald-700 border border-emerald-200/90 px-2.5 sm:px-3 py-1 rounded-xl hover:bg-emerald-100 transition-all shadow-sm active:scale-[0.98]"
+              title="View Advance Credit Details"
             >
-              <Plus className="w-3.5 h-3.5" />
-              <span className="hidden xs:inline">Add Expense</span>
-              <span className="xs:hidden">Add</span>
+              <span>{userAdvanceCredit > 0 ? `💰 +${formatCurrency(userAdvanceCredit, trip.currency)}` : `💰 ${formatCurrency(0, trip.currency)}`}</span>
             </button>
             <button
               onClick={() => router.push('/dashboard/profile')}
@@ -867,6 +865,19 @@ export default function TripDashboardPage() {
         variant={confirmModalConfig.variant}
         onConfirm={confirmModalConfig.onConfirm}
       />
+
+      {/* Advance Credit Modal */}
+      {isAdvanceCreditOpen && (
+        <AdvanceCreditModal
+          isOpen={isAdvanceCreditOpen}
+          onClose={() => setIsAdvanceCreditOpen(false)}
+          currency={trip.currency}
+          currentUserId={user.id}
+          memberBalance={currentUserBalanceRecord}
+          settlementRecords={trip.settlementRecords}
+          expenses={trip.expenses}
+        />
+      )}
 
       <BottomNav />
     </div>

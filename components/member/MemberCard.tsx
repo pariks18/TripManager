@@ -69,11 +69,11 @@ export const MemberCard: React.FC<MemberCardProps> = React.memo(({
 
               {memberBalance.advanceCredit && memberBalance.advanceCredit > 0 ? (
                 <span className="text-[10px] font-extrabold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200/80">
-                  💰 {formatCurrency(memberBalance.advanceCredit, currency)}
+                  💰 +{formatCurrency(memberBalance.advanceCredit, currency)}
                 </span>
               ) : (
                 <span className="text-[10px] font-semibold text-slate-400 bg-slate-50 px-2 py-0.5 rounded-full border border-slate-100">
-                  No Credit
+                  💰 {formatCurrency(0, currency)}
                 </span>
               )}
 

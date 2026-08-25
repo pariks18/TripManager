@@ -44,7 +44,7 @@ export const AdvanceCreditModal: React.FC<AdvanceCreditModalProps> = ({
   const creditUsed = Math.max(0, Math.round((totalCreditAdded - availableCredit) * 100) / 100);
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Advance Credit 💰">
+    <Modal isOpen={isOpen} onClose={onClose} title="Advance Credit Summary">
       <div className="space-y-5">
         {/* Available Credit Banner */}
         <div className="bg-gradient-to-br from-emerald-600 to-teal-700 rounded-3xl p-6 text-white shadow-md space-y-3">
@@ -67,41 +67,32 @@ export const AdvanceCreditModal: React.FC<AdvanceCreditModalProps> = ({
           </div>
         </div>
 
-        {/* Metric Breakdown Cards */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
-          <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-2.5">
-            <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider block truncate">
-              Available Credit
+        {/* 3 Metric Breakdown Cards */}
+        <div className="grid grid-cols-3 gap-2.5 text-center">
+          <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3">
+            <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">
+              Available
             </span>
-            <span className="text-xs sm:text-sm font-black text-emerald-700 block mt-0.5 truncate">
+            <span className="text-sm font-black text-emerald-700 block mt-0.5">
               {formatCurrency(availableCredit, currency)}
             </span>
           </div>
 
-          <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-2.5">
-            <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider block truncate">
-              Total Credit Added
+          <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3">
+            <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">
+              Total Added
             </span>
-            <span className="text-xs sm:text-sm font-bold text-slate-900 block mt-0.5 truncate">
+            <span className="text-sm font-bold text-slate-900 block mt-0.5">
               {formatCurrency(totalCreditAdded, currency)}
             </span>
           </div>
 
-          <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-2.5">
-            <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider block truncate">
+          <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3">
+            <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">
               Credit Used
             </span>
-            <span className="text-xs sm:text-sm font-bold text-purple-700 block mt-0.5 truncate">
+            <span className="text-sm font-bold text-purple-700 block mt-0.5">
               {formatCurrency(creditUsed, currency)}
-            </span>
-          </div>
-
-          <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-2.5">
-            <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider block truncate">
-              Remaining Credit
-            </span>
-            <span className="text-xs sm:text-sm font-bold text-emerald-600 block mt-0.5 truncate">
-              {formatCurrency(availableCredit, currency)}
             </span>
           </div>
         </div>
@@ -117,7 +108,7 @@ export const AdvanceCreditModal: React.FC<AdvanceCreditModalProps> = ({
         {/* Credit History Timeline */}
         <div className="space-y-3 pt-1">
           <div className="flex items-center gap-2 text-slate-900 font-bold text-xs">
-            <History className="w-4 h-4 text-emerald-600" /> Advance History
+            <History className="w-4 h-4 text-emerald-600" /> Credit & Payment History
           </div>
 
           {confirmedPaidSettlements.length === 0 ? (

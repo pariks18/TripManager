@@ -127,7 +127,7 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
 
     if (isWalletInsufficient) {
       setError(
-        `Your available Advance Credit (${formatCurrency(payerWalletBalance, currency)}) is less than the settlement amount (${formatCurrency(amountToSettle, currency)}). Please select "Pay ${formatCurrency(payerWalletBalance, currency)} from Credit" or switch to "Personal Money".`
+        `Your personal advance wallet balance (${formatCurrency(payerWalletBalance, currency)}) is less than the settlement amount (${formatCurrency(amountToSettle, currency)}). Please select "Pay ${formatCurrency(payerWalletBalance, currency)} from Wallet" or switch to "Personal Money".`
       );
       return;
     }
@@ -175,7 +175,7 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
 
       if (isWallet) {
         showToast(
-          `✓ Settlement Completed: ${formatCurrency(amountToSettle, currency)} paid to ${toUser.name} from your Advance Wallet`,
+          `✓ Settlement Completed: ${formatCurrency(amountToSettle, currency)} paid to ${toUser.name} using Advance Credit`,
           'success',
           'Settlement Completed'
         );
@@ -220,7 +220,7 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
             </h3>
             <p className="text-xs font-semibold text-slate-600 mt-1">
               {isWalletSuccess ? (
-                <>Paid to <span className="text-slate-900 font-bold">{successResult.toUserName}</span> from your Advance Wallet</>
+                <>Paid to <span className="text-slate-900 font-bold">{successResult.toUserName}</span> using Advance Credit</>
               ) : (
                 <>Sent to <span className="text-slate-900 font-bold">{successResult.toUserName}</span> for Host approval</>
               )}
@@ -232,14 +232,14 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
               <span>Payment Source:</span>
               <span className="font-bold text-slate-900">
                 {isWalletSuccess
-                  ? `${successResult.fromUserName}'s Advance Wallet`
+                  ? `${successResult.fromUserName}'s Advance Credit`
                   : 'Personal Money'}
               </span>
             </div>
 
             {isWalletSuccess && (
               <div className="flex justify-between items-center text-slate-600">
-                <span>Wallet Remaining Balance:</span>
+                <span>Remaining Advance Credit:</span>
                 <span className="font-extrabold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-200">
                   {formatCurrency(successResult.remainingWallet, currency)}
                 </span>
@@ -254,7 +254,7 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
             </div>
             <p className="text-[11px] text-slate-500 italic pt-1">
               {isWalletSuccess
-                ? '* Settlement completed instantly using your pre-approved Advance Wallet funds.'
+                ? '* Settlement completed instantly using your available Advance Credit.'
                 : '* Your request was sent — payment will complete once the Host approves.'}
             </p>
           </div>
@@ -338,10 +338,10 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
               >
                 <div className="flex items-center gap-1.5 font-bold text-xs">
                   <Wallet className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <span>Advance Wallet</span>
+                  <span>Advance Credit</span>
                 </div>
                 <span className="text-[11px] font-semibold text-emerald-700">
-                  Available: {formatCurrency(payerWalletBalance, currency)}
+                  Available: +{formatCurrency(payerWalletBalance, currency)}
                 </span>
               </button>
 
@@ -371,10 +371,10 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
             <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-2xl text-xs space-y-2 text-amber-900">
               <div className="flex items-center gap-2 font-bold text-amber-950">
                 <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
-                <span>Your available Advance Credit is insufficient.</span>
+                <span>Your wallet does not have enough balance.</span>
               </div>
               <p className="text-[11px] text-amber-800 leading-relaxed">
-                Total debt owed is <span className="font-bold">{formatCurrency(amountToSettle, currency)}</span>, but your Advance Credit has <span className="font-bold">{formatCurrency(payerWalletBalance, currency)}</span>.
+                Total debt owed is <span className="font-bold">{formatCurrency(amountToSettle, currency)}</span>, but your advance wallet has <span className="font-bold">{formatCurrency(payerWalletBalance, currency)}</span>.
               </p>
               <div className="flex flex-col gap-1.5 pt-1">
                 {payerWalletBalance > 0 && (
@@ -387,7 +387,7 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
                     }}
                     className="w-full py-2 px-3 bg-amber-200/80 hover:bg-amber-300/80 text-amber-950 font-bold rounded-xl text-[11px] transition-colors text-left flex items-center justify-between"
                   >
-                    <span>Pay {formatCurrency(payerWalletBalance, currency)} from Credit</span>
+                    <span>Pay {formatCurrency(payerWalletBalance, currency)} from Wallet</span>
                     <span className="text-[10px] text-amber-800 font-mono">(Remaining {formatCurrency(Math.max(0, outstandingAmount - payerWalletBalance), currency)} via Personal Money)</span>
                   </button>
                 )}

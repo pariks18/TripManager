@@ -12,9 +12,9 @@
     ]
   },
   "app/dashboard/trip/[tripId]/page.tsx -> @/components/settlement/SettlementList": {
-    "id": 1286,
+    "id": 208,
     "files": [
-      "static/chunks/286.11c1ea81d1ee0e7e.js"
+      "static/chunks/208.8ea13013f5168fd9.js"
     ]
   },
   "app/dashboard/trip/[tripId]/page.tsx -> @/components/trip/AnalyticsView": {
@@ -53,10 +53,8 @@
       "static/chunks/616.ddda18844f3f7962.js"
     ]
   },
-  "app/dashboard/trip/[tripId]/page.tsx -> @/components/wallet/WalletView": {
-    "id": 6396,
-    "files": [
-      "static/chunks/396.883419db4fda657d.js"
-    ]
+  "app/dashboard/trip/[tripId]/page.tsx -> @/components/wallet/AdvanceCreditModal": {
+    "id": 5045,
+    "files": []
   }
 }
