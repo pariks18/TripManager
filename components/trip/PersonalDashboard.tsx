@@ -1,13 +1,14 @@
 'use client';
 
 import React, { useState } from 'react';
-import { ExpenseDetail, MemberBalance, SettlementTransaction, TripMemberDetail, UserSummary, UserWalletDetail } from '@/types';
+import { ExpenseDetail, MemberBalance, SettlementRecordDetail, SettlementTransaction, TripMemberDetail, UserSummary, UserWalletDetail } from '@/types';
 import { formatCurrency } from '@/lib/utils';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { MemberCard } from '@/components/member/MemberCard';
 import { SettleUpModal } from '@/components/settlement/SettleUpModal';
 import { ExpenseBreakdownModal } from '@/components/expense/ExpenseBreakdownModal';
+import { AdvanceCreditModal } from '@/components/wallet/AdvanceCreditModal';
 import { ExpenseCard } from '@/components/expense/ExpenseCard';
 import {
   Wallet,
@@ -31,6 +32,7 @@ interface PersonalDashboardProps {
   settlements: SettlementTransaction[];
   onMarkSettled: (tx: SettlementTransaction) => void;
   memberBalances?: MemberBalance[];
+  settlementRecords?: SettlementRecordDetail[];
   myWallet?: UserWalletDetail | null;
   allWallets?: UserWalletDetail[];
   members?: TripMemberDetail[];
@@ -55,6 +57,7 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = React.memo(({
   settlements,
   onMarkSettled,
   memberBalances = [],
+  settlementRecords = [],
   myWallet,
   allWallets = [],
   members = [],
@@ -75,6 +78,9 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = React.memo(({
   // Expense breakdown modal state
   const [breakdownMember, setBreakdownMember] = useState<UserSummary | null>(null);
   const [isBreakdownOpen, setIsBreakdownOpen] = useState(false);
+  const [isAdvanceCreditOpen, setIsAdvanceCreditOpen] = useState(false);
+
+  const myBalanceRecord = memberBalances.find((b) => b.user.id === currentUserId);
 
   const isNetPositive = netBalance > 0.01;
   const isNetNegative = netBalance < -0.01;
@@ -217,12 +223,15 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = React.memo(({
           </span>
         </div>
 
-        <div className="bg-white rounded-2xl p-3.5 border border-slate-100/90 shadow-sm text-center">
+        <div
+          onClick={() => setIsAdvanceCreditOpen(true)}
+          className="bg-white rounded-2xl p-3.5 border border-slate-100/90 shadow-sm text-center cursor-pointer hover:border-emerald-300 transition-all active:scale-[0.98]"
+        >
           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-            Advance Wallet
+            Advance Credit
           </span>
           <span className="text-base font-black text-emerald-600 mt-0.5 block">
-            {formatCurrency(myWallet?.balance || 0, currency)}
+            💰 {formatCurrency(myBalanceRecord?.advanceCredit || 0, currency)}
           </span>
         </div>
       </div>
@@ -424,6 +433,18 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = React.memo(({
           currency={currency}
           currentUserId={currentUserId}
           otherMember={breakdownMember}
+          expenses={expenses}
+        />
+      )}
+
+      {isAdvanceCreditOpen && (
+        <AdvanceCreditModal
+          isOpen={isAdvanceCreditOpen}
+          onClose={() => setIsAdvanceCreditOpen(false)}
+          currency={currency}
+          currentUserId={currentUserId}
+          memberBalance={myBalanceRecord}
+          settlementRecords={settlementRecords}
           expenses={expenses}
         />
       )}

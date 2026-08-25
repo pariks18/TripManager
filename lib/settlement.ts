@@ -5,7 +5,10 @@ export function calculateMemberBalances(
   expenses: ExpenseDetail[],
   settlements?: SettlementRecordDetail[]
 ): MemberBalance[] {
-  const balanceMap = new Map<string, { user: UserSummary; paid: number; share: number }>();
+  const balanceMap = new Map<
+    string,
+    { user: UserSummary; paid: number; share: number; settlementsPaid: number; settlementsReceived: number }
+  >();
 
   // Initialize for all members
   members.forEach((m) => {
@@ -13,6 +16,8 @@ export function calculateMemberBalances(
       user: m.user,
       paid: 0,
       share: 0,
+      settlementsPaid: 0,
+      settlementsReceived: 0,
     });
   });
 
@@ -35,7 +40,8 @@ export function calculateMemberBalances(
     });
   });
 
-  // Incorporate CONFIRMED / SETTLED / PARTIALLY_SETTLED / COMPLETED settlements
+  // Track CONFIRMED / SETTLED / PARTIALLY_SETTLED / COMPLETED / ROLLBACK_REQUESTED settlements
+  // Note: Settlements MUST NOT modify expense paid or share values. They ONLY adjust the net outstanding balance.
   if (settlements && settlements.length > 0) {
     const validSettlements = settlements.filter(
       (s) =>
@@ -48,14 +54,13 @@ export function calculateMemberBalances(
 
     validSettlements.forEach((s) => {
       const effectiveAmount = typeof s.settledAmount === 'number' && s.settledAmount > 0 ? s.settledAmount : s.amount;
-      // fromUser paid money to toUser
       if (balanceMap.has(s.fromUserId)) {
         const fromRecord = balanceMap.get(s.fromUserId)!;
-        fromRecord.paid += effectiveAmount;
+        fromRecord.settlementsPaid += effectiveAmount;
       }
       if (balanceMap.has(s.toUserId)) {
         const toRecord = balanceMap.get(s.toUserId)!;
-        toRecord.share += effectiveAmount;
+        toRecord.settlementsReceived += effectiveAmount;
       }
     });
   }
@@ -63,12 +68,33 @@ export function calculateMemberBalances(
   // Format into MemberBalance list
   const results: MemberBalance[] = [];
   balanceMap.forEach((record) => {
-    const netBalance = Math.round((record.paid - record.share) * 100) / 100;
+    const netDebtBeforeSettlements = Math.max(0, record.share - record.paid);
+    const netSettlementPayments = record.settlementsPaid - record.settlementsReceived;
+
+    let advanceCredit = 0;
+    let netBalance = 0;
+
+    if (record.paid > record.share) {
+      // Member is an expense payer (gross receivable)
+      netBalance = Math.round(((record.paid - record.share) - record.settlementsReceived + record.settlementsPaid) * 100) / 100;
+    } else {
+      // Member is an expense debtor or even
+      if (netSettlementPayments > netDebtBeforeSettlements) {
+        advanceCredit = Math.round((netSettlementPayments - netDebtBeforeSettlements) * 100) / 100;
+        netBalance = 0;
+      } else {
+        netBalance = Math.round((-(netDebtBeforeSettlements - netSettlementPayments)) * 100) / 100;
+      }
+    }
+
     results.push({
       user: record.user,
       paid: Math.round(record.paid * 100) / 100,
       share: Math.round(record.share * 100) / 100,
       netBalance,
+      settlementsPaid: Math.round(record.settlementsPaid * 100) / 100,
+      settlementsReceived: Math.round(record.settlementsReceived * 100) / 100,
+      advanceCredit,
     });
   });
 

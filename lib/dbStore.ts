@@ -389,6 +389,19 @@ export const dbStore = {
               },
             },
           },
+          settlements: {
+            where: {
+              status: {
+                in: ['CONFIRMED', 'SETTLED', 'PARTIALLY_SETTLED', 'COMPLETED', 'ROLLBACK_REQUESTED'],
+              },
+            },
+            select: {
+              fromUserId: true,
+              toUserId: true,
+              amount: true,
+              settledAmount: true,
+            },
+          },
         },
       },
     },
@@ -423,6 +436,21 @@ export const dbStore = {
         }
       });
     });
+
+    let settlementsPaid = 0;
+    let settlementsReceived = 0;
+
+    (trip.settlements || []).forEach((s) => {
+      const effectiveAmount = typeof s.settledAmount === 'number' && s.settledAmount > 0 ? s.settledAmount : s.amount;
+      if (s.fromUserId === userId) {
+        settlementsPaid += effectiveAmount;
+      }
+      if (s.toUserId === userId) {
+        settlementsReceived += effectiveAmount;
+      }
+    });
+
+    const userBalance = Math.round(((paid - share) + settlementsPaid - settlementsReceived) * 100) / 100;
 
     return {
       id: trip.id,
@@ -460,10 +488,10 @@ export const dbStore = {
       activities: [],
       settlementRecords: [],
 
-      totalExpense,
-      userBalance: paid - share,
-      userTotalPaid: paid,
-      userTotalShare: share,
+      totalExpense: Math.round(totalExpense * 100) / 100,
+      userBalance,
+      userTotalPaid: Math.round(paid * 100) / 100,
+      userTotalShare: Math.round(share * 100) / 100,
     };
   });
 
@@ -1426,11 +1454,8 @@ export const dbStore = {
     const pairTx = computedSettlements.find((tx) => tx.fromUser.id === fromUserId && tx.toUser.id === toUserId);
     const currentOutstanding = pairTx ? pairTx.amount : 0;
 
-    if (roundedAmount > currentOutstanding + 0.01) {
-      throw new Error(
-        `Settlement amount (${trip.currency}${roundedAmount}) cannot exceed current outstanding debt (${trip.currency}${currentOutstanding}).`
-      );
-    }
+    const settledAmount = Math.min(roundedAmount, currentOutstanding);
+    const remainingAmount = Math.max(0, Math.round((roundedAmount - settledAmount) * 100) / 100);
 
     const existingPending = await prisma.settlement.findFirst({
       where: { tripId, fromUserId, toUserId, status: 'PENDING' },
@@ -1577,11 +1602,8 @@ export const dbStore = {
         );
       }
 
-      if (roundedPaymentAmount > remainingPayable + 0.01) {
-        throw new Error(
-          `Payment amount (${trip.currency}${roundedPaymentAmount}) exceeds your maximum available payable debt (${trip.currency}${remainingPayable}). Pending requests: ${trip.currency}${totalPendingAmount}, Total debt: ${trip.currency}${currentOutstanding}.`
-        );
-      }
+      const settledAmount = Math.min(roundedPaymentAmount, currentOutstanding);
+      const remainingAmount = Math.max(0, Math.round((roundedPaymentAmount - settledAmount) * 100) / 100);
 
       if (paymentMethod === 'WALLET') {
         const userWallet = await tx.userWallet.findUnique({
@@ -2099,6 +2121,7 @@ export const dbStore = {
       include: {
         members: { include: { user: true } },
         expenses: { include: { paidBy: true, participants: { include: { user: true } } } },
+        settlements: { include: { fromUser: true, toUser: true } },
       },
     });
 
@@ -2107,25 +2130,72 @@ export const dbStore = {
     const approvedExpenses = trip.expenses.filter((e) => e.status === 'APPROVED');
     const totalTripSpent = approvedExpenses.reduce((sum, e) => sum + e.amount, 0);
 
+    const formattedMembers = trip.members.map((m) => ({
+      user: { id: m.user.id, name: m.user.name, email: m.user.email },
+    }));
+
+    const formattedExpenses: ExpenseDetail[] = approvedExpenses.map((e) => ({
+      id: e.id,
+      tripId: e.tripId,
+      title: e.title,
+      amount: e.amount,
+      category: e.category as CategoryType,
+      paidById: e.paidById,
+      paidBy: { id: e.paidBy.id, name: e.paidBy.name, email: e.paidBy.email },
+      createdById: e.createdById,
+      status: e.status as 'APPROVED' | 'PENDING_APPROVAL' | 'REJECTED',
+      paymentMode: (e.paymentMode as 'PERSONALLY' | 'WALLET') || 'PERSONALLY',
+      walletTransactionId: e.walletTransactionId,
+      rejectionReason: e.rejectionReason,
+      date: e.date.toISOString(),
+      createdAt: e.createdAt.toISOString(),
+      updatedAt: e.updatedAt.toISOString(),
+      participants: e.participants.map((p) => ({
+        id: p.id,
+        expenseId: p.expenseId,
+        userId: p.userId,
+        shareAmount: p.shareAmount,
+        user: { id: p.user.id, name: p.user.name, email: p.user.email },
+      })),
+    }));
+
+    const formattedSettlements: SettlementRecordDetail[] = trip.settlements.map((s) => ({
+      id: s.id,
+      tripId: s.tripId,
+      fromUserId: s.fromUserId,
+      fromUser: { id: s.fromUser.id, name: s.fromUser.name, email: s.fromUser.email },
+      toUserId: s.toUserId,
+      toUser: { id: s.toUser.id, name: s.toUser.name, email: s.toUser.email },
+      amount: s.amount,
+      settledAmount: s.settledAmount,
+      remainingAmount: s.remainingAmount,
+      paymentMethod: (s.paymentMethod as 'PERSONAL' | 'WALLET') || 'PERSONAL',
+      status: s.status as SettlementRecordDetail['status'],
+      note: s.note,
+      createdAt: s.createdAt.toISOString(),
+      updatedAt: s.updatedAt.toISOString(),
+    }));
+
+    const memberBalances = calculateMemberBalances(formattedMembers, formattedExpenses, formattedSettlements);
+
     return trip.members.map((mem) => {
       const u = mem.user;
-      let totalPaid = 0;
-      let totalOwed = 0;
+      const mb = memberBalances.find((b) => b.user.id === u.id);
+      const totalPaid = mb?.paid || 0;
+      const totalOwed = mb?.share || 0;
+      const netBalance = mb?.netBalance || 0;
+
       let expensesAddedCount = 0;
       let largestExpenseAmount = 0;
       const categoryCounts: Record<string, number> = {};
 
       approvedExpenses.forEach((e) => {
-        if (e.paidById === u.id) {
-          totalPaid += e.amount;
-        }
         if (e.createdById === u.id) {
           expensesAddedCount++;
           if (e.amount > largestExpenseAmount) largestExpenseAmount = e.amount;
         }
         e.participants.forEach((p) => {
           if (p.userId === u.id) {
-            totalOwed += p.shareAmount;
             categoryCounts[e.category] = (categoryCounts[e.category] || 0) + 1;
           }
         });
@@ -2141,7 +2211,6 @@ export const dbStore = {
       });
 
       const percentageSpending = totalTripSpent > 0 ? Math.round((totalPaid / totalTripSpent) * 100) : 0;
-      const netBalance = Math.round((totalPaid - totalOwed) * 100) / 100;
 
       return {
         user: { id: u.id, name: u.name, email: u.email },

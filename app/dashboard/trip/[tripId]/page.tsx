@@ -418,6 +418,7 @@ export default function TripDashboardPage() {
             settlements={settlements}
             onMarkSettled={handleMarkSettled}
             memberBalances={balances}
+            settlementRecords={trip.settlementRecords}
             myWallet={trip.myWallet}
             allWallets={trip.allWallets}
             members={trip.members}
@@ -518,17 +519,17 @@ export default function TripDashboardPage() {
                   </div>
                 </div>
 
-                {/* 5. Wallet */}
+                {/* 5. Advance Credit */}
                 <div
-                  onClick={() => setActiveTab('wallet')}
+                  onClick={() => setActiveTab('overview')}
                   className="bg-white rounded-2xl p-4 border border-slate-100/90 shadow-sm hover:shadow-md cursor-pointer transition-all space-y-2 group active:scale-[0.98]"
                 >
                   <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-xl w-fit group-hover:scale-105 transition-transform">
                     <Wallet className="w-5 h-5" />
                   </div>
                   <div>
-                    <h5 className="text-xs font-bold text-slate-900">Advance Wallet</h5>
-                    <p className="text-[10px] text-slate-400 mt-0.5 leading-tight">Pre-funded trip pool</p>
+                    <h5 className="text-xs font-bold text-slate-900">Advance Credit</h5>
+                    <p className="text-[10px] text-slate-400 mt-0.5 leading-tight">Excess settlement credit</p>
                   </div>
                 </div>
 
@@ -765,19 +766,7 @@ export default function TripDashboardPage() {
           />
         )}
 
-        {/* TAB: PERSONAL WALLET */}
-        {activeTab === 'wallet' && (
-          <WalletView
-            tripId={trip.id}
-            currency={trip.currency}
-            myWallet={trip.myWallet}
-            allWallets={trip.allWallets}
-            members={trip.members}
-            currentUserId={user.id}
-            isAdmin={isAdmin}
-            onRefresh={fetchTripDetails}
-          />
-        )}
+
 
         {/* TAB 4: SETTLEMENT ENGINE */}
         {activeTab === 'settlement' && (

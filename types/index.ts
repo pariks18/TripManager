@@ -343,6 +343,11 @@ export interface MemberBalance {
   paid: number;
   share: number;
   netBalance: number;
+  settlementsPaid?: number;
+  settlementsReceived?: number;
+  advanceCredit?: number;
+  totalCreditAdded?: number;
+  creditUsed?: number;
 }
 
 export interface MemberAnalytics {
