@@ -3,7 +3,7 @@
     "id": 6725,
     "files": [
       "static/chunks/876.8de0f0513d8c6739.js",
-      "static/chunks/725.fc6ba5f15e514077.js"
+      "static/chunks/725.e2c13fc150eeedd5.js"
     ]
   },
   "app/dashboard/trip/[tripId]/page.tsx -> @/components/expense/PendingApprovalsView": {
