@@ -9,7 +9,7 @@ import {
   CheckCircle2,
   RefreshCw,
   X,
-  Wallet,
+  CreditCard,
   ArrowRight,
   ShieldAlert,
 } from 'lucide-react';
@@ -211,7 +211,7 @@ export const RemoveMemberModal: React.FC<RemoveMemberModalProps> = ({
                     className="w-full text-left p-3.5 bg-emerald-50/70 hover:bg-emerald-100/80 border border-emerald-200 rounded-2xl transition-all group flex items-start gap-3"
                   >
                     <div className="p-2 bg-emerald-600 text-white rounded-xl shrink-0 mt-0.5 shadow-sm">
-                      <Wallet className="w-4 h-4" />
+                      <CreditCard className="w-4 h-4" />
                     </div>
                     <div className="flex-1">
                       <div className="flex items-center justify-between">

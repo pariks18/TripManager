@@ -57,7 +57,7 @@ import {
   Vote,
   Radio,
   MapPin,
-  Wallet,
+  CreditCard,
   Compass,
   MessageSquare,
 } from 'lucide-react';
@@ -70,7 +70,7 @@ export default function TripDashboardPage() {
   const [user, setUser] = useState<UserSession | null>(null);
   const [trip, setTrip] = useState<TripSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'overview' | 'trip' | 'polls' | 'location' | 'expenses' | 'itinerary' | 'stay' | 'approvals' | 'wallet' | 'settlement' | 'timeline' | 'analytics' | 'chat'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'trip' | 'polls' | 'location' | 'expenses' | 'itinerary' | 'stay' | 'approvals' | 'settlement' | 'timeline' | 'analytics' | 'chat'>('overview');
   const [copiedCode, setCopiedCode] = useState(false);
 
   // Expense & Advance Credit modal state
@@ -410,7 +410,7 @@ export default function TripDashboardPage() {
           <button
             onClick={() => setActiveTab('trip')}
             className={`flex-shrink-0 sm:flex-1 py-2.5 px-3 rounded-xl transition-all flex items-center justify-center gap-1.5 whitespace-nowrap ${
-              activeTab === 'trip' || ['polls', 'location', 'itinerary', 'stay', 'approvals', 'wallet', 'timeline', 'analytics'].includes(activeTab)
+              activeTab === 'trip' || ['polls', 'location', 'itinerary', 'stay', 'approvals', 'timeline', 'analytics'].includes(activeTab)
                 ? 'bg-white text-slate-900 shadow-sm font-extrabold'
                 : 'hover:text-slate-900'
             }`}
@@ -431,8 +431,6 @@ export default function TripDashboardPage() {
             onMarkSettled={handleMarkSettled}
             memberBalances={balances}
             settlementRecords={trip.settlementRecords}
-            myWallet={trip.myWallet}
-            allWallets={trip.allWallets}
             members={trip.members}
             expenses={trip.expenses}
             tripId={trip.id}
@@ -537,7 +535,7 @@ export default function TripDashboardPage() {
                   className="bg-white rounded-2xl p-4 border border-slate-100/90 shadow-sm hover:shadow-md cursor-pointer transition-all space-y-2 group active:scale-[0.98]"
                 >
                   <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-xl w-fit group-hover:scale-105 transition-transform">
-                    <Wallet className="w-5 h-5" />
+                    <CreditCard className="w-5 h-5" />
                   </div>
                   <div>
                     <h5 className="text-xs font-bold text-slate-900">Advance Credit</h5>
@@ -615,7 +613,7 @@ export default function TripDashboardPage() {
         )}
 
         {/* Feature Sub-Page Header for Direct Features */}
-        {['polls', 'location', 'itinerary', 'stay', 'approvals', 'wallet', 'timeline', 'analytics'].includes(activeTab) && (
+        {['polls', 'location', 'itinerary', 'stay', 'approvals', 'timeline', 'analytics'].includes(activeTab) && (
           <div className="flex items-center justify-between pb-1 border-b border-slate-100">
             <button
               onClick={() => setActiveTab('trip')}
@@ -634,8 +632,6 @@ export default function TripDashboardPage() {
                 ? 'Stay'
                 : activeTab === 'approvals'
                 ? 'Host Approvals'
-                : activeTab === 'wallet'
-                ? 'Wallet'
                 : activeTab === 'timeline'
                 ? 'Audit Log'
                 : 'Analytics'}
@@ -810,8 +806,6 @@ export default function TripDashboardPage() {
             currentUserId={user.id}
             members={trip.members}
             expenses={trip.expenses}
-            myWallet={trip.myWallet}
-            allWallets={trip.allWallets}
             isAdmin={isAdmin}
             tripId={trip.id}
             onRefresh={fetchTripDetails}
@@ -838,8 +832,6 @@ export default function TripDashboardPage() {
         members={trip.members}
         currentUserId={user.id}
         isAdmin={isAdmin}
-        walletBalance={trip.myWallet?.balance || 0}
-        allWallets={trip.allWallets}
         existingExpense={editingExpense}
         onSuccess={handleExpenseSuccess}
       />

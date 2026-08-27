@@ -14,7 +14,7 @@ export async function PUT(
 
   try {
     const body = await request.json();
-    const { title, amount, category, paidById, splitBetween, participantUserIds, receiptUrl, paymentMode } = body;
+    const { title, amount, category, paidById, splitBetween, participantUserIds, receiptUrl } = body;
     const participants = splitBetween || participantUserIds;
 
     if (!title || !amount || amount <= 0 || !paidById || !participants || participants.length === 0) {
@@ -29,8 +29,7 @@ export async function PUT(
       (category as CategoryType) || 'Miscellaneous',
       paidById,
       participants,
-      receiptUrl,
-      paymentMode === 'WALLET' ? 'WALLET' : 'PERSONALLY'
+      receiptUrl
     );
 
     return NextResponse.json({ expense: updatedExpense });

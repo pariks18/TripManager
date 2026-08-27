@@ -31,16 +31,12 @@ TripManager simplifies group travel by managing expenses, optimizing debt settle
 - **💰 Expense Tracking & Approval Workflow**:
   - Add expenses split among specific trip members.
   - Track categories (Food, Travel, Stay, Miscellaneous, etc.) and receipt images/urls.
-  - Supports personal payments vs. virtual trip wallet payments.
   - Expense approval system with pending/approved/rejected states and edit/delete requests.
-- **🧮 Smart Debt Settlement Engine**:
+- **🧮 Smart Debt Settlement Engine & Advance Credit**:
   - Automatically calculates net balances for all trip members.
   - Uses a greedy minimal cash-transfer algorithm (`computeSettlements`) to minimize the total number of transactions needed to settle debts.
-  - Supports partial settlements, wallet settlements, and rollback requests.
-- **👛 Per-Trip Virtual Wallets**:
-  - Dedicated virtual balance per member per trip (`UserWallet`).
-  - Request advance funds from trip admins (`WalletAdvance`).
-  - Full transactional audit log (`WalletTransaction`).
+  - Supports partial settlements, advance credit tracking, and rollback requests.
+  - Unused excess payments automatically create **Advance Credit** to absorb future expense shares.
 - **📅 Itinerary & Stay Planner**:
   - Day-by-day itinerary schedule with categories, locations, and time slots.
   - Accommodation details manager with check-in/out times and booking references.
@@ -185,7 +181,7 @@ TripManager/
 │   ├── settlement/             # Settlement Modals, Calculations & Record List
 │   ├── trip/                   # Trip Creation, Itinerary, Polls, Stays & Activity Cards
 │   ├── ui/                     # Reusable UI Elements (Button, Input, Card, Modal, Badges)
-│   └── wallet/                 # Trip Virtual Wallet & Advance Request Components
+│   └── wallet/                 # Advance Credit Modal Component
 ├── lib/                        # Core Helpers & Business Logic
 │   ├── auth.ts                 # JWT signing, verification, password hashing & cookie storage
 │   ├── clientSession.ts        # Client-side session management helpers
@@ -212,27 +208,24 @@ TripManager/
 
 The database schema is defined in [`prisma/schema.prisma`](file:///Users/parikshitgole/TripManager/prisma/schema.prisma) using MongoDB ObjectIDs (`@db.ObjectId`).
 
-### Model Overview (18 Collections)
+### Model Overview (15 Collections)
 
-1. **`User`**: System users storing name, email, hashed password, mobile, DOB, currency preferences, emergency contacts, and relations to trips, expenses, settlements, and wallets.
+1. **`User`**: System users storing name, email, hashed password, mobile, DOB, currency preferences, emergency contacts, and relations to trips, expenses, and settlements.
 2. **`Trip`**: Trips created by users with trip code (`code`), currency, budget, start/end dates, locked state (`isLocked`), and admin approval mode toggle (`approvalMode`).
 3. **`TripMember`**: Junction collection mapping users to trips with roles (`ADMIN` or `MEMBER`). `@unique([tripId, userId])`.
-4. **`Expense`**: Expense records containing `title`, `amount`, `category`, `paidById`, `status` (`APPROVED`, `PENDING_APPROVAL`, `REJECTED`), `paymentMode` (`PERSONALLY` or `WALLET`), `receiptUrl`, and timestamps.
+4. **`Expense`**: Expense records containing `title`, `amount`, `category`, `paidById`, `status` (`APPROVED`, `PENDING_APPROVAL`, `REJECTED`), `receiptUrl`, and timestamps.
 5. **`ExpenseParticipant`**: Stores each member's owed share (`shareAmount`) for a specific expense. `@unique([expenseId, userId])`.
-6. **`Activity`**: Audit trail logging trip actions (`TRIP_CREATED`, `EXPENSE_ADDED`, `EXPENSE_APPROVED`, `SETTLEMENT_MARKED`, `WALLET_ADVANCE_SUBMITTED`, etc.).
+6. **`Activity`**: Audit trail logging trip actions (`TRIP_CREATED`, `EXPENSE_ADDED`, `EXPENSE_APPROVED`, `SETTLEMENT_MARKED`, etc.).
 7. **`Settlement`**: Recorded payment settlements between two users (`fromUserId` -> `toUserId`), with statuses (`PENDING`, `SETTLED`, `CONFIRMED`, `ROLLBACK_REQUESTED`, `ROLLED_BACK`).
-8. **`UserWallet`**: Per-trip virtual wallet for a user (`balance`, `totalAdded`, `totalSpent`). `@unique([userId, tripId])`.
-9. **`WalletAdvance`**: Advance credit requests submitted by members to trip admins for wallet loading.
-10. **`WalletTransaction`**: Financial audit ledger tracking transactions on user wallets (`ADVANCE_CREDIT`, `EXPENSE_DEBIT`, `SETTLEMENT_PAYMENT`, `REFUND`, `ADJUSTMENT`).
-11. **`ExpenseEditRequest`**: Proposals to edit or delete existing expenses when trip approval mode is enabled.
-12. **`UserDocument`**: Identity documents uploaded by users (Aadhaar, Passport, Driving License, PAN).
-13. **`ItineraryItem`**: Schedule items for a trip by `dayNumber`, start/end times, category, and order.
-14. **`StayDetail`**: Accommodation details (hotel name, address, check-in/out dates/times, booking references).
-15. **`Poll`**: Group voting polls with questions and categories.
-16. **`PollOption`**: Options listed under a poll.
-17. **`PollVote`**: Votes cast by trip members on poll options. `@unique([pollId, userId])`.
-18. **`MemberLocation`**: Real-time GPS coordinates shared by trip members. `@unique([tripId, userId])`.
-19. **`OtpVerification`**: Stores hashed OTP codes for SMS and email verification flows with attempt limits and expiration.
+8. **`ExpenseEditRequest`**: Proposals to edit or delete existing expenses when trip approval mode is enabled.
+9. **`UserDocument`**: Identity documents uploaded by users (Aadhaar, Passport, Driving License, PAN).
+10. **`ItineraryItem`**: Schedule items for a trip by `dayNumber`, start/end times, category, and order.
+11. **`StayDetail`**: Accommodation details (hotel name, address, check-in/out dates/times, booking references).
+12. **`Poll`**: Group voting polls with questions and categories.
+13. **`PollOption`**: Options listed under a poll.
+14. **`PollVote`**: Votes cast by trip members on poll options. `@unique([pollId, userId])`.
+15. **`MemberLocation`**: Real-time GPS coordinates shared by trip members. `@unique([tripId, userId])`.
+16. **`OtpVerification`**: Stores hashed OTP codes for SMS and email verification flows with attempt limits and expiration.
 
 ---
 

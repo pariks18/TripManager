@@ -10,7 +10,7 @@ import { BottomNav } from '@/components/ui/BottomNav';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { Button } from '@/components/ui/Button';
 import { formatCurrency } from '@/lib/utils';
-import { Plus, KeyRound, Compass, Search, User, LogOut, Wallet, ShieldCheck } from 'lucide-react';
+import { Plus, KeyRound, Compass, Search, User, LogOut, ShieldCheck } from 'lucide-react';
 import { fetchClientSession, clearClientSession } from '@/lib/clientSession';
 
 export default function DashboardPage() {

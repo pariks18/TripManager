@@ -11,7 +11,7 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
-    const { tripId, title, amount, category, paidById, splitBetween, participantUserIds, receiptUrl, paymentMode } = body;
+    const { tripId, title, amount, category, paidById, splitBetween, participantUserIds, receiptUrl } = body;
     const participants = splitBetween || participantUserIds;
 
     if (!tripId || !title || !amount || amount <= 0 || !paidById || !participants || participants.length === 0) {
@@ -26,8 +26,7 @@ export async function POST(request: Request) {
       paidById,
       user.id, // createdById for security ownership
       participants,
-      receiptUrl,
-      paymentMode === 'WALLET' ? 'WALLET' : 'PERSONALLY'
+      receiptUrl
     );
 
     return NextResponse.json({ expense }, { status: 201 });

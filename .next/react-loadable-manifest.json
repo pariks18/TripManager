@@ -1,8 +1,8 @@
 {
   "app/dashboard/trip/[tripId]/page.tsx -> @/components/chat/GroupChatView": {
-    "id": 571,
+    "id": 9975,
     "files": [
-      "static/chunks/571.93b6d18e29974186.js"
+      "static/chunks/975.dab9dc1d9d6adc63.js"
     ]
   },
   "app/dashboard/trip/[tripId]/page.tsx -> @/components/expense/PendingApprovalsView": {
@@ -14,7 +14,7 @@
   "app/dashboard/trip/[tripId]/page.tsx -> @/components/settlement/SettlementList": {
     "id": 208,
     "files": [
-      "static/chunks/208.1bcdd8f29707582a.js"
+      "static/chunks/208.1a9955f1ffcc4a0e.js"
     ]
   },
   "app/dashboard/trip/[tripId]/page.tsx -> @/components/trip/AnalyticsView": {

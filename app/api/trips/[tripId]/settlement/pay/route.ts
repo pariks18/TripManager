@@ -12,7 +12,7 @@ export async function POST(
   }
 
   try {
-    const { fromUserId, toUserId, paymentAmount, paymentMethod, note } = await request.json();
+    const { fromUserId, toUserId, paymentAmount, note } = await request.json();
 
     if (!fromUserId || !toUserId || !paymentAmount || paymentAmount <= 0) {
       return NextResponse.json({ error: 'Invalid settlement payment payload' }, { status: 400 });
@@ -31,13 +31,10 @@ export async function POST(
       fromUserId,
       toUserId,
       paymentAmount,
-      (paymentMethod as 'PERSONAL' | 'WALLET') || 'PERSONAL',
       note
     );
 
-    const userWallet = await dbStore.getOrCreateUserWallet(user.id, params.tripId);
-
-    return NextResponse.json({ record, userWallet });
+    return NextResponse.json({ record });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Failed to process settlement payment' }, { status: 400 });
   }

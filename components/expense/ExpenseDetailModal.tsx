@@ -164,13 +164,6 @@ export const ExpenseDetailModal: React.FC<ExpenseDetailModalProps> = ({
             </div>
           </div>
 
-          <div className="flex justify-between items-center text-xs pb-2 border-b border-slate-100">
-            <span className="text-slate-500 font-medium">Payment Method</span>
-            <span className="font-bold text-slate-900">
-              {expense.paymentMode === 'WALLET' ? 'Advance Wallet' : 'Personal Money'}
-            </span>
-          </div>
-
           <div className="flex justify-between items-center text-xs">
             <span className="text-slate-500 font-medium">Split Calculation</span>
             <span className="font-mono font-bold text-emerald-700">

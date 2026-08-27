@@ -2,7 +2,7 @@ import { prisma } from './prisma';
 import { hashPassword, comparePassword } from './auth';
 import { generateTripCode, generateObjectId } from './utils';
 import { calculateMemberBalances, computeSettlements } from './settlement';
-import { CategoryType, ExpenseDetail, TripSummary, UserSummary, ActivityDetail, SettlementRecordDetail, MemberBalance, MemberAnalytics, DocumentType, UserDocumentDetail, ItineraryItemDetail, StayDetail, PollDetail, PollOptionDetail, PollVoteDetail, MemberLocationDetail, UserWalletDetail, WalletAdvanceDetail, WalletTransactionDetail, MessageDetail } from '@/types';
+import { CategoryType, ExpenseDetail, TripSummary, UserSummary, ActivityDetail, SettlementRecordDetail, MemberBalance, MemberAnalytics, DocumentType, UserDocumentDetail, ItineraryItemDetail, StayDetail, PollDetail, PollOptionDetail, PollVoteDetail, MemberLocationDetail, MessageDetail } from '@/types';
 
 const SEED_USERS = [
   {
@@ -529,12 +529,6 @@ export const dbStore = {
         settlements: { include: { fromUser: userSelect, toUser: userSelect }, orderBy: { updatedAt: 'desc' } },
         itinerary: { orderBy: [{ dayNumber: 'asc' }, { order: 'asc' }, { createdAt: 'asc' }] },
         stays: { orderBy: { createdAt: 'desc' } },
-        userWallets: {
-          include: {
-            advances: { include: { user: userSelect, approvedBy: userSelect }, orderBy: { createdAt: 'desc' } },
-            transactions: { include: { createdBy: userSelect }, orderBy: { createdAt: 'desc' } },
-          },
-        },
       },
     });
 
@@ -542,82 +536,6 @@ export const dbStore = {
 
     const approvedExpenses = directTrip.expenses.filter((e) => e.status === 'APPROVED');
     const totalExpense = approvedExpenses.reduce((sum, e) => sum + e.amount, 0);
-
-    // Format all user wallets
-    const formattedUserWallets: UserWalletDetail[] = directTrip.userWallets.map((w) => ({
-      id: w.id,
-      userId: w.userId,
-      tripId: w.tripId,
-      balance: w.balance,
-      totalAdded: w.totalAdded,
-      totalSpent: w.totalSpent,
-      createdAt: w.createdAt.toISOString(),
-      updatedAt: w.updatedAt.toISOString(),
-      advances: w.advances.map((a) => ({
-        id: a.id,
-        walletId: a.walletId,
-        userId: a.userId,
-        tripId: a.tripId,
-        user: { id: a.user.id, name: a.user.name, email: a.user.email },
-        amount: a.amount,
-        status: a.status as WalletAdvanceDetail['status'],
-        note: a.note,
-        approvedById: a.approvedById,
-        approvedBy: a.approvedBy ? { id: a.approvedBy.id, name: a.approvedBy.name, email: a.approvedBy.email } : null,
-        approvedAt: a.approvedAt ? a.approvedAt.toISOString() : null,
-        createdAt: a.createdAt.toISOString(),
-        updatedAt: a.updatedAt.toISOString(),
-      })),
-      transactions: w.transactions.map((t) => ({
-        id: t.id,
-        walletId: t.walletId,
-        type: t.type as WalletTransactionDetail['type'],
-        amount: t.amount,
-        description: t.description,
-        expenseId: t.expenseId,
-        advanceId: t.advanceId,
-        createdById: t.createdById,
-        createdBy: { id: t.createdBy.id, name: t.createdBy.name, email: t.createdBy.email },
-        createdAt: t.createdAt.toISOString(),
-      })),
-    }));
-
-    // Find current user's personal wallet
-    let myWallet = formattedUserWallets.find((w) => w.userId === userId) || null;
-    if (!myWallet) {
-      // Construct default zero-balance wallet in memory to eliminate secondary DB query
-      myWallet = {
-        id: `wallet-${userId}-${tripId}`,
-        userId,
-        tripId,
-        balance: 0,
-        totalAdded: 0,
-        totalSpent: 0,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        advances: [],
-        transactions: [],
-      };
-      formattedUserWallets.push(myWallet);
-    }
-
-    // Ensure every trip member has a wallet entry in formattedUserWallets
-    directTrip.members.forEach((m) => {
-      if (!formattedUserWallets.some((w) => w.userId === m.userId)) {
-        formattedUserWallets.push({
-          id: `wallet-${m.userId}-${tripId}`,
-          userId: m.userId,
-          tripId,
-          balance: 0,
-          totalAdded: 0,
-          totalSpent: 0,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          advances: [],
-          transactions: [],
-        });
-      }
-    });
 
     const formattedExpenses: ExpenseDetail[] = directTrip.expenses.map((e) => ({
       id: e.id,
@@ -631,8 +549,6 @@ export const dbStore = {
       createdBy: e.createdBy ? { id: e.createdBy.id, name: e.createdBy.name, email: e.createdBy.email } : undefined,
       lastUpdatedById: e.lastUpdatedById,
       status: e.status as 'APPROVED' | 'PENDING_APPROVAL' | 'REJECTED',
-      paymentMode: (e.paymentMode as 'PERSONALLY' | 'WALLET') || 'PERSONALLY',
-      walletTransactionId: e.walletTransactionId,
       rejectionReason: e.rejectionReason,
       date: e.date.toISOString(),
       createdAt: e.createdAt.toISOString(),
@@ -678,7 +594,6 @@ export const dbStore = {
       amount: s.amount,
       settledAmount: s.settledAmount,
       remainingAmount: s.remainingAmount,
-      paymentMethod: (s.paymentMethod as 'PERSONAL' | 'WALLET') || 'PERSONAL',
       status: s.status as SettlementRecordDetail['status'],
       note: s.note,
       createdAt: s.createdAt.toISOString(),
@@ -734,10 +649,6 @@ export const dbStore = {
         createdAt: a.createdAt.toISOString(),
       })),
       settlementRecords: formattedSettlements,
-      myWallet,
-      allWallets: (directTrip.createdById === userId || directTrip.members.some((m) => m.userId === userId && m.role === 'ADMIN'))
-        ? formattedUserWallets
-        : [myWallet],
       itinerary: directTrip.itinerary.map((item) => ({
         id: item.id,
         tripId: item.tripId,
@@ -865,256 +776,6 @@ export const dbStore = {
     return fetchedTrip;
   },
 
-  async getOrCreateUserWallet(userId: string, tripId: string): Promise<UserWalletDetail> {
-    await ensureDatabaseSeeded();
-
-    const userSelect = { select: { id: true, name: true, email: true } };
-
-    let wallet = await prisma.userWallet.findUnique({
-      where: { userId_tripId: { userId, tripId } },
-      include: {
-        advances: { include: { user: userSelect, approvedBy: userSelect }, orderBy: { createdAt: 'desc' } },
-        transactions: { include: { createdBy: userSelect }, orderBy: { createdAt: 'desc' } },
-      },
-    });
-
-    if (!wallet) {
-      wallet = await prisma.userWallet.create({
-        data: {
-          id: generateObjectId(),
-          userId,
-          tripId,
-          balance: 0,
-          totalAdded: 0,
-          totalSpent: 0,
-        },
-        include: {
-          advances: { include: { user: userSelect, approvedBy: userSelect }, orderBy: { createdAt: 'desc' } },
-          transactions: { include: { createdBy: userSelect }, orderBy: { createdAt: 'desc' } },
-        },
-      });
-    }
-
-    return {
-      id: wallet.id,
-      userId: wallet.userId,
-      tripId: wallet.tripId,
-      balance: wallet.balance,
-      totalAdded: wallet.totalAdded,
-      totalSpent: wallet.totalSpent,
-      createdAt: wallet.createdAt.toISOString(),
-      updatedAt: wallet.updatedAt.toISOString(),
-      advances: wallet.advances.map((a) => ({
-        id: a.id,
-        walletId: a.walletId,
-        userId: a.userId,
-        tripId: a.tripId,
-        user: { id: a.user.id, name: a.user.name, email: a.user.email },
-        amount: a.amount,
-        status: a.status as WalletAdvanceDetail['status'],
-        note: a.note,
-        approvedById: a.approvedById,
-        approvedBy: a.approvedBy ? { id: a.approvedBy.id, name: a.approvedBy.name, email: a.approvedBy.email } : null,
-        approvedAt: a.approvedAt ? a.approvedAt.toISOString() : null,
-        createdAt: a.createdAt.toISOString(),
-        updatedAt: a.updatedAt.toISOString(),
-      })),
-      transactions: wallet.transactions.map((t) => ({
-        id: t.id,
-        walletId: t.walletId,
-        type: t.type as WalletTransactionDetail['type'],
-        amount: t.amount,
-        description: t.description,
-        expenseId: t.expenseId,
-        advanceId: t.advanceId,
-        createdById: t.createdById,
-        createdBy: { id: t.createdBy.id, name: t.createdBy.name, email: t.createdBy.email },
-        createdAt: t.createdAt.toISOString(),
-      })),
-    };
-  },
-
-  async requestWalletAdvance(
-    userId: string,
-    tripId: string,
-    amount: number,
-    note?: string
-  ): Promise<WalletAdvanceDetail> {
-    await ensureDatabaseSeeded();
-
-    if (!amount || isNaN(amount) || amount <= 0) {
-      throw new Error('Advance amount must be greater than zero.');
-    }
-
-    const userSelect = { select: { id: true, name: true, email: true } };
-    const user = await prisma.user.findUnique({ where: { id: userId } });
-    if (!user) throw new Error('User not found');
-
-    const wallet = await this.getOrCreateUserWallet(userId, tripId);
-
-    const advance = await prisma.walletAdvance.create({
-      data: {
-        id: generateObjectId(),
-        walletId: wallet.id,
-        userId,
-        tripId,
-        amount: Math.round(amount * 100) / 100,
-        status: 'PENDING',
-        note: note ? note.trim() : null,
-      },
-      include: { user: userSelect, approvedBy: userSelect },
-    });
-
-    const trip = await prisma.trip.findUnique({ where: { id: tripId } });
-    await logActivity(
-      tripId,
-      userId,
-      'WALLET_ADVANCE_SUBMITTED',
-      `${user.name} submitted a personal advance request of ${trip?.currency || '₹'}${advance.amount} (Pending Host approval)`,
-      advance.amount
-    );
-
-    return {
-      id: advance.id,
-      walletId: advance.walletId,
-      userId: advance.userId,
-      tripId: advance.tripId,
-      user: { id: advance.user.id, name: advance.user.name, email: advance.user.email },
-      amount: advance.amount,
-      status: advance.status as WalletAdvanceDetail['status'],
-      note: advance.note,
-      approvedById: advance.approvedById,
-      approvedBy: advance.approvedBy ? { id: advance.approvedBy.id, name: advance.approvedBy.name, email: advance.approvedBy.email } : null,
-      approvedAt: advance.approvedAt ? advance.approvedAt.toISOString() : null,
-      createdAt: advance.createdAt.toISOString(),
-      updatedAt: advance.updatedAt.toISOString(),
-    };
-  },
-
-  async processWalletAdvance(
-    advanceId: string,
-    hostUserId: string,
-    action: 'APPROVE' | 'REJECT'
-  ): Promise<WalletAdvanceDetail> {
-    await ensureDatabaseSeeded();
-
-    const userSelect = { select: { id: true, name: true, email: true } };
-    const hostUser = await prisma.user.findUnique({ where: { id: hostUserId } });
-    if (!hostUser) throw new Error('User not found');
-
-    const advance = await prisma.walletAdvance.findUnique({
-      where: { id: advanceId },
-      include: { user: userSelect, wallet: true },
-    });
-    if (!advance) throw new Error('Wallet advance request not found.');
-
-    const trip = await prisma.trip.findUnique({
-      where: { id: advance.tripId },
-      include: { members: true },
-    });
-    if (!trip) throw new Error('Trip not found');
-
-    const hostMember = trip.members.find((m) => m.userId === hostUserId);
-    const isHost = hostMember?.role === 'ADMIN' || trip.createdById === hostUserId;
-    if (!isHost) {
-      throw new Error('Forbidden: Only the Trip Host/Admin can approve or reject wallet advances.');
-    }
-
-    if (advance.status !== 'PENDING') {
-      throw new Error(`Advance request has already been ${advance.status.toLowerCase()}.`);
-    }
-
-    if (action === 'REJECT') {
-      const updated = await prisma.walletAdvance.update({
-        where: { id: advanceId },
-        data: { status: 'REJECTED', approvedById: hostUserId, approvedAt: new Date() },
-        include: { user: userSelect, approvedBy: userSelect },
-      });
-
-      await logActivity(
-        trip.id,
-        hostUserId,
-        'WALLET_ADVANCE_REJECTED',
-        `${hostUser.name} rejected ${advance.user.name}'s advance request of ${trip.currency}${advance.amount}`
-      );
-
-      return {
-        id: updated.id,
-        walletId: updated.walletId,
-        userId: updated.userId,
-        tripId: updated.tripId,
-        user: { id: updated.user.id, name: updated.user.name, email: updated.user.email },
-        amount: updated.amount,
-        status: updated.status as WalletAdvanceDetail['status'],
-        note: updated.note,
-        approvedById: updated.approvedById,
-        approvedBy: updated.approvedBy ? { id: updated.approvedBy.id, name: updated.approvedBy.name, email: updated.approvedBy.email } : null,
-        approvedAt: updated.approvedAt ? updated.approvedAt.toISOString() : null,
-        createdAt: updated.createdAt.toISOString(),
-        updatedAt: updated.updatedAt.toISOString(),
-      };
-    }
-
-    const result = await prisma.$transaction(async (tx) => {
-      const freshAdvance = await tx.walletAdvance.findUnique({ where: { id: advanceId } });
-      if (!freshAdvance || freshAdvance.status !== 'PENDING') {
-        throw new Error('Advance request has already been processed.');
-      }
-
-      const updatedAdvance = await tx.walletAdvance.update({
-        where: { id: advanceId },
-        data: { status: 'APPROVED', approvedById: hostUserId, approvedAt: new Date() },
-        include: { user: userSelect, approvedBy: userSelect },
-      });
-
-      await tx.userWallet.update({
-        where: { id: advance.walletId },
-        data: {
-          balance: { increment: advance.amount },
-          totalAdded: { increment: advance.amount },
-        },
-      });
-
-      await tx.walletTransaction.create({
-        data: {
-          id: generateObjectId(),
-          walletId: advance.walletId,
-          type: 'ADVANCE_CREDIT',
-          amount: advance.amount,
-          description: `Advance added (${advance.note || 'Approved by Host'})`,
-          advanceId: advance.id,
-          createdById: hostUserId,
-        },
-      });
-
-      return updatedAdvance;
-    });
-
-    await logActivity(
-      trip.id,
-      hostUserId,
-      'WALLET_ADVANCE_APPROVED',
-      `${hostUser.name} approved ${advance.user.name}'s advance request of ${trip.currency}${advance.amount}`,
-      advance.amount
-    );
-
-    return {
-      id: result.id,
-      walletId: result.walletId,
-      userId: result.userId,
-      tripId: result.tripId,
-      user: { id: result.user.id, name: result.user.name, email: result.user.email },
-      amount: result.amount,
-      status: result.status as WalletAdvanceDetail['status'],
-      note: result.note,
-      approvedById: result.approvedById,
-      approvedBy: result.approvedBy ? { id: result.approvedBy.id, name: result.approvedBy.name, email: result.approvedBy.email } : null,
-      approvedAt: result.approvedAt ? result.approvedAt.toISOString() : null,
-      createdAt: result.createdAt.toISOString(),
-      updatedAt: result.updatedAt.toISOString(),
-    };
-  },
-
   async addExpense(
     tripId: string,
     title: string,
@@ -1123,8 +784,7 @@ export const dbStore = {
     paidById: string,
     createdById: string,
     participantUserIds: string[],
-    receiptUrl?: string | null,
-    paymentMode: 'PERSONALLY' | 'WALLET' = 'PERSONALLY'
+    receiptUrl?: string | null
   ): Promise<ExpenseDetail> {
     await ensureDatabaseSeeded();
 
@@ -1158,7 +818,6 @@ export const dbStore = {
           paidById,
           createdById,
           status,
-          paymentMode: 'PERSONALLY',
           receiptUrl: receiptUrl || null,
           date: new Date(),
           participants: {
@@ -1185,7 +844,7 @@ export const dbStore = {
       tripId,
       createdById,
       'EXPENSE_ADDED',
-      `${creatorUser.name} added expense "${title}" (${trip.currency}${amount})${paymentMode === 'WALLET' ? ' [Paid from Advance Wallet]' : ''}`,
+      `${creatorUser.name} added expense "${title}" (${trip.currency}${amount})`,
       amount,
       category
     );
@@ -1202,8 +861,6 @@ export const dbStore = {
       createdBy: { id: creatorUser.id, name: creatorUser.name, email: creatorUser.email },
       lastUpdatedById: result.lastUpdatedById,
       status: result.status as 'APPROVED' | 'PENDING_APPROVAL',
-      paymentMode: (result.paymentMode as 'PERSONALLY' | 'WALLET') || 'PERSONALLY',
-      walletTransactionId: result.walletTransactionId,
       date: result.date.toISOString(),
       createdAt: result.createdAt.toISOString(),
       updatedAt: result.updatedAt.toISOString(),
@@ -1226,8 +883,7 @@ export const dbStore = {
     category: CategoryType,
     paidById: string,
     participantUserIds: string[],
-    receiptUrl?: string | null,
-    paymentMode: 'PERSONALLY' | 'WALLET' = 'PERSONALLY'
+    receiptUrl?: string | null
   ): Promise<ExpenseDetail> {
     await ensureDatabaseSeeded();
 
@@ -1264,7 +920,6 @@ export const dbStore = {
           amount,
           category,
           paidById,
-          paymentMode: 'PERSONALLY',
           lastUpdatedById: currentUserId,
           receiptUrl: receiptUrl !== undefined ? receiptUrl : existingExpense.receiptUrl,
           participants: {
@@ -1306,8 +961,6 @@ export const dbStore = {
       createdBy: updated.createdBy ? { id: updated.createdBy.id, name: updated.createdBy.name, email: updated.createdBy.email } : undefined,
       lastUpdatedById: updated.lastUpdatedById,
       status: updated.status as 'APPROVED' | 'PENDING_APPROVAL',
-      paymentMode: (updated.paymentMode as 'PERSONALLY' | 'WALLET') || 'PERSONALLY',
-      walletTransactionId: updated.walletTransactionId,
       date: updated.date.toISOString(),
       createdAt: updated.createdAt.toISOString(),
       updatedAt: updated.updatedAt.toISOString(),
@@ -1346,35 +999,7 @@ export const dbStore = {
       throw new Error('Trip is locked by the organizer.');
     }
 
-    await prisma.$transaction(async (tx) => {
-      if (existingExpense.paymentMode === 'WALLET') {
-        const wallet = await tx.userWallet.findUnique({
-          where: { userId_tripId: { userId: existingExpense.paidById, tripId: existingExpense.tripId } },
-        });
-        if (wallet) {
-          await tx.userWallet.update({
-            where: { id: wallet.id },
-            data: {
-              balance: { increment: existingExpense.amount },
-              totalSpent: { decrement: existingExpense.amount },
-            },
-          });
-          await tx.walletTransaction.create({
-            data: {
-              id: generateObjectId(),
-              walletId: wallet.id,
-              type: 'REFUND',
-              amount: existingExpense.amount,
-              description: `Restored advance for deleted expense: ${existingExpense.title}`,
-              expenseId,
-              createdById: currentUserId,
-            },
-          });
-        }
-      }
-
-      await tx.expense.delete({ where: { id: expenseId } });
-    });
+    await prisma.expense.delete({ where: { id: expenseId } });
 
     await logActivity(
       existingExpense.tripId,
@@ -1430,7 +1055,6 @@ export const dbStore = {
       .map((e) => ({
         ...e,
         category: e.category as CategoryType,
-        paymentMode: (e.paymentMode as 'PERSONALLY' | 'WALLET') || 'PERSONALLY',
         date: e.date.toISOString(),
         createdAt: e.createdAt.toISOString(),
         updatedAt: e.updatedAt.toISOString(),
@@ -1440,7 +1064,6 @@ export const dbStore = {
 
     const settlementRecords: SettlementRecordDetail[] = trip.settlements.map((s) => ({
       ...s,
-      paymentMethod: (s.paymentMethod as 'PERSONAL' | 'WALLET') || 'PERSONAL',
       status: s.status as any,
       createdAt: s.createdAt.toISOString(),
       updatedAt: s.updatedAt.toISOString(),
@@ -1503,7 +1126,6 @@ export const dbStore = {
       amount: settlement.amount,
       settledAmount: settlement.settledAmount,
       remainingAmount: settlement.remainingAmount,
-      paymentMethod: (settlement.paymentMethod as 'PERSONAL' | 'WALLET') || 'PERSONAL',
       status: settlement.status as SettlementRecordDetail['status'],
       note: settlement.note,
       createdAt: settlement.createdAt.toISOString(),
@@ -1517,12 +1139,10 @@ export const dbStore = {
     fromUserId: string,
     toUserId: string,
     paymentAmount: number,
-    paymentMethod: 'PERSONAL' | 'WALLET',
     note?: string
   ): Promise<SettlementRecordDetail> {
     await ensureDatabaseSeeded();
 
-    // 1. Strict Server Authorization Check: Only the debtor can request a settlement
     if (sessionUserId !== fromUserId) {
       throw new Error('Forbidden: You can only pay settlement debts that belong to you.');
     }
@@ -1534,9 +1154,7 @@ export const dbStore = {
     const roundedPaymentAmount = Math.round(paymentAmount * 100) / 100;
     const userSelect = { select: { id: true, name: true, email: true } };
 
-    // 2. All operations, validations, and request creation execute INSIDE atomic Prisma transaction
     const result = await prisma.$transaction(async (tx) => {
-      // Re-fetch trip with fresh members, expenses, and settlements inside tx
       const trip = await tx.trip.findUnique({
         where: { id: tripId },
         include: {
@@ -1559,13 +1177,11 @@ export const dbStore = {
       ]);
       if (!fromUser || !toUser) throw new Error('Users not found.');
 
-      // Re-calculate live debt inside transaction
       const approvedExpenses: ExpenseDetail[] = trip.expenses
         .filter((e) => e.status === 'APPROVED')
         .map((e) => ({
           ...e,
           category: e.category as CategoryType,
-          paymentMode: (e.paymentMode as 'PERSONALLY' | 'WALLET') || 'PERSONALLY',
           date: e.date.toISOString(),
           createdAt: e.createdAt.toISOString(),
           updatedAt: e.updatedAt.toISOString(),
@@ -1575,7 +1191,6 @@ export const dbStore = {
 
       const settlementRecords: SettlementRecordDetail[] = trip.settlements.map((s) => ({
         ...s,
-        paymentMethod: (s.paymentMethod as 'PERSONAL' | 'WALLET') || 'PERSONAL',
         status: s.status as any,
         createdAt: s.createdAt.toISOString(),
         updatedAt: s.updatedAt.toISOString(),
@@ -1589,7 +1204,6 @@ export const dbStore = {
       const pairTx = computedSettlements.find((txItem) => txItem.fromUser.id === fromUserId && txItem.toUser.id === toUserId);
       const currentOutstanding = pairTx ? pairTx.amount : 0;
 
-      // Calculate total pending requests for this pair
       const existingPendingRecords = trip.settlements.filter(
         (s) => s.fromUserId === fromUserId && s.toUserId === toUserId && s.status === 'PENDING'
       );
@@ -1602,80 +1216,6 @@ export const dbStore = {
         );
       }
 
-      const settledAmount = Math.min(roundedPaymentAmount, currentOutstanding);
-      const remainingAmount = Math.max(0, Math.round((roundedPaymentAmount - settledAmount) * 100) / 100);
-
-      if (paymentMethod === 'WALLET') {
-        const userWallet = await tx.userWallet.findUnique({
-          where: { userId_tripId: { userId: fromUserId, tripId } },
-        });
-
-        if (!userWallet || userWallet.balance < roundedPaymentAmount - 0.01) {
-          const availableBalance = userWallet ? userWallet.balance : 0;
-          throw new Error(
-            `Insufficient wallet balance. Available: ${trip.currency}${availableBalance}, required: ${trip.currency}${roundedPaymentAmount}. Please add advance money first.`
-          );
-        }
-
-        const walletUpdateResult = await tx.userWallet.updateMany({
-          where: {
-            id: userWallet.id,
-            balance: { gte: roundedPaymentAmount - 0.01 },
-          },
-          data: {
-            balance: { decrement: roundedPaymentAmount },
-            totalSpent: { increment: roundedPaymentAmount },
-          },
-        });
-
-        if (walletUpdateResult.count === 0) {
-          throw new Error(
-            `Insufficient wallet balance or concurrent wallet payment detected. Transaction aborted.`
-          );
-        }
-
-        await tx.walletTransaction.create({
-          data: {
-            id: generateObjectId(),
-            walletId: userWallet!.id,
-            type: 'SETTLEMENT_PAYMENT',
-            amount: roundedPaymentAmount,
-            description: `Settlement payment to ${toUser.name}`,
-            createdById: fromUserId,
-          },
-        });
-
-        const confirmedSettlement = await tx.settlement.create({
-          data: {
-            id: generateObjectId(),
-            tripId,
-            fromUserId,
-            toUserId,
-            amount: roundedPaymentAmount,
-            settledAmount: roundedPaymentAmount,
-            remainingAmount: 0,
-            paymentMethod: 'WALLET',
-            status: 'CONFIRMED',
-            note: note ? note.trim() : null,
-          },
-          include: { fromUser: true, toUser: true },
-        });
-
-        await tx.activity.create({
-          data: {
-            id: generateObjectId(),
-            tripId,
-            userId: fromUserId,
-            actionType: 'SETTLEMENT_CONFIRMED',
-            details: `${fromUser.name} paid ${trip.currency}${roundedPaymentAmount} to ${toUser.name} via Advance Wallet`,
-            amount: roundedPaymentAmount,
-          },
-        });
-
-        return confirmedSettlement;
-      }
-
-      // If paying via PERSONAL money, create a PENDING request requiring Host approval
       const newSettlement = await tx.settlement.create({
         data: {
           id: generateObjectId(),
@@ -1685,7 +1225,6 @@ export const dbStore = {
           amount: roundedPaymentAmount,
           settledAmount: 0,
           remainingAmount: roundedPaymentAmount,
-          paymentMethod: 'PERSONAL',
           status: 'PENDING',
           note: note ? note.trim() : null,
         },
@@ -1698,7 +1237,7 @@ export const dbStore = {
           tripId,
           userId: fromUserId,
           actionType: 'SETTLEMENT_CONFIRMED',
-          details: `${fromUser.name} submitted a settlement payment request of ${trip.currency}${roundedPaymentAmount} to ${toUser.name} via Personal Money (Pending Host Approval)`,
+          details: `${fromUser.name} submitted a settlement payment request of ${trip.currency}${roundedPaymentAmount} to ${toUser.name} (Pending Host Approval)`,
           amount: roundedPaymentAmount,
         },
       });
@@ -1724,7 +1263,6 @@ export const dbStore = {
       amount: result.amount,
       settledAmount: result.settledAmount || 0,
       remainingAmount: result.remainingAmount || result.amount,
-      paymentMethod: (result.paymentMethod as 'PERSONAL' | 'WALLET') || 'PERSONAL',
       status: result.status as SettlementRecordDetail['status'],
       note: result.note,
       createdAt: result.createdAt.toISOString(),
@@ -1743,7 +1281,6 @@ export const dbStore = {
 
     const userSelect = { select: { id: true, name: true, email: true } };
 
-    // All approval operations, validations, and wallet deductions run inside atomic Prisma transaction
     const result = await prisma.$transaction(async (tx) => {
       const settlement = await tx.settlement.findUnique({
         where: { id: settlementId },
@@ -1756,7 +1293,6 @@ export const dbStore = {
       const isReceiver = settlement.toUserId === currentUserId;
       const isPayer = settlement.fromUserId === currentUserId;
 
-      // Validate state transitions & permissions
       if (targetStatus === 'CONFIRMED' || targetStatus === 'REJECTED') {
         if (settlement.status === 'ROLLBACK_REQUESTED') {
           if (!isPayer && !isAdmin) {
@@ -1786,55 +1322,12 @@ export const dbStore = {
         }
       }
 
-      // If APPROVING a PENDING settlement (CONFIRMED)
       let newSettledAmount = settlement.settledAmount || 0;
       let newRemainingAmount = settlement.remainingAmount ?? settlement.amount;
 
       if (targetStatus === 'CONFIRMED' && settlement.status === 'PENDING') {
         newSettledAmount = settlement.amount;
         newRemainingAmount = 0;
-
-        // IF payment method is WALLET: Atomically verify and deduct debtor's personal wallet now
-        if (settlement.paymentMethod === 'WALLET') {
-          let userWallet = await tx.userWallet.findUnique({
-            where: { userId_tripId: { userId: settlement.fromUserId, tripId } },
-          });
-
-          if (!userWallet || userWallet.balance < settlement.amount - 0.01) {
-            throw new Error(
-              `Cannot approve settlement: ${settlement.fromUser.name} has insufficient wallet balance (Available: ${settlement.trip.currency || '₹'}${userWallet?.balance || 0}, required: ${settlement.trip.currency || '₹'}${settlement.amount}).`
-            );
-          }
-
-          // Atomic conditional update to prevent double deduction or negative balance
-          const updateWalletResult = await tx.userWallet.updateMany({
-            where: {
-              id: userWallet.id,
-              balance: { gte: settlement.amount - 0.01 },
-            },
-            data: {
-              balance: { decrement: settlement.amount },
-              totalSpent: { increment: settlement.amount },
-            },
-          });
-
-          if (updateWalletResult.count === 0) {
-            throw new Error('Concurrent wallet update detected or insufficient balance. Approval aborted.');
-          }
-
-          // Create WalletTransaction record
-          await tx.walletTransaction.create({
-            data: {
-              id: generateObjectId(),
-              walletId: userWallet.id,
-              type: 'SETTLEMENT_PAYMENT',
-              amount: settlement.amount,
-              description: `Settlement payment to ${settlement.toUser.name}`,
-              settlementId: settlement.id,
-              createdById: settlement.fromUserId,
-            },
-          });
-        }
       }
 
       const updated = await tx.settlement.update({
@@ -1859,7 +1352,7 @@ export const dbStore = {
           activityText = `${currentUser?.name || 'User'} rejected settlement rollback. Settlement of ${settlement.trip.currency || '₹'}${settlement.amount} between ${settlement.fromUser.name} and ${settlement.toUser.name} remains valid.`;
         } else {
           actionType = 'SETTLEMENT_CONFIRMED';
-          activityText = `${currentUser?.name || 'User'} approved settlement of ${settlement.trip.currency || '₹'}${settlement.amount} from ${settlement.fromUser.name} to ${settlement.toUser.name} (Paid via ${settlement.paymentMethod === 'WALLET' ? 'Advance Wallet' : 'Personal Money'})`;
+          activityText = `${currentUser?.name || 'User'} approved settlement of ${settlement.trip.currency || '₹'}${settlement.amount} from ${settlement.fromUser.name} to ${settlement.toUser.name}`;
         }
       } else if (targetStatus === 'REJECTED') {
         actionType = 'SETTLEMENT_REJECTED';
@@ -1896,7 +1389,6 @@ export const dbStore = {
       amount: result.amount,
       settledAmount: result.settledAmount || 0,
       remainingAmount: result.remainingAmount || 0,
-      paymentMethod: (result.paymentMethod as 'PERSONAL' | 'WALLET') || 'PERSONAL',
       status: result.status as SettlementRecordDetail['status'],
       note: result.note,
       createdAt: result.createdAt.toISOString(),
@@ -2144,8 +1636,6 @@ export const dbStore = {
       paidBy: { id: e.paidBy.id, name: e.paidBy.name, email: e.paidBy.email },
       createdById: e.createdById,
       status: e.status as 'APPROVED' | 'PENDING_APPROVAL' | 'REJECTED',
-      paymentMode: (e.paymentMode as 'PERSONALLY' | 'WALLET') || 'PERSONALLY',
-      walletTransactionId: e.walletTransactionId,
       rejectionReason: e.rejectionReason,
       date: e.date.toISOString(),
       createdAt: e.createdAt.toISOString(),
@@ -2169,7 +1659,6 @@ export const dbStore = {
       amount: s.amount,
       settledAmount: s.settledAmount,
       remainingAmount: s.remainingAmount,
-      paymentMethod: (s.paymentMethod as 'PERSONAL' | 'WALLET') || 'PERSONAL',
       status: s.status as SettlementRecordDetail['status'],
       note: s.note,
       createdAt: s.createdAt.toISOString(),
@@ -2467,7 +1956,6 @@ export const dbStore = {
       createdBy: updated.createdBy ? { id: updated.createdBy.id, name: updated.createdBy.name, email: updated.createdBy.email } : undefined,
       lastUpdatedById: updated.lastUpdatedById,
       status: updated.status as 'APPROVED' | 'PENDING_APPROVAL' | 'REJECTED',
-      paymentMode: (updated.paymentMode as 'PERSONALLY' | 'WALLET') || 'PERSONALLY',
       rejectionReason: updated.rejectionReason,
       date: updated.date.toISOString(),
       createdAt: updated.createdAt.toISOString(),

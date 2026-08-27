@@ -1,11 +1,10 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
-import { io, Socket } from 'socket.io-client';
+import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import { MessageDetail, UserSummary } from '@/types';
 import { Avatar } from '@/components/ui/Avatar';
 import { formatTime } from '@/lib/utils';
-import { Send, MessageSquare } from 'lucide-react';
+import { Send, MessageSquare, ArrowDown, Loader2 } from 'lucide-react';
 
 interface GroupChatViewProps {
   tripId: string;
@@ -13,22 +12,71 @@ interface GroupChatViewProps {
   currentUser: UserSummary;
 }
 
+const formatDateHeader = (dateString: string) => {
+  const date = new Date(dateString);
+  const now = new Date();
+  const isToday = date.toDateString() === now.toDateString();
+
+  const yesterday = new Date();
+  yesterday.setDate(now.getDate() - 1);
+  const isYesterday = date.toDateString() === yesterday.toDateString();
+
+  if (isToday) return 'Today';
+  if (isYesterday) return 'Yesterday';
+
+  return date.toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  });
+};
+
 export const GroupChatView: React.FC<GroupChatViewProps> = React.memo(({ tripId, tripName, currentUser }) => {
   const [messages, setMessages] = useState<MessageDetail[]>([]);
   const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(true);
-  const socketRef = useRef<Socket | null>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [isSending, setIsSending] = useState(false);
+  const [hasUnreadBelow, setHasUnreadBelow] = useState(false);
 
-  // Auto scroll to bottom
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const isInitialLoadRef = useRef(true);
+  const isNearBottomRef = useRef(true);
+
+  // Smooth / Immediate container scroll
+  const scrollToBottom = (smooth = true) => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+    container.scrollTo({
+      top: container.scrollHeight,
+      behavior: smooth ? 'smooth' : 'auto',
+    });
+    setHasUnreadBelow(false);
+    isNearBottomRef.current = true;
   };
 
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+  // Detect scroll position to check if user is at bottom
+  const handleScroll = () => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+    const { scrollTop, scrollHeight, clientHeight } = container;
+    const isAtBottom = scrollHeight - scrollTop - clientHeight < 100;
+    isNearBottomRef.current = isAtBottom;
+    if (isAtBottom) {
+      setHasUnreadBelow(false);
+    }
+  };
 
+  // Adjust textarea height dynamically
+  const adjustTextareaHeight = () => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    textarea.style.height = 'auto';
+    const newHeight = Math.min(textarea.scrollHeight, 120);
+    textarea.style.height = `${newHeight}px`;
+  };
+
+  // Fetch initial messages & setup SSE real-time stream
   useEffect(() => {
     if (!tripId) return;
 
@@ -37,7 +85,6 @@ export const GroupChatView: React.FC<GroupChatViewProps> = React.memo(({ tripId,
     const initChat = async () => {
       setIsLoading(true);
 
-      // 1. Fetch existing messages for initial load
       try {
         const res = await fetch(`/api/trips/${tripId}/messages`);
         const data = await res.json();
@@ -50,7 +97,7 @@ export const GroupChatView: React.FC<GroupChatViewProps> = React.memo(({ tripId,
         setIsLoading(false);
       }
 
-      // 2. Connect to real-time Server-Sent Events (SSE) stream for instant push updates
+      // Connect to Server-Sent Events (SSE) real-time stream
       try {
         eventSource = new EventSource(`/api/trips/${tripId}/messages/stream`);
 
@@ -67,10 +114,6 @@ export const GroupChatView: React.FC<GroupChatViewProps> = React.memo(({ tripId,
             console.error('Error parsing real-time message stream event:', e);
           }
         };
-
-        eventSource.onerror = (err) => {
-          console.warn('Real-time stream notice: Reconnecting...');
-        };
       } catch (err) {
         console.error('Failed to connect real-time stream:', err);
       }
@@ -78,7 +121,7 @@ export const GroupChatView: React.FC<GroupChatViewProps> = React.memo(({ tripId,
 
     initChat();
 
-    // 3. Periodic light background sync fallback (every 4 seconds) to guarantee zero missed messages
+    // Periodic sync fallback
     const syncInterval = setInterval(async () => {
       try {
         const res = await fetch(`/api/trips/${tripId}/messages?limit=20`);
@@ -102,11 +145,36 @@ export const GroupChatView: React.FC<GroupChatViewProps> = React.memo(({ tripId,
     };
   }, [tripId]);
 
-  const handleSend = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // Handle scrolling when messages change
+  useLayoutEffect(() => {
+    if (messages.length === 0) return;
+
+    if (isInitialLoadRef.current) {
+      scrollToBottom(false);
+      isInitialLoadRef.current = false;
+      return;
+    }
+
+    const lastMsg = messages[messages.length - 1];
+    const isMyMessage = lastMsg.senderId === currentUser.id;
+
+    if (isMyMessage || isNearBottomRef.current) {
+      scrollToBottom(true);
+    } else {
+      setHasUnreadBelow(true);
+    }
+  }, [messages, currentUser.id]);
+
+  const handleSend = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     const text = inputText.trim();
-    if (!text) return;
+    if (!text || isSending) return;
+
+    setIsSending(true);
     setInputText('');
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+    }
 
     try {
       const res = await fetch(`/api/trips/${tripId}/messages`, {
@@ -120,88 +188,177 @@ export const GroupChatView: React.FC<GroupChatViewProps> = React.memo(({ tripId,
           if (prev.some((m) => m.id === data.message.id)) return prev;
           return [...prev, data.message];
         });
+        setTimeout(() => scrollToBottom(true), 40);
       }
     } catch (err) {
       console.error('Failed to send message:', err);
+    } finally {
+      setIsSending(false);
     }
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
+  };
+
+  // Group messages by Date Header
+  const groupedMessages = React.useMemo(() => {
+    const groups: { dateHeader: string; msgs: MessageDetail[] }[] = [];
+    messages.forEach((msg) => {
+      const dateHeader = formatDateHeader(msg.createdAt);
+      const lastGroup = groups[groups.length - 1];
+      if (lastGroup && lastGroup.dateHeader === dateHeader) {
+        lastGroup.msgs.push(msg);
+      } else {
+        groups.push({ dateHeader, msgs: [msg] });
+      }
+    });
+    return groups;
+  }, [messages]);
+
   return (
-    <div className="flex flex-col h-[calc(100vh-13rem)] min-h-[380px] max-h-[600px] w-full max-w-4xl mx-auto bg-white rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden">
-      {/* Header */}
-      <div className="bg-slate-50 px-5 py-3 border-b border-slate-200 flex items-center gap-3">
-        <div className="p-2 bg-emerald-100 text-emerald-700 rounded-xl">
-          <MessageSquare className="w-4 h-4" />
-        </div>
-        <div>
-          <h4 className="text-xs font-bold text-slate-900">{tripName} Chat</h4>
-          <p className="text-[10px] text-slate-400">Group messaging</p>
+    <div className="flex flex-col h-[580px] sm:h-[620px] max-h-[78vh] w-full max-w-4xl mx-auto bg-white rounded-3xl border border-slate-200/90 shadow-sm overflow-hidden">
+      {/* 1. Header (Fixed Top) */}
+      <div className="shrink-0 bg-slate-50/90 backdrop-blur-sm px-5 py-3.5 border-b border-slate-200/80 flex items-center justify-between z-10">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-emerald-100/80 text-emerald-700 rounded-xl">
+            <MessageSquare className="w-4.5 h-4.5" />
+          </div>
+          <div>
+            <h4 className="text-xs font-extrabold text-slate-900 leading-snug">{tripName} Chat</h4>
+            <div className="flex items-center gap-1.5 mt-0.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="text-[10px] font-semibold text-slate-500">Live group conversation</span>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Messages List */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-50/30">
+      {/* 2. Messages List (Scrollable Center Area) */}
+      <div
+        ref={messagesContainerRef}
+        onScroll={handleScroll}
+        className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-5 space-y-4 bg-slate-50/40 relative"
+      >
         {isLoading ? (
-          <div className="text-center py-10 text-xs text-slate-400">Loading messages...</div>
+          <div className="flex flex-col items-center justify-center py-16 text-slate-400 gap-2">
+            <Loader2 className="w-6 h-6 animate-spin text-emerald-500" />
+            <span className="text-xs font-medium">Loading messages...</span>
+          </div>
         ) : messages.length === 0 ? (
-          <div className="text-center py-12 text-xs text-slate-400">
-            No messages yet. Send a message to start the conversation!
+          <div className="text-center py-16 text-slate-400 space-y-2">
+            <div className="w-12 h-12 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mx-auto">
+              <MessageSquare className="w-6 h-6" />
+            </div>
+            <p className="text-xs font-bold text-slate-700">No messages yet</p>
+            <p className="text-[11px] text-slate-400 max-w-xs mx-auto">
+              Start the discussion with fellow trip members!
+            </p>
           </div>
         ) : (
-          messages.map((msg) => {
-            const isMe = msg.senderId === currentUser.id;
-            return (
-              <div
-                key={msg.id}
-                className={`flex items-start gap-2 ${isMe ? 'justify-end' : 'justify-start'}`}
-              >
-                {!isMe && <Avatar name={msg.sender?.name || 'Member'} size="sm" />}
-                <div className="max-w-[75%] space-y-0.5">
-                  {!isMe && (
-                    <span className="text-[10px] font-bold text-slate-400 block px-1">
-                      {msg.sender?.name}
-                    </span>
-                  )}
+          groupedMessages.map((group, groupIdx) => (
+            <div key={groupIdx} className="space-y-3">
+              {/* Date Section Header */}
+              <div className="flex items-center justify-center my-3">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 bg-white/90 border border-slate-200/80 px-3 py-0.5 rounded-full shadow-xs">
+                  {group.dateHeader}
+                </span>
+              </div>
+
+              {/* Group Messages */}
+              {group.msgs.map((msg, msgIdx) => {
+                const isMe = msg.senderId === currentUser.id;
+                const prevMsg = msgIdx > 0 ? group.msgs[msgIdx - 1] : null;
+                const isSameSender = prevMsg && prevMsg.senderId === msg.senderId;
+
+                return (
                   <div
-                    className={`p-3 rounded-2xl text-xs leading-relaxed break-words ${
-                      isMe
-                        ? 'bg-emerald-600 text-white rounded-tr-none'
-                        : 'bg-white text-slate-800 border border-slate-200 rounded-tl-none'
+                    key={msg.id}
+                    className={`flex items-start gap-2.5 ${isMe ? 'justify-end' : 'justify-start'} ${
+                      isSameSender ? 'mt-1' : 'mt-3'
                     }`}
                   >
-                    <p>{msg.content}</p>
-                    <span
-                      className={`text-[9px] block text-right mt-1 font-medium ${
-                        isMe ? 'text-emerald-100' : 'text-slate-400'
-                      }`}
-                    >
-                      {formatTime(msg.createdAt)}
-                    </span>
+                    {!isMe && (
+                      <div className="w-7 shrink-0">
+                        {!isSameSender && <Avatar name={msg.sender?.name || 'Member'} size="sm" />}
+                      </div>
+                    )}
+
+                    <div className="max-w-[78%] sm:max-w-[70%] space-y-0.5">
+                      {!isMe && !isSameSender && (
+                        <span className="text-[10px] font-bold text-slate-500 block px-1">
+                          {msg.sender?.name}
+                        </span>
+                      )}
+                      <div
+                        className={`px-3.5 py-2.5 rounded-2xl text-xs leading-relaxed break-words shadow-xs ${
+                          isMe
+                            ? 'bg-emerald-600 text-white rounded-tr-xs font-medium'
+                            : 'bg-white text-slate-800 border border-slate-200/90 rounded-tl-xs'
+                        }`}
+                      >
+                        <p className="whitespace-pre-wrap">{msg.content}</p>
+                        <span
+                          className={`text-[9px] block text-right mt-1 font-semibold ${
+                            isMe ? 'text-emerald-100/90' : 'text-slate-400'
+                          }`}
+                        >
+                          {formatTime(msg.createdAt)}
+                        </span>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
-            );
-          })
+                );
+              })}
+            </div>
+          ))
         )}
-        <div ref={messagesEndRef} />
+
+        {/* Floating New Messages Indicator */}
+        {hasUnreadBelow && (
+          <button
+            onClick={() => scrollToBottom(true)}
+            className="sticky bottom-2 left-1/2 -translate-x-1/2 z-20 bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold py-1.5 px-3.5 rounded-full shadow-lg transition-all flex items-center gap-1.5 cursor-pointer animate-bounce"
+          >
+            <ArrowDown className="w-3.5 h-3.5" />
+            <span>New messages below</span>
+          </button>
+        )}
       </div>
 
-      {/* Input Footer */}
-      <form onSubmit={handleSend} className="p-3 bg-white border-t border-slate-200 flex items-center gap-2">
-        <input
-          type="text"
+      {/* 3. Input Footer (Fixed Bottom) */}
+      <form
+        onSubmit={handleSend}
+        className="shrink-0 p-3 sm:p-3.5 bg-white border-t border-slate-200/80 flex items-end gap-2"
+      >
+        <textarea
+          ref={textareaRef}
+          rows={1}
           value={inputText}
-          onChange={(e) => setInputText(e.target.value)}
-          placeholder="Type a message..."
-          className="flex-1 px-3.5 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-500 font-medium text-slate-800"
+          onChange={(e) => {
+            setInputText(e.target.value);
+            adjustTextareaHeight();
+          }}
+          onKeyDown={handleKeyDown}
+          placeholder="Type a message... (Shift + Enter for new line)"
+          className="flex-1 px-3.5 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:border-emerald-500 focus:bg-white font-medium text-slate-900 resize-none max-h-30 leading-relaxed no-scrollbar"
         />
         <button
           type="submit"
-          disabled={!inputText.trim()}
-          className="py-2 px-3.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white font-bold text-xs rounded-xl shadow-sm transition-all flex items-center gap-1 shrink-0"
+          disabled={!inputText.trim() || isSending}
+          className="py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white font-bold text-xs rounded-2xl shadow-sm transition-all flex items-center gap-1.5 shrink-0 self-end h-[38px] cursor-pointer"
         >
-          <Send className="w-3.5 h-3.5" />
-          <span>Send</span>
+          {isSending ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <>
+              <Send className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Send</span>
+            </>
+          )}
         </button>
       </form>
     </div>

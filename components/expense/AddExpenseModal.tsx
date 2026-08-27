@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { CategoryType, ExpenseDetail, TripMemberDetail, UserWalletDetail } from '@/types';
+import { CategoryType, ExpenseDetail, TripMemberDetail } from '@/types';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -16,7 +16,6 @@ import {
   Sparkles,
   AlertCircle,
   ShieldAlert,
-  Wallet,
   CreditCard,
   Receipt,
   Camera,
@@ -33,9 +32,6 @@ interface AddExpenseModalProps {
   currency: string;
   members: TripMemberDetail[];
   currentUserId: string;
-  allWallets?: UserWalletDetail[];
-  myWallet?: UserWalletDetail | null;
-  walletBalance?: number;
   isAdmin?: boolean;
   approvalMode?: boolean;
   existingExpense?: ExpenseDetail | null;
@@ -59,9 +55,6 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
   currency,
   members,
   currentUserId,
-  allWallets = [],
-  myWallet,
-  walletBalance = 0,
   isAdmin = false,
   approvalMode = false,
   existingExpense,
@@ -72,7 +65,6 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
   const [amount, setAmount] = useState('');
   const [category, setCategory] = useState<CategoryType>('Food');
   const [paidById, setPaidById] = useState(currentUserId);
-  const [paymentMode, setPaymentMode] = useState<'PERSONALLY' | 'WALLET'>('PERSONALLY');
   const [splitBetween, setSplitBetween] = useState<string[]>([]);
   const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -85,18 +77,12 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
   const isCreatorAdmin = isAdmin;
   const isEditRequestRequired = approvalMode && existingExpense && existingExpense.status === 'APPROVED' && !isCreatorAdmin;
 
-  const selectedPayerWallet =
-    allWallets.find((w) => w.userId === paidById) || (paidById === currentUserId ? myWallet : null);
-  const payerWalletBalance = selectedPayerWallet?.balance ?? walletBalance;
-  const payerName = members.find((m) => m.userId === paidById)?.user.name || 'Payer';
-
   useEffect(() => {
     if (existingExpense) {
       setTitle(existingExpense.title);
       setAmount(existingExpense.amount.toString());
       setCategory(existingExpense.category);
       setPaidById(existingExpense.paidById);
-      setPaymentMode(existingExpense.paymentMode || 'PERSONALLY');
       setSplitBetween(existingExpense.participants.map((p) => p.userId));
       setReceiptUrl(existingExpense.receiptUrl || null);
     } else {
@@ -104,7 +90,6 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
       setAmount('');
       setCategory('Food');
       setPaidById(currentUserId);
-      setPaymentMode('PERSONALLY');
       setSplitBetween(members.map((m) => m.userId));
       setReceiptUrl(null);
     }
@@ -175,7 +160,6 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
               amount: numAmount,
               category,
               paidById,
-              paymentMode,
               participantUserIds: splitBetween,
               receiptUrl,
             },
@@ -202,7 +186,6 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
           amount: numAmount,
           category,
           paidById,
-          paymentMode,
           participantUserIds: splitBetween,
           receiptUrl,
         }),

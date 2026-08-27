@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { ExpenseDetail, MemberBalance, SettlementRecordDetail, SettlementTransaction, TripMemberDetail, UserSummary, UserWalletDetail } from '@/types';
+import { ExpenseDetail, MemberBalance, SettlementRecordDetail, SettlementTransaction, TripMemberDetail, UserSummary } from '@/types';
 import { formatCurrency } from '@/lib/utils';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
@@ -11,7 +11,6 @@ import { ExpenseBreakdownModal } from '@/components/expense/ExpenseBreakdownModa
 import { AdvanceCreditModal } from '@/components/wallet/AdvanceCreditModal';
 import { ExpenseCard } from '@/components/expense/ExpenseCard';
 import {
-  Wallet,
   ArrowUpRight,
   ArrowDownLeft,
   CheckCircle2,
@@ -33,8 +32,6 @@ interface PersonalDashboardProps {
   onMarkSettled: (tx: SettlementTransaction) => void;
   memberBalances?: MemberBalance[];
   settlementRecords?: SettlementRecordDetail[];
-  myWallet?: UserWalletDetail | null;
-  allWallets?: UserWalletDetail[];
   members?: TripMemberDetail[];
   expenses?: ExpenseDetail[];
   tripId?: string;
@@ -58,8 +55,6 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = React.memo(({
   onMarkSettled,
   memberBalances = [],
   settlementRecords = [],
-  myWallet,
-  allWallets = [],
   members = [],
   expenses = [],
   tripId,
@@ -138,12 +133,6 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = React.memo(({
             >
               {isSettled ? 'All Settled Up' : isNetNegative ? 'Payment Required' : 'You Are Owed'}
             </span>
-
-            {myWallet && myWallet.balance > 0 && (
-              <span className="text-xs font-bold text-emerald-700 bg-emerald-100 px-2.5 py-0.5 rounded-full">
-                Wallet: {formatCurrency(myWallet.balance, currency)}
-              </span>
-            )}
           </div>
 
           <div>
@@ -416,8 +405,6 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = React.memo(({
           currency={currency}
           transaction={selectedTx}
           members={members}
-          myWallet={myWallet}
-          allWallets={allWallets}
           currentUserId={currentUserId}
           isAdmin={isAdmin}
           onSuccess={() => {

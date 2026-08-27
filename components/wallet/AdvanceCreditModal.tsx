@@ -4,7 +4,7 @@ import React from 'react';
 import { Modal } from '@/components/ui/Modal';
 import { ExpenseDetail, MemberBalance, SettlementRecordDetail } from '@/types';
 import { formatCurrency, formatDate } from '@/lib/utils';
-import { Wallet, Sparkles, History, ArrowDownLeft } from 'lucide-react';
+import { CreditCard, Sparkles, History, ArrowDownLeft } from 'lucide-react';
 
 interface AdvanceCreditModalProps {
   isOpen: boolean;
@@ -53,7 +53,7 @@ export const AdvanceCreditModal: React.FC<AdvanceCreditModalProps> = ({
               Available Credit
             </span>
             <div className="p-2 bg-white/10 rounded-2xl backdrop-blur-sm">
-              <Wallet className="w-5 h-5 text-emerald-100" />
+              <CreditCard className="w-5 h-5 text-emerald-100" />
             </div>
           </div>
 

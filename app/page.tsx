@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Sparkles, ArrowRight, ShieldCheck, Zap, Users, Wallet } from 'lucide-react';
+import { Sparkles, ArrowRight, ShieldCheck, Zap, Users, CreditCard } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 
 export default function SplashPage() {
@@ -83,7 +83,7 @@ export default function SplashPage() {
             <p className="text-[10px] text-slate-400">Join instantly</p>
           </div>
           <div className="bg-white/5 border border-white/10 p-3.5 rounded-2xl backdrop-blur-md space-y-1">
-            <Wallet className="w-5 h-5 text-blue-400" />
+            <CreditCard className="w-5 h-5 text-blue-400" />
             <h4 className="text-xs font-bold text-white">Auto Split</h4>
             <p className="text-[10px] text-slate-400">Equal shares</p>
           </div>

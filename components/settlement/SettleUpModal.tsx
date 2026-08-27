@@ -5,10 +5,10 @@ import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Avatar } from '@/components/ui/Avatar';
-import { SettlementTransaction, TripMemberDetail, UserSummary, UserWalletDetail } from '@/types';
+import { SettlementTransaction, TripMemberDetail, UserSummary } from '@/types';
 import { formatCurrency } from '@/lib/utils';
 import { useToast } from '@/components/ui/Toast';
-import { CheckCircle2, Wallet, AlertCircle, CreditCard, Edit3 } from 'lucide-react';
+import { CheckCircle2, AlertCircle, Edit3 } from 'lucide-react';
 
 interface SettleUpModalProps {
   isOpen: boolean;
@@ -17,8 +17,6 @@ interface SettleUpModalProps {
   currency: string;
   transaction: SettlementTransaction | null;
   members?: TripMemberDetail[];
-  myWallet?: UserWalletDetail | null;
-  allWallets?: UserWalletDetail[];
   currentUserId: string;
   isAdmin?: boolean;
   onSuccess: () => void;
@@ -31,8 +29,6 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
   currency,
   transaction,
   members = [],
-  myWallet,
-  allWallets = [],
   currentUserId,
   isAdmin = false,
   onSuccess,
@@ -40,7 +36,6 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
   const { showToast } = useToast();
   const [customAmount, setCustomAmount] = useState<string>('');
   const [isEditingAmount, setIsEditingAmount] = useState<boolean>(false);
-  const [paymentMethod, setPaymentMethod] = useState<'PERSONAL' | 'WALLET'>('PERSONAL');
   const [note, setNote] = useState<string>('');
   const [selectedFromUserId, setSelectedFromUserId] = useState<string>('');
   const [selectedToUserId, setSelectedToUserId] = useState<string>('');
@@ -48,9 +43,6 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
   const [error, setError] = useState('');
   const [successResult, setSuccessResult] = useState<{
     paidAmount: number;
-    method: 'PERSONAL' | 'WALLET';
-    remainingWallet: number;
-    status: string;
     toUserName: string;
     fromUserName: string;
   } | null>(null);
@@ -65,13 +57,6 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
 
   const outstandingAmount = transaction ? transaction.amount : 0;
 
-  // Determine payer's wallet balance
-  const activeDebtorUserId = fromUser?.id || currentUserId;
-  const debtorWallet =
-    allWallets.find((w) => w.userId === activeDebtorUserId) ||
-    (activeDebtorUserId === currentUserId ? myWallet : null);
-  const payerWalletBalance = debtorWallet?.balance || 0;
-
   useEffect(() => {
     if (transaction) {
       setCustomAmount(transaction.amount.toString());
@@ -81,13 +66,6 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
       setSuccessResult(null);
       setSelectedFromUserId(transaction.fromUser.id);
       setSelectedToUserId(transaction.toUser.id);
-
-      const dWallet = allWallets.find((w) => w.userId === transaction.fromUser.id) || myWallet;
-      if (dWallet && dWallet.balance >= transaction.amount) {
-        setPaymentMethod('WALLET');
-      } else {
-        setPaymentMethod('PERSONAL');
-      }
     } else if (members.length >= 2) {
       setSelectedFromUserId(currentUserId);
       const firstOther = members.find((m) => m.userId !== currentUserId);
@@ -97,14 +75,11 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
       setNote('');
       setError('');
       setSuccessResult(null);
-      setPaymentMethod('PERSONAL');
     }
-  }, [transaction, isOpen, currentUserId, members, myWallet, allWallets]);
+  }, [transaction, isOpen, currentUserId, members]);
 
   const numCustomAmount = parseFloat(customAmount);
   const amountToSettle = isNaN(numCustomAmount) ? 0 : Math.round(numCustomAmount * 100) / 100;
-
-  const isWalletInsufficient = paymentMethod === 'WALLET' && payerWalletBalance < amountToSettle - 0.01;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -112,11 +87,6 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
 
     if (amountToSettle <= 0) {
       setError('Please enter a valid settlement amount.');
-      return;
-    }
-
-    if (isWalletInsufficient) {
-      setError(`Not enough wallet balance (${formatCurrency(payerWalletBalance, currency)}). Please use Personal Money.`);
       return;
     }
 
@@ -140,7 +110,6 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
           fromUserId: fromUser.id,
           toUserId: toUser.id,
           paymentAmount: amountToSettle,
-          paymentMethod,
           note: note.trim() || undefined,
         }),
       });
@@ -148,23 +117,14 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to process settlement payment');
 
-      const isWallet = paymentMethod === 'WALLET';
-      const remainingWallet = isWallet ? Math.max(0, payerWalletBalance - amountToSettle) : payerWalletBalance;
-      const statusLabel = isWallet ? 'Completed' : 'Pending Host Approval';
-
       setSuccessResult({
         paidAmount: amountToSettle,
-        method: paymentMethod,
-        remainingWallet,
-        status: statusLabel,
         toUserName: toUser.name,
         fromUserName: fromUser.id === currentUserId ? 'You' : fromUser.name,
       });
 
       showToast(
-        isWallet
-          ? `✓ Settlement Completed: Paid ${formatCurrency(amountToSettle, currency)} to ${toUser.name}`
-          : `✓ Sent ${formatCurrency(amountToSettle, currency)} to ${toUser.name} for approval`,
+        `✓ Sent ${formatCurrency(amountToSettle, currency)} to ${toUser.name} for approval`,
         'success'
       );
 
@@ -194,7 +154,7 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
               {formatCurrency(successResult.paidAmount, currency)}
             </h3>
             <p className="text-xs font-semibold text-slate-600 mt-1">
-              Paid to <span className="text-slate-900 font-bold">{successResult.toUserName}</span>
+              Sent to <span className="text-slate-900 font-bold">{successResult.toUserName}</span> for host approval
             </p>
           </div>
 
@@ -262,58 +222,6 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
             )}
           </div>
 
-          {/* Simple Payment Method */}
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1.5">
-              Payment Method
-            </label>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => setPaymentMethod('PERSONAL')}
-                className={`p-3 rounded-2xl border flex flex-col items-start gap-1 transition-all text-left ${
-                  paymentMethod === 'PERSONAL'
-                    ? 'bg-blue-50 border-blue-500 text-blue-900 ring-2 ring-blue-500/20'
-                    : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
-                }`}
-              >
-                <div className="flex items-center gap-1.5 font-bold text-xs">
-                  <CreditCard className="w-4 h-4 text-blue-600 shrink-0" />
-                  <span>Personal Money</span>
-                </div>
-                <span className="text-[11px] text-slate-500 font-medium">UPI / Cash / Bank</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setPaymentMethod('WALLET')}
-                className={`p-3 rounded-2xl border flex flex-col items-start gap-1 transition-all text-left ${
-                  paymentMethod === 'WALLET'
-                    ? 'bg-emerald-50 border-emerald-500 text-emerald-900 ring-2 ring-emerald-500/20'
-                    : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
-                }`}
-              >
-                <div className="flex items-center gap-1.5 font-bold text-xs">
-                  <Wallet className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <span>Wallet</span>
-                </div>
-                <span className="text-[11px] font-semibold text-emerald-700">
-                  Balance: {formatCurrency(payerWalletBalance, currency)}
-                </span>
-              </button>
-            </div>
-          </div>
-
-          {/* Clean Insufficient Wallet Notice */}
-          {isWalletInsufficient && (
-            <div className="p-3 bg-amber-50 border border-amber-200 rounded-2xl text-xs text-amber-900 space-y-1">
-              <p className="font-bold">Wallet balance: {formatCurrency(payerWalletBalance, currency)}</p>
-              <p className="text-amber-800">
-                Not enough wallet balance. Please use <span className="font-bold">Personal Money</span>.
-              </p>
-            </div>
-          )}
-
           {/* Payment Note */}
           <div>
             <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1">
@@ -338,7 +246,6 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
             <Button
               type="submit"
               isLoading={isLoading}
-              disabled={isWalletInsufficient}
               className="flex-1 text-xs font-bold py-3"
             >
               Confirm Payment

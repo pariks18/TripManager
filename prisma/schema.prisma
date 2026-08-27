@@ -39,10 +39,6 @@ model User {
   editRequests        ExpenseEditRequest[]
   pollsCreated        Poll[]                  @relation("CreatedPolls")
   pollVotes           PollVote[]
-  walletAdvances        WalletAdvance[]      @relation("AdvanceUser")
-  approvedAdvances      WalletAdvance[]      @relation("ApprovedAdvanceUser")
-  walletTransactions    WalletTransaction[]  @relation("TransactionCreatedBy")
-  userWallets           UserWallet[]
   locations             MemberLocation[]
   otpVerifications      OtpVerification[]
   sentMessages          Message[]            @relation("MessageSender")
@@ -72,7 +68,6 @@ model Trip {
   stays     StayDetail[]
   polls     Poll[]
   locations MemberLocation[]
-  userWallets UserWallet[]
   messages  Message[]
 }
 
@@ -90,29 +85,26 @@ model TripMember {
 }
 
 model Expense {
-  id                  String   @id @default(auto()) @map("_id") @db.ObjectId
-  tripId              String   @db.ObjectId
-  title               String
-  amount              Float
-  category            String   @default("Miscellaneous")
-  paidById            String   @db.ObjectId
-  createdById         String?  @db.ObjectId
-  lastUpdatedById     String?  @db.ObjectId
-  status              String   @default("APPROVED") // APPROVED, PENDING_APPROVAL, or REJECTED
-  paymentMode         String   @default("PERSONALLY") // PERSONALLY or WALLET
-  walletTransactionId String?  @db.ObjectId
-  rejectionReason     String?
-  receiptUrl          String?
-  date                DateTime @default(now())
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  tripId          String   @db.ObjectId
+  title           String
+  amount          Float
+  category        String   @default("Miscellaneous")
+  paidById        String   @db.ObjectId
+  createdById     String?  @db.ObjectId
+  lastUpdatedById String?  @db.ObjectId
+  status          String   @default("APPROVED") // APPROVED, PENDING_APPROVAL, or REJECTED
+  rejectionReason String?
+  receiptUrl      String?
+  date            DateTime @default(now())
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
-  trip               Trip                @relation(fields: [tripId], references: [id], onDelete: Cascade)
-  paidBy             User                @relation("PaidBy", fields: [paidById], references: [id])
-  createdBy          User?               @relation("CreatedBy", fields: [createdById], references: [id])
-  participants       ExpenseParticipant[]
-  editRequests       ExpenseEditRequest[]
-  walletTransactions WalletTransaction[]
+  trip         Trip                 @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  paidBy       User                 @relation("PaidBy", fields: [paidById], references: [id])
+  createdBy    User?                @relation("CreatedBy", fields: [createdById], references: [id])
+  participants ExpenseParticipant[]
+  editRequests ExpenseEditRequest[]
 
   @@index([tripId])
   @@index([paidById])
@@ -134,7 +126,7 @@ model Activity {
   id         String   @id @default(auto()) @map("_id") @db.ObjectId
   tripId     String   @db.ObjectId
   userId     String   @db.ObjectId
-  actionType String   // TRIP_CREATED, MEMBER_JOINED, EXPENSE_ADDED, EXPENSE_UPDATED, EXPENSE_DELETED, EXPENSE_APPROVED, EXPENSE_REJECTED, EXPENSE_RESUBMITTED, EDIT_REQUEST_SUBMITTED, EDIT_REQUEST_APPROVED, EDIT_REQUEST_REJECTED, BUDGET_UPDATED, SETTLEMENT_MARKED, SETTLEMENT_CONFIRMED, TRIP_UPDATED, WALLET_ADVANCE_SUBMITTED, WALLET_ADVANCE_APPROVED, WALLET_ADVANCE_REJECTED
+  actionType String   // TRIP_CREATED, MEMBER_JOINED, EXPENSE_ADDED, EXPENSE_UPDATED, EXPENSE_DELETED, EXPENSE_APPROVED, EXPENSE_REJECTED, EXPENSE_RESUBMITTED, EDIT_REQUEST_SUBMITTED, EDIT_REQUEST_APPROVED, EDIT_REQUEST_REJECTED, BUDGET_UPDATED, SETTLEMENT_MARKED, SETTLEMENT_CONFIRMED, TRIP_UPDATED
   details    String
   amount     Float?
   category   String?
@@ -154,81 +146,16 @@ model Settlement {
   amount          Float
   settledAmount   Float    @default(0)
   remainingAmount Float?
-  paymentMethod   String   @default("PERSONAL") // PERSONAL or WALLET
   status          String   @default("PENDING") // PENDING, PARTIALLY_SETTLED, SETTLED, CONFIRMED, REJECTED, COMPLETED, ROLLBACK_REQUESTED, ROLLED_BACK
   note            String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  trip               Trip                @relation(fields: [tripId], references: [id], onDelete: Cascade)
-  fromUser           User                @relation("FromUser", fields: [fromUserId], references: [id], onDelete: Cascade)
-  toUser             User                @relation("ToUser", fields: [toUserId], references: [id], onDelete: Cascade)
-  walletTransactions WalletTransaction[]
+  trip     Trip @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  fromUser User @relation("FromUser", fields: [fromUserId], references: [id], onDelete: Cascade)
+  toUser   User @relation("ToUser", fields: [toUserId], references: [id], onDelete: Cascade)
 
   @@index([tripId])
-}
-
-model UserWallet {
-  id         String   @id @default(auto()) @map("_id") @db.ObjectId
-  userId     String   @db.ObjectId
-  tripId     String   @db.ObjectId
-  balance    Float    @default(0)
-  totalAdded Float    @default(0)
-  totalSpent Float    @default(0)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-
-  user         User                @relation(fields: [userId], references: [id], onDelete: Cascade)
-  trip         Trip                @relation(fields: [tripId], references: [id], onDelete: Cascade)
-  advances     WalletAdvance[]
-  transactions WalletTransaction[]
-
-  @@unique([userId, tripId])
-  @@index([tripId])
-}
-
-model WalletAdvance {
-  id           String    @id @default(auto()) @map("_id") @db.ObjectId
-  walletId     String    @db.ObjectId
-  userId       String    @db.ObjectId
-  tripId       String    @db.ObjectId
-  amount       Float
-  status       String    @default("PENDING") // PENDING, APPROVED, REJECTED
-  note         String?
-  approvedById String?   @db.ObjectId
-  approvedAt   DateTime?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-
-  wallet       UserWallet          @relation(fields: [walletId], references: [id], onDelete: Cascade)
-  user         User                @relation("AdvanceUser", fields: [userId], references: [id], onDelete: Cascade)
-  approvedBy   User?               @relation("ApprovedAdvanceUser", fields: [approvedById], references: [id])
-  transactions WalletTransaction[]
-
-  @@index([walletId])
-  @@index([userId])
-  @@index([tripId])
-}
-
-model WalletTransaction {
-  id           String   @id @default(auto()) @map("_id") @db.ObjectId
-  walletId     String   @db.ObjectId
-  type         String   // ADVANCE_CREDIT, EXPENSE_DEBIT, SETTLEMENT_PAYMENT, REFUND, ADJUSTMENT
-  amount       Float
-  description  String?
-  expenseId    String?  @db.ObjectId
-  advanceId    String?  @db.ObjectId
-  settlementId String?  @db.ObjectId
-  createdById  String   @db.ObjectId
-  createdAt    DateTime @default(now())
-
-  wallet     UserWallet     @relation(fields: [walletId], references: [id], onDelete: Cascade)
-  expense    Expense?       @relation(fields: [expenseId], references: [id], onDelete: SetNull)
-  advance    WalletAdvance? @relation(fields: [advanceId], references: [id], onDelete: SetNull)
-  settlement Settlement?    @relation(fields: [settlementId], references: [id], onDelete: SetNull)
-  createdBy  User           @relation("TransactionCreatedBy", fields: [createdById], references: [id], onDelete: Cascade)
-
-  @@index([walletId])
 }
 
 model ExpenseEditRequest {
