@@ -154,6 +154,12 @@ export const TripMemoriesView: React.FC<TripMemoriesViewProps> = ({ trip, curren
 
   // Open Questionnaire Modal
   const openNewMemoryModal = () => {
+    const existingMyMem = myJourneyMemories.find((m) => m.dayNumber === selectedDay);
+    if (existingMyMem) {
+      openEditMemoryModal(existingMyMem);
+      return;
+    }
+
     setEditingMemory(null);
     setQWhere('');
     setQHighlight('');

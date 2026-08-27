@@ -3055,7 +3055,16 @@ export const dbStore = {
       orderBy: [{ dayNumber: 'asc' }, { createdAt: 'desc' }],
     });
 
-    const memories: TripMemoryDetail[] = memoriesRaw.map((m) => {
+    // Deduplicate memories by unique key (userId + dayNumber + type) keeping newest
+    const uniqueMemoriesMap = new Map<string, typeof memoriesRaw[0]>();
+    memoriesRaw.forEach((m) => {
+      const key = `${m.userId}_${m.dayNumber}_${m.type}`;
+      if (!uniqueMemoriesMap.has(key)) {
+        uniqueMemoriesMap.set(key, m);
+      }
+    });
+
+    const memories: TripMemoryDetail[] = Array.from(uniqueMemoriesMap.values()).map((m) => {
       let parsedAnswers: MemoryQuestionnaireAnswers | null = null;
       if (m.answers) {
         try {
@@ -3144,24 +3153,31 @@ export const dbStore = {
 
     let memoryRecord;
 
-    if (data.id) {
-      // Edit existing memory
-      const existing = await prisma.tripMemory.findUnique({ where: { id: data.id } });
-      if (!existing) throw new Error('Memory record not found');
-      if (existing.userId !== data.userId) {
-        throw new Error('Forbidden: You can only edit your own memories');
-      }
+    const targetId =
+      data.id ||
+      (
+        await prisma.tripMemory.findFirst({
+          where: {
+            tripId: data.tripId,
+            userId: data.userId,
+            dayNumber: data.dayNumber,
+            type: memoryType,
+          },
+        })
+      )?.id;
 
+    if (targetId) {
+      // Edit existing memory for this day
       memoryRecord = await prisma.tripMemory.update({
-        where: { id: data.id },
+        where: { id: targetId },
         data: {
-          title: data.title !== undefined ? data.title : existing.title,
-          answers: stringifiedAnswers !== undefined ? stringifiedAnswers : existing.answers,
-          freeText: data.freeText !== undefined ? data.freeText : existing.freeText,
-          photos: data.photos !== undefined ? data.photos : existing.photos,
+          title: data.title !== undefined ? data.title : undefined,
+          answers: stringifiedAnswers !== undefined ? stringifiedAnswers : undefined,
+          freeText: data.freeText !== undefined ? data.freeText : undefined,
+          photos: data.photos !== undefined ? data.photos : undefined,
           privacy: memoryPrivacy,
-          sharedWithUserIds: data.sharedWithUserIds !== undefined ? data.sharedWithUserIds : existing.sharedWithUserIds,
-          date: data.date ? new Date(data.date) : existing.date,
+          sharedWithUserIds: data.sharedWithUserIds !== undefined ? data.sharedWithUserIds : undefined,
+          date: data.date ? new Date(data.date) : undefined,
         },
         include: { user: userSelect },
       });

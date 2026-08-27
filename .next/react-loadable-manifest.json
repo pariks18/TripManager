@@ -14,7 +14,7 @@
   "app/dashboard/trip/[tripId]/page.tsx -> @/components/memories/TripMemoriesView": {
     "id": 1242,
     "files": [
-      "static/chunks/242.cda2c5d47ead01f1.js"
+      "static/chunks/242.217a5fbebf763dd7.js"
     ]
   },
   "app/dashboard/trip/[tripId]/page.tsx -> @/components/settlement/SettlementList": {
