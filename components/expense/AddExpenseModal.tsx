@@ -96,18 +96,40 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
     setError('');
   }, [existingExpense, isOpen, currentUserId, members]);
 
+  const [isUploadingReceipt, setIsUploadingReceipt] = useState(false);
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 2 * 1024 * 1024) {
-      setError('Receipt image size should be less than 2MB');
+    if (file.size > 10 * 1024 * 1024) {
+      setError('Receipt image size should be less than 10MB');
       return;
     }
 
+    setIsUploadingReceipt(true);
+    setError('');
+
     const reader = new FileReader();
-    reader.onloadend = () => {
-      setReceiptUrl(reader.result as string);
+    reader.onloadend = async () => {
+      const base64 = reader.result as string;
+      try {
+        const res = await fetch('/api/upload', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ image: base64, folder: 'receipts' }),
+        });
+        const data = await res.json();
+        if (res.ok && data.secureUrl) {
+          setReceiptUrl(data.secureUrl);
+        } else {
+          setError(data.error || 'Failed to upload receipt to Cloudinary');
+        }
+      } catch (err: any) {
+        setError('Error uploading receipt image');
+      } finally {
+        setIsUploadingReceipt(false);
+      }
     };
     reader.readAsDataURL(file);
   };

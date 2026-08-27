@@ -69,19 +69,41 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
     setIsModalOpen(true);
   };
 
+  const [isUploading, setIsUploading] = useState(false);
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 8 * 1024 * 1024) {
-      setError('Document photo must be smaller than 8MB');
+    if (file.size > 10 * 1024 * 1024) {
+      setError('Document photo must be smaller than 10MB');
       return;
     }
 
     setFileName(file.name);
+    setIsUploading(true);
+    setError('');
+
     const reader = new FileReader();
-    reader.onloadend = () => {
-      setFileUrl(reader.result as string);
+    reader.onloadend = async () => {
+      const base64 = reader.result as string;
+      try {
+        const res = await fetch('/api/upload', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ image: base64, folder: 'documents' }),
+        });
+        const data = await res.json();
+        if (res.ok && data.secureUrl) {
+          setFileUrl(data.secureUrl);
+        } else {
+          setError(data.error || 'Failed to upload document image to Cloudinary');
+        }
+      } catch (err: any) {
+        setError('Error uploading document image');
+      } finally {
+        setIsUploading(false);
+      }
     };
     reader.readAsDataURL(file);
   };

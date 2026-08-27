@@ -79,53 +79,73 @@ export const TripMemoriesView: React.FC<TripMemoriesViewProps> = ({ trip, curren
   const [photosList, setPhotosList] = useState<string[]>([]);
   const [memoryPrivacy, setMemoryPrivacy] = useState<'PRIVATE' | 'SHARED_SELECTIVE' | 'SHARED_GROUP'>('PRIVATE');
 
-  const handleDeviceFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+
+  const handleDeviceFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
-    Array.from(files).forEach((file) => {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const rawResult = event.target?.result as string;
-        if (!rawResult) return;
+    setIsUploadingPhoto(true);
+    try {
+      for (const file of Array.from(files)) {
+        const rawResult = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onload = (event) => resolve((event.target?.result as string) || '');
+          reader.readAsDataURL(file);
+        });
 
-        const img = new Image();
-        img.onload = () => {
-          const maxDim = 1024;
-          let width = img.width;
-          let height = img.height;
+        if (!rawResult) continue;
 
-          if (width > maxDim || height > maxDim) {
-            if (width > height) {
-              height = Math.round((height * maxDim) / width);
-              width = maxDim;
-            } else {
-              width = Math.round((width * maxDim) / height);
-              height = maxDim;
+        // Downscale image via offscreen canvas
+        const compressed = await new Promise<string>((resolve) => {
+          const img = new Image();
+          img.onload = () => {
+            const maxDim = 1024;
+            let width = img.width;
+            let height = img.height;
+            if (width > maxDim || height > maxDim) {
+              if (width > height) {
+                height = Math.round((height * maxDim) / width);
+                width = maxDim;
+              } else {
+                width = Math.round((width * maxDim) / height);
+                height = maxDim;
+              }
             }
-          }
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+              ctx.drawImage(img, 0, 0, width, height);
+              resolve(canvas.toDataURL('image/jpeg', 0.8));
+            } else {
+              resolve(rawResult);
+            }
+          };
+          img.onerror = () => resolve(rawResult);
+          img.src = rawResult;
+        });
 
-          const canvas = document.createElement('canvas');
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext('2d');
-          if (ctx) {
-            ctx.drawImage(img, 0, 0, width, height);
-            const compressed = canvas.toDataURL('image/jpeg', 0.8);
-            setPhotosList((prev) => [...prev, compressed]);
-          } else {
-            setPhotosList((prev) => [...prev, rawResult]);
-          }
-        };
-        img.onerror = () => {
-          setPhotosList((prev) => [...prev, rawResult]);
-        };
-        img.src = rawResult;
-      };
-      reader.readAsDataURL(file);
-    });
-
-    e.target.value = '';
+        // Upload directly to Cloudinary via backend API
+        const res = await fetch('/api/upload', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ image: compressed, folder: 'memories' }),
+        });
+        const data = await res.json();
+        if (res.ok && data.secureUrl) {
+          setPhotosList((prev) => [...prev, data.secureUrl]);
+        } else {
+          showToast(data.error || 'Failed to upload photo to Cloudinary', 'error');
+        }
+      }
+    } catch (err: any) {
+      showToast('Error uploading photo', 'error');
+    } finally {
+      setIsUploadingPhoto(false);
+      e.target.value = '';
+    }
   };
 
   // 1. Compute Trip Days list based on startDate & endDate
