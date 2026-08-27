@@ -53,4 +53,22 @@ export async function PUT(
   }
 }
 
+export async function DELETE(
+  request: Request,
+  { params }: { params: { tripId: string } }
+) {
+  const user = await getSessionUser();
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  try {
+    await dbStore.deleteTrip(params.tripId, user.id);
+    return NextResponse.json({ success: true });
+  } catch (error: any) {
+    const status = error.message?.includes('Forbidden') ? 403 : 400;
+    return NextResponse.json({ error: error.message || 'Failed to delete trip' }, { status });
+  }
+}
+
 

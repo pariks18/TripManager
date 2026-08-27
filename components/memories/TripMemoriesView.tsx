@@ -64,6 +64,7 @@ export const TripMemoriesView: React.FC<TripMemoriesViewProps> = ({ trip, curren
   // Photo Layout State (Carousel, Grid, Collage)
   const [photoLayout, setPhotoLayout] = useState<'GRID' | 'CAROUSEL' | 'COLLAGE'>('GRID');
   const [activeCarouselIndex, setActiveCarouselIndex] = useState(0);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   // Questionnaire Form State
   const [qWhere, setQWhere] = useState('');
@@ -77,6 +78,24 @@ export const TripMemoriesView: React.FC<TripMemoriesViewProps> = ({ trip, curren
   const [photoInput, setPhotoInput] = useState('');
   const [photosList, setPhotosList] = useState<string[]>([]);
   const [memoryPrivacy, setMemoryPrivacy] = useState<'PRIVATE' | 'SHARED_SELECTIVE' | 'SHARED_GROUP'>('PRIVATE');
+
+  const handleDeviceFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    Array.from(files).forEach((file) => {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const result = event.target?.result as string;
+        if (result) {
+          setPhotosList((prev) => [...prev, result]);
+        }
+      };
+      reader.readAsDataURL(file);
+    });
+
+    e.target.value = '';
+  };
 
   // 1. Compute Trip Days list based on startDate & endDate
   const tripDays = useMemo(() => {
@@ -335,7 +354,7 @@ export const TripMemoriesView: React.FC<TripMemoriesViewProps> = ({ trip, curren
   }, [dayMemories, currentUser.id]);
 
   const ourJourneyMemories = useMemo(() => {
-    return dayMemories.filter((m) => m.type === 'GROUP' || m.privacy === 'SHARED_GROUP');
+    return dayMemories.filter((m) => m.type === 'GROUP');
   }, [dayMemories]);
 
   const sharedWithMeMemories = useMemo(() => {
@@ -1013,16 +1032,39 @@ export const TripMemoriesView: React.FC<TripMemoriesViewProps> = ({ trip, curren
           {/* Photo Attachments */}
           <div className="space-y-2">
             <label className="block text-xs font-bold text-slate-700">Photos (Optional)</label>
-            <div className="flex items-center gap-2">
-              <Input
-                placeholder="Paste Photo Image URL"
-                value={photoInput}
-                onChange={(e) => setPhotoInput(e.target.value)}
-                className="flex-1"
-              />
-              <Button type="button" onClick={handleAddPhoto} size="sm" variant="outline" className="text-xs">
-                Add Photo
+
+            {/* Hidden device file input */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              className="hidden"
+              onChange={handleDeviceFileUpload}
+            />
+
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+              <Button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                size="sm"
+                className="bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold border border-rose-200 text-xs rounded-xl flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <Camera className="w-4 h-4 text-rose-600" />
+                <span>Upload Photos from Device</span>
               </Button>
+
+              <div className="flex items-center gap-2 flex-1">
+                <Input
+                  placeholder="Or paste Photo Image URL"
+                  value={photoInput}
+                  onChange={(e) => setPhotoInput(e.target.value)}
+                  className="flex-1"
+                />
+                <Button type="button" onClick={handleAddPhoto} size="sm" variant="outline" className="text-xs shrink-0 cursor-pointer">
+                  Add URL
+                </Button>
+              </div>
             </div>
 
             {photosList.length > 0 && (

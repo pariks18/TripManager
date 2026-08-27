@@ -3358,29 +3358,57 @@ export const dbStore = {
     if (!personalMemory) throw new Error('Personal memory not found');
     if (personalMemory.userId !== currentUserId) throw new Error('Forbidden: You can only share your own memories');
 
-    const groupMemory = await prisma.tripMemory.create({
-      data: {
-        id: generateObjectId(),
+    const user = await prisma.user.findUnique({ where: { id: currentUserId } });
+    const authorName = user?.name || 'Member';
+
+    // Check if group memory already exists for this user and day
+    const existingGroupMem = await prisma.tripMemory.findFirst({
+      where: {
         tripId: personalMemory.tripId,
         userId: currentUserId,
         dayNumber: personalMemory.dayNumber,
-        date: personalMemory.date,
-        title: personalMemory.title ? `${personalMemory.title} (Shared by ${currentUserId})` : `Group Memory - Day ${personalMemory.dayNumber}`,
         type: 'GROUP',
-        answers: personalMemory.answers,
-        freeText: personalMemory.freeText,
-        photos: personalMemory.photos || [],
-        privacy: 'SHARED_GROUP',
       },
-      include: { user: { select: { id: true, name: true, email: true } } },
     });
 
-    const user = await prisma.user.findUnique({ where: { id: currentUserId } });
+    let groupMemory;
+
+    if (existingGroupMem) {
+      groupMemory = await prisma.tripMemory.update({
+        where: { id: existingGroupMem.id },
+        data: {
+          title: personalMemory.title ? `${personalMemory.title} (Shared by ${authorName})` : `Day ${personalMemory.dayNumber} Group Memory`,
+          answers: personalMemory.answers,
+          freeText: personalMemory.freeText,
+          photos: personalMemory.photos || [],
+          privacy: 'SHARED_GROUP',
+        },
+        include: { user: { select: { id: true, name: true, email: true } } },
+      });
+    } else {
+      groupMemory = await prisma.tripMemory.create({
+        data: {
+          id: generateObjectId(),
+          tripId: personalMemory.tripId,
+          userId: currentUserId,
+          dayNumber: personalMemory.dayNumber,
+          date: personalMemory.date,
+          title: personalMemory.title ? `${personalMemory.title} (Shared by ${authorName})` : `Day ${personalMemory.dayNumber} Group Memory`,
+          type: 'GROUP',
+          answers: personalMemory.answers,
+          freeText: personalMemory.freeText,
+          photos: personalMemory.photos || [],
+          privacy: 'SHARED_GROUP',
+        },
+        include: { user: { select: { id: true, name: true, email: true } } },
+      });
+    }
+
     await logActivity(
       personalMemory.tripId,
       currentUserId,
       'MEMORY_SHARED_GROUP',
-      `${user?.name || 'A member'} added a story to Our Journey (Day ${personalMemory.dayNumber})`
+      `${authorName} added a story to Our Journey (Day ${personalMemory.dayNumber})`
     );
 
     let parsedAnswers: MemoryQuestionnaireAnswers | null = null;
@@ -3407,6 +3435,30 @@ export const dbStore = {
       createdAt: groupMemory.createdAt.toISOString(),
       updatedAt: groupMemory.updatedAt.toISOString(),
     };
+  },
+
+  async deleteTrip(tripId: string, currentUserId: string): Promise<boolean> {
+    await ensureDatabaseSeeded();
+    const trip = await prisma.trip.findUnique({
+      where: { id: tripId },
+      include: { members: true },
+    });
+
+    if (!trip) throw new Error('Trip not found');
+
+    const member = trip.members.find((m) => m.userId === currentUserId);
+    const isCreator = trip.createdById === currentUserId;
+    const isAdmin = member?.role === 'ADMIN';
+
+    if (!isCreator && !isAdmin) {
+      throw new Error('Forbidden: Only the Trip Organizer can delete this trip.');
+    }
+
+    await prisma.trip.delete({
+      where: { id: tripId },
+    });
+
+    return true;
   },
 };
 

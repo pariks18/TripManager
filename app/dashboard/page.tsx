@@ -6,15 +6,18 @@ import { TripSummary, UserSession } from '@/types';
 import { TripCard } from '@/components/trip/TripCard';
 import { CreateTripModal } from '@/components/trip/CreateTripModal';
 import { JoinTripModal } from '@/components/trip/JoinTripModal';
+import { Modal } from '@/components/ui/Modal';
+import { useToast } from '@/components/ui/Toast';
 import { BottomNav } from '@/components/ui/BottomNav';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { Button } from '@/components/ui/Button';
 import { formatCurrency } from '@/lib/utils';
-import { Plus, KeyRound, Compass, Search, User, LogOut, ShieldCheck } from 'lucide-react';
+import { Plus, KeyRound, Compass, Search, User, LogOut, ShieldCheck, AlertTriangle, Loader2 } from 'lucide-react';
 import { fetchClientSession, clearClientSession } from '@/lib/clientSession';
 
 export default function DashboardPage() {
   const router = useRouter();
+  const { showToast } = useToast();
   const [user, setUser] = useState<UserSession | null>(null);
   const [trips, setTrips] = useState<TripSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -22,6 +25,8 @@ export default function DashboardPage() {
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isJoinOpen, setIsJoinOpen] = useState(false);
+  const [deletingTrip, setDeletingTrip] = useState<TripSummary | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     const handler = setTimeout(() => {
@@ -62,6 +67,26 @@ export default function DashboardPage() {
     clearClientSession();
     await fetch('/api/auth/logout', { method: 'POST' });
     router.push('/login');
+  };
+
+  const handleConfirmDeleteTrip = async () => {
+    if (!deletingTrip) return;
+    setIsDeleting(true);
+    try {
+      const res = await fetch(`/api/trips/${deletingTrip.id}`, {
+        method: 'DELETE',
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to delete trip');
+
+      showToast(`Trip "${deletingTrip.name}" deleted permanently.`, 'success');
+      setTrips((prev) => prev.filter((t) => t.id !== deletingTrip.id));
+      setDeletingTrip(null);
+    } catch (err: any) {
+      showToast(err.message || 'Error deleting trip', 'error');
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   const filteredTrips = React.useMemo(() => {
@@ -200,7 +225,12 @@ export default function DashboardPage() {
         ) : filteredTrips.length > 0 ? (
           <div className="space-y-4">
             {filteredTrips.map((trip) => (
-              <TripCard key={trip.id} trip={trip} />
+              <TripCard
+                key={trip.id}
+                trip={trip}
+                currentUserId={user?.id}
+                onDelete={(t) => setDeletingTrip(t)}
+              />
             ))}
           </div>
         ) : (
@@ -250,6 +280,63 @@ export default function DashboardPage() {
         onClose={() => setIsJoinOpen(false)}
         onSuccess={() => fetchTrips()}
       />
+
+      {/* Delete Trip Confirmation Modal */}
+      <Modal
+        isOpen={!!deletingTrip}
+        onClose={() => setDeletingTrip(null)}
+        title={`Delete "${deletingTrip?.name || 'Trip'}"?`}
+        maxWidth="max-w-md"
+      >
+        <div className="space-y-4">
+          <div className="bg-rose-50 border border-rose-200/80 rounded-2xl p-4 flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+            <div className="space-y-1.5 text-xs text-rose-900">
+              <p className="font-extrabold text-rose-700">Permanent Action Warning</p>
+              <p className="leading-relaxed font-medium">
+                This will permanently delete <span className="font-bold text-rose-950">{deletingTrip?.name}</span> and erase all associated data from the database.
+              </p>
+              <ul className="list-disc list-inside space-y-0.5 text-[11px] text-rose-800 pt-1 font-medium">
+                <li>Expense logs & receipt uploads</li>
+                <li>Debt settlement records & advance credits</li>
+                <li>Itinerary, hotel stays & decision polls</li>
+                <li>Personal & group trip memories</li>
+                <li>Real-time group chat & activity audit trail</li>
+              </ul>
+            </div>
+          </div>
+
+          <p className="text-xs text-slate-500 font-bold text-center">
+            Are you sure you want to proceed? This action cannot be undone.
+          </p>
+
+          <div className="flex items-center justify-end gap-2 pt-2">
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={isDeleting}
+              onClick={() => setDeletingTrip(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              disabled={isDeleting}
+              onClick={handleConfirmDeleteTrip}
+              className="bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-sm gap-1.5"
+            >
+              {isDeleting ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>Deleting Trip...</span>
+                </>
+              ) : (
+                <span>Permanently Delete Trip</span>
+              )}
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Bottom Nav Bar */}
       <BottomNav />
