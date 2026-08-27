@@ -3120,6 +3120,14 @@ export const dbStore = {
     await ensureDatabaseSeeded();
     const userSelect = { select: { id: true, name: true, email: true } };
 
+    // Verify trip membership
+    const tripMember = await prisma.tripMember.findUnique({
+      where: { tripId_userId: { tripId, userId: currentUserId } },
+    });
+    if (!tripMember) {
+      throw new Error('Forbidden: You are not a member of this trip.');
+    }
+
     // Fetch share requests for this current user
     const shareRequestsRaw = await prisma.memoryShareRequest.findMany({
       where: { targetUserId: currentUserId },
@@ -3140,19 +3148,21 @@ export const dbStore = {
       .map((sr) => sr.memoryId);
 
     // Fetch all memories accessible to current user for this trip:
-    // 1. Personal memories created by currentUser
-    // 2. Group memories (type == 'GROUP')
-    // 3. Memories with privacy == 'SHARED_GROUP'
-    // 4. Selective memories where currentUser is in sharedWithUserIds or has an accepted share request
+    // 1. Memories created by currentUser
+    // 2. Official group memories (type == 'GROUP')
+    // 3. Selective personal memories where currentUser is in sharedWithUserIds AND has an accepted share request
     const memoriesRaw = await prisma.tripMemory.findMany({
       where: {
         tripId,
         OR: [
           { userId: currentUserId },
           { type: 'GROUP' },
-          { privacy: 'SHARED_GROUP' },
-          { sharedWithUserIds: { has: currentUserId } },
-          { id: { in: acceptedMemoryIds } },
+          {
+            AND: [
+              { sharedWithUserIds: { has: currentUserId } },
+              { id: { in: acceptedMemoryIds } },
+            ],
+          },
         ],
       },
       include: {
@@ -3274,6 +3284,12 @@ export const dbStore = {
 
     if (targetId) {
       // Edit existing memory for this day
+      const existing = await prisma.tripMemory.findUnique({ where: { id: targetId } });
+      if (!existing) throw new Error('Memory record not found');
+      if (existing.userId !== data.userId) {
+        throw new Error('Forbidden: You can only edit your own memories');
+      }
+
       memoryRecord = await prisma.tripMemory.update({
         where: { id: targetId },
         data: {
@@ -3383,6 +3399,14 @@ export const dbStore = {
     });
 
     if (privacy === 'SHARED_SELECTIVE') {
+      // Clean up share requests for users removed from targetUserIds
+      await prisma.memoryShareRequest.deleteMany({
+        where: {
+          memoryId,
+          targetUserId: { notIn: targetUserIds },
+        },
+      });
+
       // Create pending share requests for selected members
       for (const targetId of targetUserIds) {
         if (targetId !== ownerId) {

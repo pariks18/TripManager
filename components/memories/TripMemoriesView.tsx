@@ -86,10 +86,41 @@ export const TripMemoriesView: React.FC<TripMemoriesViewProps> = ({ trip, curren
     Array.from(files).forEach((file) => {
       const reader = new FileReader();
       reader.onload = (event) => {
-        const result = event.target?.result as string;
-        if (result) {
-          setPhotosList((prev) => [...prev, result]);
-        }
+        const rawResult = event.target?.result as string;
+        if (!rawResult) return;
+
+        const img = new Image();
+        img.onload = () => {
+          const maxDim = 1024;
+          let width = img.width;
+          let height = img.height;
+
+          if (width > maxDim || height > maxDim) {
+            if (width > height) {
+              height = Math.round((height * maxDim) / width);
+              width = maxDim;
+            } else {
+              width = Math.round((width * maxDim) / height);
+              height = maxDim;
+            }
+          }
+
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, width, height);
+            const compressed = canvas.toDataURL('image/jpeg', 0.8);
+            setPhotosList((prev) => [...prev, compressed]);
+          } else {
+            setPhotosList((prev) => [...prev, rawResult]);
+          }
+        };
+        img.onerror = () => {
+          setPhotosList((prev) => [...prev, rawResult]);
+        };
+        img.src = rawResult;
       };
       reader.readAsDataURL(file);
     });
