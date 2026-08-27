@@ -2,7 +2,7 @@ import { prisma } from './prisma';
 import { hashPassword, comparePassword } from './auth';
 import { generateTripCode, generateObjectId } from './utils';
 import { calculateMemberBalances, computeSettlements } from './settlement';
-import { CategoryType, ExpenseDetail, TripSummary, UserSummary, ActivityDetail, SettlementRecordDetail, MemberBalance, MemberAnalytics, DocumentType, UserDocumentDetail, ItineraryItemDetail, StayDetail, PollDetail, PollOptionDetail, PollVoteDetail, MemberLocationDetail, MessageDetail } from '@/types';
+import { CategoryType, ExpenseDetail, TripSummary, UserSummary, ActivityDetail, SettlementRecordDetail, MemberBalance, MemberAnalytics, DocumentType, UserDocumentDetail, ItineraryItemDetail, StayDetail, PollDetail, PollOptionDetail, PollVoteDetail, MemberLocationDetail, MessageDetail, TripMemoryDetail, MemoryQuestionnaireAnswers, MemoryShareRequestDetail } from '@/types';
 
 const SEED_USERS = [
   {
@@ -3001,6 +3001,411 @@ export const dbStore = {
       content: msg.content,
       createdAt: msg.createdAt.toISOString(),
       updatedAt: msg.updatedAt.toISOString(),
+    };
+  },
+
+  async getTripMemories(
+    tripId: string,
+    currentUserId: string
+  ): Promise<{
+    memories: TripMemoryDetail[];
+    shareRequests: MemoryShareRequestDetail[];
+  }> {
+    await ensureDatabaseSeeded();
+    const userSelect = { select: { id: true, name: true, email: true } };
+
+    // Fetch share requests for this current user
+    const shareRequestsRaw = await prisma.memoryShareRequest.findMany({
+      where: { targetUserId: currentUserId },
+      include: {
+        owner: userSelect,
+        targetUser: userSelect,
+        memory: {
+          include: {
+            user: userSelect,
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const acceptedMemoryIds = shareRequestsRaw
+      .filter((sr) => sr.status === 'ACCEPTED')
+      .map((sr) => sr.memoryId);
+
+    // Fetch all memories accessible to current user for this trip:
+    // 1. Personal memories created by currentUser
+    // 2. Group memories (type == 'GROUP')
+    // 3. Memories with privacy == 'SHARED_GROUP'
+    // 4. Selective memories where currentUser is in sharedWithUserIds or has an accepted share request
+    const memoriesRaw = await prisma.tripMemory.findMany({
+      where: {
+        tripId,
+        OR: [
+          { userId: currentUserId },
+          { type: 'GROUP' },
+          { privacy: 'SHARED_GROUP' },
+          { sharedWithUserIds: { has: currentUserId } },
+          { id: { in: acceptedMemoryIds } },
+        ],
+      },
+      include: {
+        user: userSelect,
+      },
+      orderBy: [{ dayNumber: 'asc' }, { createdAt: 'desc' }],
+    });
+
+    const memories: TripMemoryDetail[] = memoriesRaw.map((m) => {
+      let parsedAnswers: MemoryQuestionnaireAnswers | null = null;
+      if (m.answers) {
+        try {
+          parsedAnswers = JSON.parse(m.answers);
+        } catch (e) {}
+      }
+      return {
+        id: m.id,
+        tripId: m.tripId,
+        userId: m.userId,
+        user: { id: m.user.id, name: m.user.name, email: m.user.email },
+        dayNumber: m.dayNumber,
+        date: m.date ? m.date.toISOString() : null,
+        title: m.title,
+        type: m.type as 'PERSONAL' | 'GROUP',
+        answers: parsedAnswers,
+        freeText: m.freeText,
+        photos: m.photos || [],
+        privacy: m.privacy as 'PRIVATE' | 'SHARED_SELECTIVE' | 'SHARED_GROUP',
+        sharedWithUserIds: m.sharedWithUserIds || [],
+        createdAt: m.createdAt.toISOString(),
+        updatedAt: m.updatedAt.toISOString(),
+      };
+    });
+
+    const shareRequests: MemoryShareRequestDetail[] = shareRequestsRaw.map((sr) => {
+      let parsedAnswers: MemoryQuestionnaireAnswers | null = null;
+      if (sr.memory.answers) {
+        try {
+          parsedAnswers = JSON.parse(sr.memory.answers);
+        } catch (e) {}
+      }
+      return {
+        id: sr.id,
+        memoryId: sr.memoryId,
+        memory: {
+          id: sr.memory.id,
+          tripId: sr.memory.tripId,
+          userId: sr.memory.userId,
+          user: { id: sr.memory.user.id, name: sr.memory.user.name, email: sr.memory.user.email },
+          dayNumber: sr.memory.dayNumber,
+          date: sr.memory.date ? sr.memory.date.toISOString() : null,
+          title: sr.memory.title,
+          type: sr.memory.type as 'PERSONAL' | 'GROUP',
+          answers: parsedAnswers,
+          freeText: sr.memory.freeText,
+          photos: sr.memory.photos || [],
+          privacy: sr.memory.privacy as 'PRIVATE' | 'SHARED_SELECTIVE' | 'SHARED_GROUP',
+          sharedWithUserIds: sr.memory.sharedWithUserIds || [],
+          createdAt: sr.memory.createdAt.toISOString(),
+          updatedAt: sr.memory.updatedAt.toISOString(),
+        },
+        ownerId: sr.ownerId,
+        owner: { id: sr.owner.id, name: sr.owner.name, email: sr.owner.email },
+        targetUserId: sr.targetUserId,
+        targetUser: { id: sr.targetUser.id, name: sr.targetUser.name, email: sr.targetUser.email },
+        status: sr.status as 'PENDING' | 'ACCEPTED' | 'DECLINED',
+        createdAt: sr.createdAt.toISOString(),
+        updatedAt: sr.updatedAt.toISOString(),
+      };
+    });
+
+    return { memories, shareRequests };
+  },
+
+  async saveMemory(data: {
+    id?: string;
+    tripId: string;
+    userId: string;
+    dayNumber: number;
+    date?: string | null;
+    title?: string | null;
+    type?: 'PERSONAL' | 'GROUP';
+    answers?: MemoryQuestionnaireAnswers | null;
+    freeText?: string | null;
+    photos?: string[];
+    privacy?: 'PRIVATE' | 'SHARED_SELECTIVE' | 'SHARED_GROUP';
+    sharedWithUserIds?: string[];
+  }): Promise<TripMemoryDetail> {
+    await ensureDatabaseSeeded();
+    const userSelect = { select: { id: true, name: true, email: true } };
+
+    const stringifiedAnswers = data.answers ? JSON.stringify(data.answers) : null;
+    const memoryType = data.type || 'PERSONAL';
+    const memoryPrivacy = data.privacy || (memoryType === 'GROUP' ? 'SHARED_GROUP' : 'PRIVATE');
+
+    let memoryRecord;
+
+    if (data.id) {
+      // Edit existing memory
+      const existing = await prisma.tripMemory.findUnique({ where: { id: data.id } });
+      if (!existing) throw new Error('Memory record not found');
+      if (existing.userId !== data.userId) {
+        throw new Error('Forbidden: You can only edit your own memories');
+      }
+
+      memoryRecord = await prisma.tripMemory.update({
+        where: { id: data.id },
+        data: {
+          title: data.title !== undefined ? data.title : existing.title,
+          answers: stringifiedAnswers !== undefined ? stringifiedAnswers : existing.answers,
+          freeText: data.freeText !== undefined ? data.freeText : existing.freeText,
+          photos: data.photos !== undefined ? data.photos : existing.photos,
+          privacy: memoryPrivacy,
+          sharedWithUserIds: data.sharedWithUserIds !== undefined ? data.sharedWithUserIds : existing.sharedWithUserIds,
+          date: data.date ? new Date(data.date) : existing.date,
+        },
+        include: { user: userSelect },
+      });
+    } else {
+      // Create new memory
+      memoryRecord = await prisma.tripMemory.create({
+        data: {
+          id: generateObjectId(),
+          tripId: data.tripId,
+          userId: data.userId,
+          dayNumber: data.dayNumber,
+          date: data.date ? new Date(data.date) : null,
+          title: data.title || null,
+          type: memoryType,
+          answers: stringifiedAnswers,
+          freeText: data.freeText || null,
+          photos: data.photos || [],
+          privacy: memoryPrivacy,
+          sharedWithUserIds: data.sharedWithUserIds || [],
+        },
+        include: { user: userSelect },
+      });
+
+      const user = await prisma.user.findUnique({ where: { id: data.userId } });
+      await logActivity(
+        data.tripId,
+        data.userId,
+        'MEMORY_CREATED',
+        `${user?.name || 'A member'} added a ${memoryType.toLowerCase()} memory for Day ${data.dayNumber}`
+      );
+    }
+
+    let parsedAnswers: MemoryQuestionnaireAnswers | null = null;
+    if (memoryRecord.answers) {
+      try {
+        parsedAnswers = JSON.parse(memoryRecord.answers);
+      } catch (e) {}
+    }
+
+    return {
+      id: memoryRecord.id,
+      tripId: memoryRecord.tripId,
+      userId: memoryRecord.userId,
+      user: { id: memoryRecord.user.id, name: memoryRecord.user.name, email: memoryRecord.user.email },
+      dayNumber: memoryRecord.dayNumber,
+      date: memoryRecord.date ? memoryRecord.date.toISOString() : null,
+      title: memoryRecord.title,
+      type: memoryRecord.type as 'PERSONAL' | 'GROUP',
+      answers: parsedAnswers,
+      freeText: memoryRecord.freeText,
+      photos: memoryRecord.photos || [],
+      privacy: memoryRecord.privacy as 'PRIVATE' | 'SHARED_SELECTIVE' | 'SHARED_GROUP',
+      sharedWithUserIds: memoryRecord.sharedWithUserIds || [],
+      createdAt: memoryRecord.createdAt.toISOString(),
+      updatedAt: memoryRecord.updatedAt.toISOString(),
+    };
+  },
+
+  async deleteMemory(memoryId: string, currentUserId: string): Promise<boolean> {
+    await ensureDatabaseSeeded();
+    const memory = await prisma.tripMemory.findUnique({
+      where: { id: memoryId },
+      include: { trip: { include: { members: true } } },
+    });
+    if (!memory) return false;
+
+    const memberRole = memory.trip.members.find((m) => m.userId === currentUserId)?.role;
+    const isOwner = memory.userId === currentUserId;
+    const isAdmin = memberRole === 'ADMIN' || memory.trip.createdById === currentUserId;
+
+    if (!isOwner && !(memory.type === 'GROUP' && isAdmin)) {
+      throw new Error('Forbidden: You can only delete your own memories.');
+    }
+
+    await prisma.tripMemory.delete({ where: { id: memoryId } });
+    return true;
+  },
+
+  async shareMemory(
+    memoryId: string,
+    ownerId: string,
+    targetUserIds: string[],
+    privacy: 'SHARED_SELECTIVE' | 'SHARED_GROUP'
+  ): Promise<TripMemoryDetail> {
+    await ensureDatabaseSeeded();
+    const memory = await prisma.tripMemory.findUnique({ where: { id: memoryId } });
+    if (!memory) throw new Error('Memory not found');
+    if (memory.userId !== ownerId) throw new Error('Forbidden: Only memory owner can share this memory');
+
+    const updatedMemory = await prisma.tripMemory.update({
+      where: { id: memoryId },
+      data: {
+        privacy,
+        sharedWithUserIds: targetUserIds,
+      },
+      include: { user: { select: { id: true, name: true, email: true } } },
+    });
+
+    if (privacy === 'SHARED_SELECTIVE') {
+      // Create pending share requests for selected members
+      for (const targetId of targetUserIds) {
+        if (targetId !== ownerId) {
+          await prisma.memoryShareRequest.upsert({
+            where: { memoryId_targetUserId: { memoryId, targetUserId: targetId } },
+            create: {
+              id: generateObjectId(),
+              memoryId,
+              ownerId,
+              targetUserId: targetId,
+              status: 'PENDING',
+            },
+            update: {
+              status: 'PENDING',
+            },
+          });
+        }
+      }
+    }
+
+    let parsedAnswers: MemoryQuestionnaireAnswers | null = null;
+    if (updatedMemory.answers) {
+      try {
+        parsedAnswers = JSON.parse(updatedMemory.answers);
+      } catch (e) {}
+    }
+
+    return {
+      id: updatedMemory.id,
+      tripId: updatedMemory.tripId,
+      userId: updatedMemory.userId,
+      user: { id: updatedMemory.user.id, name: updatedMemory.user.name, email: updatedMemory.user.email },
+      dayNumber: updatedMemory.dayNumber,
+      date: updatedMemory.date ? updatedMemory.date.toISOString() : null,
+      title: updatedMemory.title,
+      type: updatedMemory.type as 'PERSONAL' | 'GROUP',
+      answers: parsedAnswers,
+      freeText: updatedMemory.freeText,
+      photos: updatedMemory.photos || [],
+      privacy: updatedMemory.privacy as 'PRIVATE' | 'SHARED_SELECTIVE' | 'SHARED_GROUP',
+      sharedWithUserIds: updatedMemory.sharedWithUserIds || [],
+      createdAt: updatedMemory.createdAt.toISOString(),
+      updatedAt: updatedMemory.updatedAt.toISOString(),
+    };
+  },
+
+  async respondToShareRequest(
+    requestId: string,
+    targetUserId: string,
+    action: 'ACCEPT' | 'DECLINE'
+  ): Promise<boolean> {
+    await ensureDatabaseSeeded();
+    const req = await prisma.memoryShareRequest.findUnique({ where: { id: requestId } });
+    if (!req) throw new Error('Share request not found');
+    if (req.targetUserId !== targetUserId) throw new Error('Forbidden: You can only manage your own invitations');
+
+    await prisma.memoryShareRequest.update({
+      where: { id: requestId },
+      data: { status: action === 'ACCEPT' ? 'ACCEPTED' : 'DECLINED' },
+    });
+
+    return true;
+  },
+
+  async revokeMemoryShare(
+    memoryId: string,
+    ownerId: string,
+    targetUserId: string
+  ): Promise<boolean> {
+    await ensureDatabaseSeeded();
+    const memory = await prisma.tripMemory.findUnique({ where: { id: memoryId } });
+    if (!memory) throw new Error('Memory not found');
+    if (memory.userId !== ownerId) throw new Error('Forbidden: Only owner can revoke sharing');
+
+    const updatedSharedList = (memory.sharedWithUserIds || []).filter((id) => id !== targetUserId);
+
+    await prisma.tripMemory.update({
+      where: { id: memoryId },
+      data: {
+        sharedWithUserIds: updatedSharedList,
+        privacy: updatedSharedList.length === 0 ? 'PRIVATE' : memory.privacy,
+      },
+    });
+
+    await prisma.memoryShareRequest.deleteMany({
+      where: { memoryId, targetUserId },
+    });
+
+    return true;
+  },
+
+  async addToGroupMemory(personalMemoryId: string, currentUserId: string): Promise<TripMemoryDetail> {
+    await ensureDatabaseSeeded();
+    const personalMemory = await prisma.tripMemory.findUnique({ where: { id: personalMemoryId } });
+    if (!personalMemory) throw new Error('Personal memory not found');
+    if (personalMemory.userId !== currentUserId) throw new Error('Forbidden: You can only share your own memories');
+
+    const groupMemory = await prisma.tripMemory.create({
+      data: {
+        id: generateObjectId(),
+        tripId: personalMemory.tripId,
+        userId: currentUserId,
+        dayNumber: personalMemory.dayNumber,
+        date: personalMemory.date,
+        title: personalMemory.title ? `${personalMemory.title} (Shared by ${currentUserId})` : `Group Memory - Day ${personalMemory.dayNumber}`,
+        type: 'GROUP',
+        answers: personalMemory.answers,
+        freeText: personalMemory.freeText,
+        photos: personalMemory.photos || [],
+        privacy: 'SHARED_GROUP',
+      },
+      include: { user: { select: { id: true, name: true, email: true } } },
+    });
+
+    const user = await prisma.user.findUnique({ where: { id: currentUserId } });
+    await logActivity(
+      personalMemory.tripId,
+      currentUserId,
+      'MEMORY_SHARED_GROUP',
+      `${user?.name || 'A member'} added a story to Our Journey (Day ${personalMemory.dayNumber})`
+    );
+
+    let parsedAnswers: MemoryQuestionnaireAnswers | null = null;
+    if (groupMemory.answers) {
+      try {
+        parsedAnswers = JSON.parse(groupMemory.answers);
+      } catch (e) {}
+    }
+
+    return {
+      id: groupMemory.id,
+      tripId: groupMemory.tripId,
+      userId: groupMemory.userId,
+      user: { id: groupMemory.user.id, name: groupMemory.user.name, email: groupMemory.user.email },
+      dayNumber: groupMemory.dayNumber,
+      date: groupMemory.date ? groupMemory.date.toISOString() : null,
+      title: groupMemory.title,
+      type: groupMemory.type as 'PERSONAL' | 'GROUP',
+      answers: parsedAnswers,
+      freeText: groupMemory.freeText,
+      photos: groupMemory.photos || [],
+      privacy: groupMemory.privacy as 'PRIVATE' | 'SHARED_SELECTIVE' | 'SHARED_GROUP',
+      sharedWithUserIds: groupMemory.sharedWithUserIds || [],
+      createdAt: groupMemory.createdAt.toISOString(),
+      updatedAt: groupMemory.updatedAt.toISOString(),
     };
   },
 };

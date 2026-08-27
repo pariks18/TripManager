@@ -11,6 +11,12 @@
       "static/chunks/47.ac18931a05b1b052.js"
     ]
   },
+  "app/dashboard/trip/[tripId]/page.tsx -> @/components/memories/TripMemoriesView": {
+    "id": 1242,
+    "files": [
+      "static/chunks/242.36b1402409f57f6d.js"
+    ]
+  },
   "app/dashboard/trip/[tripId]/page.tsx -> @/components/settlement/SettlementList": {
     "id": 208,
     "files": [

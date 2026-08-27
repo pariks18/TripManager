@@ -42,6 +42,9 @@ model User {
   locations             MemberLocation[]
   otpVerifications      OtpVerification[]
   sentMessages          Message[]            @relation("MessageSender")
+  memories              TripMemory[]         @relation("MemoryAuthor")
+  sentMemoryShares      MemoryShareRequest[] @relation("MemoryShareOwner")
+  receivedMemoryShares  MemoryShareRequest[] @relation("MemoryShareTarget")
 }
 
 model Trip {
@@ -69,6 +72,7 @@ model Trip {
   polls     Poll[]
   locations MemberLocation[]
   messages  Message[]
+  memories  TripMemory[]
 }
 
 model TripMember {
@@ -316,4 +320,45 @@ model Message {
   sender User @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
 
   @@index([tripId, createdAt])
+}
+
+model TripMemory {
+  id                String   @id @default(auto()) @map("_id") @db.ObjectId
+  tripId            String   @db.ObjectId
+  userId            String   @db.ObjectId
+  dayNumber         Int
+  date              DateTime?
+  title             String?
+  type              String   @default("PERSONAL") // "PERSONAL" or "GROUP"
+  answers           String?  // JSON stringified object for questionnaire answers
+  freeText          String?
+  photos            String[] @default([])
+  privacy           String   @default("PRIVATE") // "PRIVATE", "SHARED_SELECTIVE", "SHARED_GROUP"
+  sharedWithUserIds String[] @default([])
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  trip          Trip                 @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  user          User                 @relation("MemoryAuthor", fields: [userId], references: [id], onDelete: Cascade)
+  shareRequests MemoryShareRequest[]
+
+  @@index([tripId, dayNumber])
+  @@index([userId, tripId])
+}
+
+model MemoryShareRequest {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  memoryId     String   @db.ObjectId
+  ownerId      String   @db.ObjectId
+  targetUserId String   @db.ObjectId
+  status       String   @default("PENDING") // "PENDING", "ACCEPTED", "DECLINED"
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  memory     TripMemory @relation(fields: [memoryId], references: [id], onDelete: Cascade)
+  owner      User       @relation("MemoryShareOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  targetUser User       @relation("MemoryShareTarget", fields: [targetUserId], references: [id], onDelete: Cascade)
+
+  @@unique([memoryId, targetUserId])
+  @@index([targetUserId, status])
 }

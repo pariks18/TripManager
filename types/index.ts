@@ -150,7 +150,9 @@ export interface ActivityDetail {
     | 'LOCATION_SHARED'
     | 'TRIP_LOCKED'
     | 'TRIP_UPDATED'
-    | 'APPROVAL_MODE_UPDATED';
+    | 'APPROVAL_MODE_UPDATED'
+    | 'MEMORY_CREATED'
+    | 'MEMORY_SHARED_GROUP';
   details: string;
   amount?: number | null;
   category?: string | null;
@@ -316,6 +318,47 @@ export interface MessageDetail {
   senderId: string;
   sender: UserSummary;
   content: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MemoryQuestionnaireAnswers {
+  where?: string;
+  highlight?: string;
+  bestMoment?: string;
+  funniestMoment?: string;
+  bestFood?: string;
+  unexpected?: string;
+  notes?: string;
+}
+
+export interface TripMemoryDetail {
+  id: string;
+  tripId: string;
+  userId: string;
+  user: UserSummary;
+  dayNumber: number;
+  date: string | null;
+  title: string | null;
+  type: 'PERSONAL' | 'GROUP';
+  answers: MemoryQuestionnaireAnswers | null;
+  freeText: string | null;
+  photos: string[];
+  privacy: 'PRIVATE' | 'SHARED_SELECTIVE' | 'SHARED_GROUP';
+  sharedWithUserIds: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MemoryShareRequestDetail {
+  id: string;
+  memoryId: string;
+  memory: TripMemoryDetail;
+  ownerId: string;
+  owner: UserSummary;
+  targetUserId: string;
+  targetUser: UserSummary;
+  status: 'PENDING' | 'ACCEPTED' | 'DECLINED';
   createdAt: string;
   updatedAt: string;
 }

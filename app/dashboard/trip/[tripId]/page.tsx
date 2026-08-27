@@ -21,6 +21,7 @@ const StayView = dynamic(() => import('@/components/trip/StayView').then((m) => 
 const LivePollsView = dynamic(() => import('@/components/trip/LivePollsView').then((m) => m.LivePollsView));
 const LiveLocationView = dynamic(() => import('@/components/trip/LiveLocationView').then((m) => m.LiveLocationView));
 const GroupChatView = dynamic(() => import('@/components/chat/GroupChatView').then((m) => m.GroupChatView));
+const TripMemoriesView = dynamic(() => import('@/components/memories/TripMemoriesView').then((m) => m.TripMemoriesView));
 const AdvanceCreditModal = dynamic(() => import('@/components/wallet/AdvanceCreditModal').then((m) => m.AdvanceCreditModal));
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
@@ -60,6 +61,7 @@ import {
   CreditCard,
   Compass,
   MessageSquare,
+  Heart,
 } from 'lucide-react';
 
 export default function TripDashboardPage() {
@@ -70,7 +72,7 @@ export default function TripDashboardPage() {
   const [user, setUser] = useState<UserSession | null>(null);
   const [trip, setTrip] = useState<TripSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'overview' | 'trip' | 'polls' | 'location' | 'expenses' | 'itinerary' | 'stay' | 'approvals' | 'settlement' | 'timeline' | 'analytics' | 'chat'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'trip' | 'polls' | 'location' | 'expenses' | 'itinerary' | 'stay' | 'approvals' | 'settlement' | 'timeline' | 'analytics' | 'chat' | 'memories'>('overview');
   const [copiedCode, setCopiedCode] = useState(false);
 
   // Expense & Advance Credit modal state
@@ -487,7 +489,21 @@ export default function TripDashboardPage() {
                   </div>
                 </div>
 
-                {/* 2. Stay */}
+                {/* 2. Trip Memories & Journey */}
+                <div
+                  onClick={() => setActiveTab('memories')}
+                  className="bg-white rounded-2xl p-4 border border-rose-100/90 shadow-sm hover:shadow-md cursor-pointer transition-all space-y-2 group active:scale-[0.98]"
+                >
+                  <div className="p-2.5 bg-rose-50 text-rose-600 rounded-xl w-fit group-hover:scale-105 transition-transform">
+                    <Heart className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h5 className="text-xs font-bold text-slate-900">Trip Memories</h5>
+                    <p className="text-[10px] text-slate-400 mt-0.5 leading-tight">My Journey & Our Journey</p>
+                  </div>
+                </div>
+
+                {/* 3. Stay */}
                 <div
                   onClick={() => setActiveTab('stay')}
                   className="bg-white rounded-2xl p-4 border border-slate-100/90 shadow-sm hover:shadow-md cursor-pointer transition-all space-y-2 group active:scale-[0.98]"
@@ -613,7 +629,7 @@ export default function TripDashboardPage() {
         )}
 
         {/* Feature Sub-Page Header for Direct Features */}
-        {['polls', 'location', 'itinerary', 'stay', 'approvals', 'timeline', 'analytics'].includes(activeTab) && (
+        {['polls', 'location', 'itinerary', 'stay', 'approvals', 'timeline', 'analytics', 'memories'].includes(activeTab) && (
           <div className="flex items-center justify-between pb-1 border-b border-slate-100">
             <button
               onClick={() => setActiveTab('trip')}
@@ -628,6 +644,8 @@ export default function TripDashboardPage() {
                 ? 'Live Map'
                 : activeTab === 'itinerary'
                 ? 'Itinerary'
+                : activeTab === 'memories'
+                ? 'Trip Memories'
                 : activeTab === 'stay'
                 ? 'Stay'
                 : activeTab === 'approvals'
@@ -764,6 +782,14 @@ export default function TripDashboardPage() {
             itinerary={trip.itinerary || []}
             isAdmin={isAdmin}
             onRefresh={fetchTripDetails}
+          />
+        )}
+
+        {/* TAB: TRIP MEMORIES & JOURNEY */}
+        {activeTab === 'memories' && (
+          <TripMemoriesView
+            trip={trip}
+            currentUser={user}
           />
         )}
 
