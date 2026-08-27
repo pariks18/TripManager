@@ -1,8 +1,11 @@
 import React, { useState } from 'react';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
+import { Modal } from '@/components/ui/Modal';
 import { ExpenseDetail, SettlementRecordDetail, SettlementTransaction, TripMemberDetail, UserSummary } from '@/types';
 import { Avatar } from '@/components/ui/Avatar';
-import { formatCurrency } from '@/lib/utils';
+import { Input } from '@/components/ui/Input';
+import { Button } from '@/components/ui/Button';
+import { formatCurrency, formatDate } from '@/lib/utils';
 import { SettleUpModal } from './SettleUpModal';
 import { ExpenseBreakdownModal } from '@/components/expense/ExpenseBreakdownModal';
 import {
@@ -13,14 +16,16 @@ import {
   Copy,
   Receipt,
   ShieldCheck,
-  Sparkles,
   XCircle,
-  AlertCircle,
-  RotateCcw,
-  Undo2,
   AlertTriangle,
-  History,
+  RotateCcw,
   Plus,
+  ShieldAlert,
+  FileText,
+  Info,
+  Check,
+  X,
+  ExternalLink,
 } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
 
@@ -50,7 +55,6 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
   const { showToast } = useToast();
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [submittingId, setSubmittingId] = useState<string | null>(null);
-  const [rollbackConfirmId, setRollbackConfirmId] = useState<string | null>(null);
 
   // Settle Up Modal State
   const [isSettleModalOpen, setIsSettleModalOpen] = useState(false);
@@ -59,6 +63,25 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
   // Expense Breakdown Modal State
   const [breakdownMember, setBreakdownMember] = useState<UserSummary | null>(null);
   const [isBreakdownOpen, setIsBreakdownOpen] = useState(false);
+
+  // Reversal Request Modal State
+  const [reversalModalRecord, setReversalModalRecord] = useState<SettlementRecordDetail | null>(null);
+  const [reversalReason, setReversalReason] = useState('');
+  const [reversalProofUrl, setReversalProofUrl] = useState('');
+
+  // Decline Reversal Modal State
+  const [declineModalRecord, setDeclineModalRecord] = useState<SettlementRecordDetail | null>(null);
+  const [declineReason, setDeclineReason] = useState('');
+  const [declineProofUrl, setDeclineProofUrl] = useState('');
+
+  // Host Review Modal State
+  const [hostReviewRecord, setHostReviewRecord] = useState<SettlementRecordDetail | null>(null);
+  const [hostReason, setHostReason] = useState('');
+
+  // Audit Detail Modal State
+  const [auditModalRecord, setAuditModalRecord] = useState<SettlementRecordDetail | null>(null);
+
+  const [cancellingSettlementId, setCancellingSettlementId] = useState<string | null>(null);
 
   // Filter settlements strictly from the logged-in user's perspective
   const userSettlements = React.useMemo(() => {
@@ -73,17 +96,33 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
     return userSettlements.filter((tx) => tx.toUser.id === currentUserId);
   }, [userSettlements, currentUserId]);
 
-  // Filter settlement history records strictly involving the current user
+  // Filter settlement history records strictly involving the current user (or all if admin)
   const userSettlementRecords = React.useMemo(() => {
+    if (isAdmin) return settlementRecords;
     return settlementRecords.filter(
       (r) => r.fromUserId === currentUserId || r.toUserId === currentUserId
     );
-  }, [settlementRecords, currentUserId]);
+  }, [settlementRecords, currentUserId, isAdmin]);
 
-  const pendingRecords = React.useMemo(() => userSettlementRecords.filter((r) => r.status === 'PENDING'), [userSettlementRecords]);
-  const rollbackRecords = React.useMemo(() => userSettlementRecords.filter((r) => r.status === 'ROLLBACK_REQUESTED'), [userSettlementRecords]);
-  const confirmedRecords = React.useMemo(() => userSettlementRecords.filter((r) => r.status === 'CONFIRMED' || r.status === 'SETTLED' || r.status === 'PARTIALLY_SETTLED' || r.status === 'COMPLETED'), [userSettlementRecords]);
-  const historyRecords = React.useMemo(() => userSettlementRecords.filter((r) => r.status !== 'PENDING' && r.status !== 'ROLLBACK_REQUESTED'), [userSettlementRecords]);
+  const pendingApprovalRecords = React.useMemo(
+    () => userSettlementRecords.filter((r) => r.status === 'PENDING'),
+    [userSettlementRecords]
+  );
+
+  const pendingReversalRecords = React.useMemo(
+    () => userSettlementRecords.filter((r) => r.status === 'PENDING_REVERSAL' || r.status === 'ROLLBACK_REQUESTED'),
+    [userSettlementRecords]
+  );
+
+  const hostReviewRecords = React.useMemo(
+    () => userSettlementRecords.filter((r) => r.status === 'REVERSAL_DECLINED_PENDING_HOST'),
+    [userSettlementRecords]
+  );
+
+  const historyRecords = React.useMemo(
+    () => userSettlementRecords.filter((r) => r.status !== 'PENDING'),
+    [userSettlementRecords]
+  );
 
   // Financial totals
   const totalOwed = React.useMemo(() => youOweList.reduce((sum, tx) => sum + tx.amount, 0), [youOweList]);
@@ -120,7 +159,7 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
       const res = await fetch(`/api/trips/${tripId}/settlement/${settlementId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'APPROVE' }),
+        body: JSON.stringify({ action: 'CONFIRM' }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to approve settlement');
@@ -155,8 +194,6 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
     }
   };
 
-  const [cancellingSettlementId, setCancellingSettlementId] = useState<string | null>(null);
-
   const performCancelSettlement = async (settlementId: string) => {
     if (!tripId) return;
     setSubmittingId(settlementId);
@@ -181,29 +218,175 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
     setCancellingSettlementId(settlementId);
   };
 
-  const handleRequestRollback = async (settlementId: string) => {
+  // Reversal Action Handlers
+  const handleOpenReversalModal = (rec: SettlementRecordDetail) => {
+    setReversalModalRecord(rec);
+    setReversalReason('');
+    setReversalProofUrl('');
+  };
+
+  const handleRequestReversalSubmit = async () => {
+    if (!tripId || !reversalModalRecord) return;
+    if (!reversalReason.trim()) {
+      showToast('A mandatory reason is required to request a reversal.', 'error', 'Missing Reason');
+      return;
+    }
+
+    setSubmittingId(reversalModalRecord.id);
+    try {
+      const res = await fetch(`/api/trips/${tripId}/settlement/${reversalModalRecord.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'REQUEST_REVERSAL',
+          reason: reversalReason.trim(),
+          proofUrl: reversalProofUrl.trim() || undefined,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to request reversal');
+
+      showToast('Reversal request submitted to recipient', 'success', 'Reversal Requested');
+      setReversalModalRecord(null);
+      if (onRefresh) onRefresh();
+    } catch (err: any) {
+      showToast(err.message || 'Failed to request reversal', 'error', 'Error');
+    } finally {
+      setSubmittingId(null);
+    }
+  };
+
+  const handleAcceptReversal = async (settlementId: string) => {
     if (!tripId) return;
     setSubmittingId(settlementId);
     try {
       const res = await fetch(`/api/trips/${tripId}/settlement/${settlementId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'REQUEST_ROLLBACK' }),
+        body: JSON.stringify({ action: 'ACCEPT_REVERSAL' }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to request settlement rollback');
+      if (!res.ok) throw new Error(data.error || 'Failed to accept reversal');
 
-      showToast('Rollback requested', 'info', 'Rollback Requested');
-      setRollbackConfirmId(null);
+      showToast('✓ Reversal Approved & Settlement Restored', 'success', 'Reversal Approved');
       if (onRefresh) onRefresh();
     } catch (err: any) {
-      showToast(err.message || 'Failed to request settlement rollback', 'error', 'Error');
+      showToast(err.message || 'Failed to accept reversal', 'error', 'Error');
+    } finally {
+      setSubmittingId(null);
+    }
+  };
+
+  const handleOpenDeclineModal = (rec: SettlementRecordDetail) => {
+    setDeclineModalRecord(rec);
+    setDeclineReason('');
+    setDeclineProofUrl('');
+  };
+
+  const handleDeclineReversalSubmit = async () => {
+    if (!tripId || !declineModalRecord) return;
+    if (!declineReason.trim()) {
+      showToast('A mandatory reason is required to decline a reversal.', 'error', 'Missing Reason');
+      return;
+    }
+
+    setSubmittingId(declineModalRecord.id);
+    try {
+      const res = await fetch(`/api/trips/${tripId}/settlement/${declineModalRecord.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'DECLINE_REVERSAL',
+          declineReason: declineReason.trim(),
+          proofUrl: declineProofUrl.trim() || undefined,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to decline reversal');
+
+      showToast('Reversal declined. Request escalated to Trip Host.', 'info', 'Escalated to Host');
+      setDeclineModalRecord(null);
+      if (onRefresh) onRefresh();
+    } catch (err: any) {
+      showToast(err.message || 'Failed to decline reversal', 'error', 'Error');
+    } finally {
+      setSubmittingId(null);
+    }
+  };
+
+  const handleHostApproveReversal = async (settlementId: string) => {
+    if (!tripId) return;
+    setSubmittingId(settlementId);
+    try {
+      const res = await fetch(`/api/trips/${tripId}/settlement/${settlementId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'HOST_APPROVE_REVERSAL',
+          hostReason: hostReason.trim() || 'Host Override Approved',
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to approve reversal');
+
+      showToast('✓ Host Override: Reversal Approved', 'success', 'Host Override Approved');
+      setHostReviewRecord(null);
+      if (onRefresh) onRefresh();
+    } catch (err: any) {
+      showToast(err.message || 'Failed to approve reversal', 'error', 'Error');
+    } finally {
+      setSubmittingId(null);
+    }
+  };
+
+  const handleHostRejectReversal = async (settlementId: string) => {
+    if (!tripId) return;
+    setSubmittingId(settlementId);
+    try {
+      const res = await fetch(`/api/trips/${tripId}/settlement/${settlementId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'HOST_REJECT_REVERSAL',
+          hostReason: hostReason.trim() || 'Host Rejected Reversal',
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to reject reversal');
+
+      showToast('Reversal request rejected by Host', 'info', 'Reversal Rejected');
+      setHostReviewRecord(null);
+      if (onRefresh) onRefresh();
+    } catch (err: any) {
+      showToast(err.message || 'Failed to reject reversal', 'error', 'Error');
     } finally {
       setSubmittingId(null);
     }
   };
 
   const isAllSettled = youOweList.length === 0 && youReceiveList.length === 0;
+
+  const renderStatusBadge = (status: SettlementRecordDetail['status']) => {
+    switch (status) {
+      case 'PENDING':
+        return <span className="bg-amber-100 text-amber-800 text-[10px] font-extrabold px-2.5 py-1 rounded-full border border-amber-200">Pending Approval</span>;
+      case 'PENDING_REVERSAL':
+      case 'ROLLBACK_REQUESTED':
+        return <span className="bg-orange-100 text-orange-800 text-[10px] font-extrabold px-2.5 py-1 rounded-full border border-orange-200">Reversal Requested</span>;
+      case 'REVERSAL_DECLINED_PENDING_HOST':
+        return <span className="bg-purple-100 text-purple-800 text-[10px] font-extrabold px-2.5 py-1 rounded-full border border-purple-200 flex items-center gap-1"><ShieldAlert className="w-3 h-3 text-purple-600" /> Host Review</span>;
+      case 'REVERSED':
+      case 'ROLLED_BACK':
+        return <span className="bg-rose-100 text-rose-800 text-[10px] font-extrabold px-2.5 py-1 rounded-full border border-rose-200">Reversal Approved</span>;
+      case 'REVERSAL_REJECTED':
+        return <span className="bg-slate-100 text-slate-700 text-[10px] font-extrabold px-2.5 py-1 rounded-full border border-slate-200">Reversal Declined</span>;
+      case 'CONFIRMED':
+      case 'SETTLED':
+      case 'COMPLETED':
+      default:
+        return <span className="bg-emerald-100 text-emerald-800 text-[10px] font-extrabold px-2.5 py-1 rounded-full border border-emerald-200">Completed</span>;
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -279,17 +462,17 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
       </div>
 
       {/* 2. Pending Settlement Approval Requests Section */}
-      {pendingRecords.length > 0 && (
+      {pendingApprovalRecords.length > 0 && (
         <div className="bg-amber-50/70 border border-amber-200/80 rounded-3xl p-5 space-y-3 shadow-sm">
           <div className="flex items-center justify-between">
             <h4 className="text-xs font-extrabold uppercase tracking-wider text-amber-900 flex items-center gap-1.5">
               <Clock className="w-4 h-4 text-amber-600 animate-pulse" />
-              Pending Settlement Requests ({pendingRecords.length})
+              Pending Settlement Approvals ({pendingApprovalRecords.length})
             </h4>
           </div>
 
           <div className="space-y-2.5">
-            {pendingRecords.map((record) => {
+            {pendingApprovalRecords.map((record) => {
               const isPayer = record.fromUserId === currentUserId;
               const isReceiver = record.toUserId === currentUserId;
               const canApprove = isReceiver || isAdmin;
@@ -339,14 +522,14 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
                         <button
                           onClick={() => handleRejectSettlement(record.id)}
                           disabled={submittingId === record.id}
-                          className="px-2.5 py-1 text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-xl transition-colors"
+                          className="px-2.5 py-1 text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-xl transition-colors cursor-pointer"
                         >
                           Reject
                         </button>
                         <button
                           onClick={() => handleApproveSettlement(record.id)}
                           disabled={submittingId === record.id}
-                          className="px-3 py-1 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-sm transition-all flex items-center gap-1"
+                          className="px-3 py-1 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-sm transition-all flex items-center gap-1 cursor-pointer"
                         >
                           <CheckCircle2 className="w-3.5 h-3.5" /> Approve
                         </button>
@@ -355,7 +538,7 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
                       <button
                         onClick={() => handleCancelSettlement(record.id)}
                         disabled={submittingId === record.id}
-                        className="px-3 py-1 text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-xl transition-colors flex items-center gap-1"
+                        className="px-3 py-1 text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-xl transition-colors flex items-center gap-1 cursor-pointer"
                       >
                         <XCircle className="w-3.5 h-3.5" /> Cancel Request
                       </button>
@@ -372,7 +555,146 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
         </div>
       )}
 
-      {/* 3. Section: "You need to pay" */}
+      {/* 3. Pending Reversal Requests Section */}
+      {pendingReversalRecords.length > 0 && (
+        <div className="bg-orange-50/80 border border-orange-200/90 rounded-3xl p-5 space-y-3 shadow-sm">
+          <div className="flex items-center justify-between">
+            <h4 className="text-xs font-extrabold uppercase tracking-wider text-orange-900 flex items-center gap-1.5">
+              <RotateCcw className="w-4 h-4 text-orange-600 animate-spin" />
+              Reversal Requests Pending Review ({pendingReversalRecords.length})
+            </h4>
+          </div>
+
+          <div className="space-y-2.5">
+            {pendingReversalRecords.map((record) => {
+              const isPayer = record.fromUserId === currentUserId;
+              const isReceiver = record.toUserId === currentUserId;
+
+              return (
+                <div key={record.id} className="bg-white rounded-2xl p-4 border border-orange-200 space-y-3 shadow-sm">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-xs text-slate-900">{record.fromUser.name}</span>
+                      <span className="text-xs text-slate-400">Paid</span>
+                      <span className="font-bold text-xs text-slate-900">{record.toUser.name}</span>
+                    </div>
+
+                    <span className="font-extrabold text-sm text-slate-900">
+                      {formatCurrency(record.amount, currency)}
+                    </span>
+                  </div>
+
+                  {record.reversalReason && (
+                    <div className="bg-orange-50 p-2.5 rounded-xl border border-orange-100 text-xs text-orange-950 space-y-0.5">
+                      <span className="font-bold block text-[10px] uppercase text-orange-800">Reversal Reason:</span>
+                      <p className="font-medium">{record.reversalReason}</p>
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+                    <span className="text-[11px] text-slate-500 font-medium">
+                      Status: <span className="font-bold text-orange-700">Reversal Requested</span>
+                    </span>
+
+                    {isReceiver || isAdmin ? (
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenDeclineModal(record)}
+                          disabled={submittingId === record.id}
+                          className="px-3 py-1 text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-xl transition-colors cursor-pointer"
+                        >
+                          Decline Reversal
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleAcceptReversal(record.id)}
+                          disabled={submittingId === record.id}
+                          className="px-3.5 py-1 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-sm transition-all flex items-center gap-1 cursor-pointer"
+                        >
+                          <Check className="w-3.5 h-3.5" /> Accept Reversal
+                        </button>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-slate-500 font-semibold italic">
+                        Awaiting recipient response
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* 4. Host Review Section (Reversals declined by recipient) */}
+      {hostReviewRecords.length > 0 && (
+        <div className="bg-purple-50/80 border border-purple-200/90 rounded-3xl p-5 space-y-3 shadow-sm">
+          <div className="flex items-center justify-between">
+            <h4 className="text-xs font-extrabold uppercase tracking-wider text-purple-900 flex items-center gap-1.5">
+              <ShieldAlert className="w-4 h-4 text-purple-600" />
+              Host Review & Override Needed ({hostReviewRecords.length})
+            </h4>
+          </div>
+
+          <div className="space-y-2.5">
+            {hostReviewRecords.map((record) => (
+              <div key={record.id} className="bg-white rounded-2xl p-4 border border-purple-200 space-y-3 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="font-bold text-xs text-slate-900">
+                      {record.fromUser.name} → {record.toUser.name}
+                    </span>
+                    <span className="text-[10px] text-slate-400 block mt-0.5">
+                      Amount: {formatCurrency(record.amount, currency)}
+                    </span>
+                  </div>
+                  <span className="bg-purple-100 text-purple-800 text-[10px] font-extrabold px-2.5 py-1 rounded-full">
+                    Host Review Required
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                  {record.reversalReason && (
+                    <div className="bg-amber-50 p-2.5 rounded-xl border border-amber-200/70 text-amber-950">
+                      <span className="font-bold text-[10px] uppercase block text-amber-800">Requester Reason:</span>
+                      <p className="font-medium mt-0.5">{record.reversalReason}</p>
+                    </div>
+                  )}
+                  {record.reversalRecipientReason && (
+                    <div className="bg-rose-50 p-2.5 rounded-xl border border-rose-200/70 text-rose-950">
+                      <span className="font-bold text-[10px] uppercase block text-rose-800">Recipient Decline Reason:</span>
+                      <p className="font-medium mt-0.5">{record.reversalRecipientReason}</p>
+                    </div>
+                  )}
+                </div>
+
+                {isAdmin ? (
+                  <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setHostReviewRecord(record);
+                        setHostReason('');
+                      }}
+                      className="px-3.5 py-1.5 text-xs font-extrabold text-white bg-purple-600 hover:bg-purple-700 rounded-xl shadow-sm transition-all flex items-center gap-1 cursor-pointer"
+                    >
+                      <ShieldCheck className="w-3.5 h-3.5" /> Review Reversal
+                    </button>
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-500 font-medium italic pt-1 border-t border-slate-100">
+                    Under Trip Host review. The organizer will make the final determination.
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 5. Section: "You need to pay" */}
       {youOweList.length > 0 && (
         <div className="space-y-3">
           <div className="flex items-center justify-between px-1">
@@ -389,7 +711,7 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
 
           <div className="space-y-3">
             {youOweList.map((tx) => {
-              const pairPendingRecords = pendingRecords.filter(
+              const pairPendingRecords = pendingApprovalRecords.filter(
                 (r) => r.fromUserId === tx.fromUser.id && r.toUserId === tx.toUser.id
               );
               const pendingSum = pairPendingRecords.reduce((sum, r) => sum + r.amount, 0);
@@ -437,7 +759,7 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
                     <div className="flex items-center gap-1.5">
                       <button
                         onClick={() => handleCopyPayInfo(tx.toUser.name, remainingUnsettled > 0 ? remainingUnsettled : tx.amount, tx.id)}
-                        className="flex items-center gap-1 text-xs text-slate-600 hover:text-slate-900 font-semibold px-2.5 py-1.5 rounded-xl hover:bg-slate-100 transition-colors"
+                        className="flex items-center gap-1 text-xs text-slate-600 hover:text-slate-900 font-semibold px-2.5 py-1.5 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer"
                       >
                         <Copy className="w-3.5 h-3.5 text-slate-500" />
                         {copiedId === tx.id ? 'Copied Note!' : 'Copy Info'}
@@ -445,7 +767,7 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
 
                       <button
                         onClick={() => handleOpenBreakdown(tx.toUser)}
-                        className="flex items-center gap-1 text-xs text-slate-700 hover:text-slate-900 font-bold px-2.5 py-1.5 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 transition-colors"
+                        className="flex items-center gap-1 text-xs text-slate-700 hover:text-slate-900 font-bold px-2.5 py-1.5 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer"
                       >
                         <Receipt className="w-3.5 h-3.5 text-rose-600" />
                         View Expenses
@@ -456,7 +778,7 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
                       <button
                         onClick={() => handleOpenSettleModal(partialTx)}
                         disabled={submittingId === tx.id}
-                        className="flex items-center gap-1.5 text-xs font-extrabold px-4 py-2 rounded-2xl bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm transition-all active:scale-[0.98]"
+                        className="flex items-center gap-1.5 text-xs font-extrabold px-4 py-2 rounded-2xl bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm transition-all active:scale-[0.98] cursor-pointer"
                       >
                         <CheckCircle2 className="w-4 h-4" />
                         Pay {tx.toUser.name} {pendingSum > 0 ? formatCurrency(remainingUnsettled, currency) : ''}
@@ -474,7 +796,7 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
         </div>
       )}
 
-      {/* 4. Section: "You will receive" */}
+      {/* 6. Section: "You will receive" */}
       {youReceiveList.length > 0 && (
         <div className="space-y-3">
           <div className="flex items-center justify-between px-1">
@@ -490,103 +812,115 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
           </div>
 
           <div className="space-y-3">
-            {youReceiveList.map((tx) => {
-              const pairPendingRecords = pendingRecords.filter(
-                (r) => r.fromUserId === tx.fromUser.id && r.toUserId === tx.toUser.id
-              );
-              const pendingSum = pairPendingRecords.reduce((sum, r) => sum + r.amount, 0);
-
-              return (
-                <div
-                  key={tx.id}
-                  className="bg-white rounded-3xl p-5 border border-emerald-200/80 ring-1 ring-emerald-100 shadow-sm space-y-4"
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-3">
-                      <Avatar name={tx.fromUser.name} size="md" />
-                      <div>
-                        <h5 className="text-base font-extrabold text-slate-900">
-                          {tx.fromUser.name} owes you <span className="text-emerald-600 font-black">{formatCurrency(tx.amount, currency)}</span>
-                        </h5>
-                        <p className="text-xs text-slate-500 font-medium mt-0.5">
-                          Owed to you for trip expenses
-                        </p>
-                      </div>
+            {youReceiveList.map((tx) => (
+              <div
+                key={tx.id}
+                className="bg-white rounded-3xl p-5 border border-emerald-200/80 ring-1 ring-emerald-100 shadow-sm space-y-4"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <Avatar name={tx.fromUser.name} size="md" />
+                    <div>
+                      <h5 className="text-base font-extrabold text-slate-900">
+                        {tx.fromUser.name} owes you <span className="text-emerald-600 font-black">{formatCurrency(tx.amount, currency)}</span>
+                      </h5>
+                      <p className="text-xs text-slate-500 font-medium mt-0.5">
+                        Owed to you for trip expenses
+                      </p>
                     </div>
-                  </div>
-
-                  {/* Action Buttons */}
-                  <div className="flex items-center justify-between pt-2 border-t border-slate-100 flex-wrap gap-2">
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        onClick={() => handleCopyReceiveInfo(tx.fromUser.name, tx.amount, tx.id)}
-                        className="flex items-center gap-1 text-xs text-slate-600 hover:text-slate-900 font-semibold px-2.5 py-1.5 rounded-xl hover:bg-slate-100 transition-colors"
-                      >
-                        <Copy className="w-3.5 h-3.5 text-slate-500" />
-                        {copiedId === tx.id ? 'Copied Note!' : 'Copy Request'}
-                      </button>
-
-                      <button
-                        onClick={() => handleOpenBreakdown(tx.fromUser)}
-                        className="flex items-center gap-1 text-xs text-slate-700 hover:text-slate-900 font-bold px-2.5 py-1.5 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 transition-colors"
-                      >
-                        <Receipt className="w-3.5 h-3.5 text-emerald-600" />
-                        View Expenses
-                      </button>
-                    </div>
-
-                    <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-800 bg-emerald-50 px-3 py-1.5 rounded-2xl border border-emerald-200">
-                      Awaiting payment
-                    </span>
                   </div>
                 </div>
-              );
-            })}
+
+                {/* Action Buttons */}
+                <div className="flex items-center justify-between pt-2 border-t border-slate-100 flex-wrap gap-2">
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => handleCopyReceiveInfo(tx.fromUser.name, tx.amount, tx.id)}
+                      className="flex items-center gap-1 text-xs text-slate-600 hover:text-slate-900 font-semibold px-2.5 py-1.5 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer"
+                    >
+                      <Copy className="w-3.5 h-3.5 text-slate-500" />
+                      {copiedId === tx.id ? 'Copied Note!' : 'Copy Request'}
+                    </button>
+
+                    <button
+                      onClick={() => handleOpenBreakdown(tx.fromUser)}
+                      className="flex items-center gap-1 text-xs text-slate-700 hover:text-slate-900 font-bold px-2.5 py-1.5 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer"
+                    >
+                      <Receipt className="w-3.5 h-3.5 text-emerald-600" />
+                      View Expenses
+                    </button>
+                  </div>
+
+                  <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-800 bg-emerald-50 px-3 py-1.5 rounded-2xl border border-emerald-200">
+                    Awaiting payment
+                  </span>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}
 
-      {/* 5. Confirmed Settlement History Section */}
-      {confirmedRecords.length > 0 && (
+      {/* 7. Settlement History & Reversals List */}
+      {historyRecords.length > 0 && (
         <div className="bg-white rounded-3xl p-5 border border-slate-100 shadow-sm space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <ShieldCheck className="w-4 h-4 text-emerald-600" />
-              <h4 className="text-sm font-bold text-slate-900">Your Settlement History</h4>
+              <h4 className="text-sm font-bold text-slate-900">Settlement & Reversal History</h4>
             </div>
             <span className="text-xs text-slate-400 font-medium">
-              {confirmedRecords.length} Settled
+              {historyRecords.length} records
             </span>
           </div>
 
-          <div className="space-y-2 pt-1">
-            {confirmedRecords.map((rec) => {
+          <div className="space-y-2.5 pt-1">
+            {historyRecords.map((rec) => {
               const isPayer = rec.fromUserId === currentUserId;
               const isReceiver = rec.toUserId === currentUserId;
-              const canRequestRollback = isAdmin || isReceiver;
+              const canRequestReversal =
+                (rec.status === 'CONFIRMED' || rec.status === 'SETTLED' || rec.status === 'COMPLETED') &&
+                (isPayer || isReceiver || isAdmin);
+
               const displayAmount = typeof rec.settledAmount === 'number' && rec.settledAmount > 0 ? rec.settledAmount : rec.amount;
 
               return (
                 <div
                   key={rec.id}
-                  className="flex items-center justify-between p-3 rounded-2xl bg-slate-50 border border-slate-100 text-xs gap-2"
+                  className="flex flex-col sm:flex-row sm:items-center justify-between p-3.5 rounded-2xl bg-slate-50 border border-slate-100 text-xs gap-3"
                 >
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-bold text-slate-900">{isPayer ? 'You' : rec.fromUser.name}</span>
-                    <span className="text-slate-400">paid</span>
-                    <span className="font-bold text-slate-900">{isReceiver ? 'You' : rec.toUser.name}</span>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-extrabold text-slate-900">{isPayer ? 'You' : rec.fromUser.name}</span>
+                      <span className="text-slate-400 font-medium">paid</span>
+                      <span className="font-extrabold text-slate-900">{isReceiver ? 'You' : rec.toUser.name}</span>
+                      <span className="font-extrabold text-slate-900 bg-white px-2 py-0.5 rounded-lg border border-slate-200">
+                        {formatCurrency(displayAmount, currency)}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2 text-[11px]">
+                      <span className="text-slate-400">{formatDate(rec.createdAt)}</span>
+                      {renderStatusBadge(rec.status)}
+                    </div>
                   </div>
 
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span className="font-extrabold text-emerald-700">
-                      {formatCurrency(displayAmount, currency)}
-                    </span>
-                    {canRequestRollback && (
+                  <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                    <button
+                      type="button"
+                      onClick={() => setAuditModalRecord(rec)}
+                      className="px-2.5 py-1 text-[11px] font-bold text-slate-600 bg-white hover:bg-slate-100 border border-slate-200 rounded-xl transition-colors flex items-center gap-1 cursor-pointer"
+                    >
+                      <FileText className="w-3 h-3 text-slate-500" /> Audit Log
+                    </button>
+
+                    {canRequestReversal && (
                       <button
-                        onClick={() => setRollbackConfirmId(rec.id)}
-                        className="px-2.5 py-1 text-[11px] font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-xl transition-colors flex items-center gap-1 ml-1"
+                        type="button"
+                        onClick={() => handleOpenReversalModal(rec)}
+                        className="px-3 py-1 text-[11px] font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-xl transition-colors flex items-center gap-1 cursor-pointer"
                       >
-                        <RotateCcw className="w-3 h-3" /> Rollback
+                        <RotateCcw className="w-3 h-3 text-rose-600" /> Request Reversal
                       </button>
                     )}
                   </div>
@@ -626,42 +960,238 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
         />
       )}
 
-      {/* Rollback Confirmation Modal */}
-      {rollbackConfirmId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
-          <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl border border-slate-100 overflow-hidden flex flex-col p-6 space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 bg-purple-100 text-purple-700 rounded-2xl">
-                <AlertTriangle className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="text-base font-bold text-slate-900">Request Settlement Rollback</h3>
-                <p className="text-xs text-purple-700 font-medium">Reverse payment confirmation</p>
-              </div>
-            </div>
-
-            <p className="text-xs text-slate-600 leading-relaxed">
-              A rollback request will be sent to reverse this settlement payment.
+      {/* 1. Request Reversal Modal */}
+      <Modal
+        isOpen={!!reversalModalRecord}
+        onClose={() => setReversalModalRecord(null)}
+        title="Request Settlement Reversal"
+        maxWidth="max-w-md"
+      >
+        <div className="space-y-4">
+          <div className="bg-amber-50 border border-amber-200/80 rounded-2xl p-3.5 flex items-start gap-3">
+            <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+            <p className="text-xs text-amber-900 leading-relaxed font-medium">
+              This request will be sent to the payment recipient for approval. The original settlement will remain active until reviewed.
             </p>
+          </div>
 
-            <div className="flex gap-3 pt-2">
-              <button
-                onClick={() => setRollbackConfirmId(null)}
-                className="flex-1 py-2.5 px-4 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => handleRequestRollback(rollbackConfirmId)}
-                disabled={submittingId === rollbackConfirmId}
-                className="flex-1 py-2.5 px-4 rounded-2xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs shadow-sm transition-all"
-              >
-                {submittingId === rollbackConfirmId ? 'Sending...' : 'Send Request'}
-              </button>
-            </div>
+          <div className="space-y-1 text-xs">
+            <span className="text-slate-400 font-medium">Settlement Amount:</span>
+            <p className="text-base font-extrabold text-slate-900">
+              {formatCurrency(reversalModalRecord?.amount || 0, currency)} ({reversalModalRecord?.fromUser.name} → {reversalModalRecord?.toUser.name})
+            </p>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="block text-xs font-bold text-slate-700">
+              Mandatory Reversal Reason <span className="text-rose-500">*</span>
+            </label>
+            <textarea
+              rows={3}
+              placeholder="Explain why this settlement needs to be reversed..."
+              value={reversalReason}
+              onChange={(e) => setReversalReason(e.target.value)}
+              className="w-full p-3 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-rose-500 font-medium text-slate-800"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="block text-xs font-bold text-slate-700">Supporting Proof / Receipt URL (Optional)</label>
+            <Input
+              placeholder="Paste image or receipt URL"
+              value={reversalProofUrl}
+              onChange={(e) => setReversalProofUrl(e.target.value)}
+            />
+          </div>
+
+          <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+            <Button type="button" variant="ghost" onClick={() => setReversalModalRecord(null)}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={handleRequestReversalSubmit}
+              disabled={submittingId === reversalModalRecord?.id}
+              className="bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl"
+            >
+              Submit Reversal Request
+            </Button>
           </div>
         </div>
-      )}
+      </Modal>
+
+      {/* 2. Decline Reversal Modal */}
+      <Modal
+        isOpen={!!declineModalRecord}
+        onClose={() => setDeclineModalRecord(null)}
+        title="Decline Reversal Request"
+        maxWidth="max-w-md"
+      >
+        <div className="space-y-4">
+          <p className="text-xs text-slate-600 font-medium leading-relaxed">
+            If you decline this reversal, the request will be submitted to the Trip Host/Organizer for final review.
+          </p>
+
+          <div className="space-y-1.5">
+            <label className="block text-xs font-bold text-slate-700">
+              Mandatory Decline Reason <span className="text-rose-500">*</span>
+            </label>
+            <textarea
+              rows={3}
+              placeholder="State your reason for declining this reversal..."
+              value={declineReason}
+              onChange={(e) => setDeclineReason(e.target.value)}
+              className="w-full p-3 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-rose-500 font-medium text-slate-800"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="block text-xs font-bold text-slate-700">Supporting Proof URL (Optional)</label>
+            <Input
+              placeholder="Paste proof image URL"
+              value={declineProofUrl}
+              onChange={(e) => setDeclineProofUrl(e.target.value)}
+            />
+          </div>
+
+          <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+            <Button type="button" variant="ghost" onClick={() => setDeclineModalRecord(null)}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={handleDeclineReversalSubmit}
+              disabled={submittingId === declineModalRecord?.id}
+              className="bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl"
+            >
+              Decline & Escalate to Host
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* 3. Host Review Modal */}
+      <Modal
+        isOpen={!!hostReviewRecord}
+        onClose={() => setHostReviewRecord(null)}
+        title="Host Review: Settlement Reversal"
+        maxWidth="max-w-md"
+      >
+        <div className="space-y-4 text-xs">
+          <div className="bg-purple-50 border border-purple-200 rounded-2xl p-4 space-y-2">
+            <div className="flex items-center justify-between font-bold text-purple-950">
+              <span>Settlement: {formatCurrency(hostReviewRecord?.amount || 0, currency)}</span>
+              <span>{hostReviewRecord?.fromUser.name} → {hostReviewRecord?.toUser.name}</span>
+            </div>
+
+            {hostReviewRecord?.reversalReason && (
+              <div className="pt-2 border-t border-purple-200/60">
+                <span className="font-extrabold uppercase text-[10px] text-amber-800 block">Requester Reason:</span>
+                <p className="font-medium text-slate-800 mt-0.5">{hostReviewRecord.reversalReason}</p>
+              </div>
+            )}
+
+            {hostReviewRecord?.reversalRecipientReason && (
+              <div className="pt-2 border-t border-purple-200/60">
+                <span className="font-extrabold uppercase text-[10px] text-rose-800 block">Recipient Decline Reason:</span>
+                <p className="font-medium text-slate-800 mt-0.5">{hostReviewRecord.reversalRecipientReason}</p>
+              </div>
+            )}
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="block text-xs font-bold text-slate-700">Host Note / Override Justification</label>
+            <textarea
+              rows={2}
+              placeholder="Add host decision note..."
+              value={hostReason}
+              onChange={(e) => setHostReason(e.target.value)}
+              className="w-full p-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-purple-500 font-medium text-slate-800"
+            />
+          </div>
+
+          <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-100">
+            <Button
+              type="button"
+              onClick={() => hostReviewRecord && handleHostRejectReversal(hostReviewRecord.id)}
+              disabled={submittingId === hostReviewRecord?.id}
+              variant="outline"
+              className="text-xs font-bold"
+            >
+              Reject Reversal
+            </Button>
+            <Button
+              type="button"
+              onClick={() => hostReviewRecord && handleHostApproveReversal(hostReviewRecord.id)}
+              disabled={submittingId === hostReviewRecord?.id}
+              className="bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-xl shadow-sm gap-1"
+            >
+              <ShieldCheck className="w-4 h-4" /> Approve Reversal (Host Override)
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* 4. Full Audit Log Modal */}
+      <Modal
+        isOpen={!!auditModalRecord}
+        onClose={() => setAuditModalRecord(null)}
+        title="Settlement Audit History"
+        maxWidth="max-w-md"
+      >
+        <div className="space-y-3 text-xs">
+          <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-2">
+            <div className="flex justify-between items-center">
+              <span className="text-slate-400 font-medium">Record ID:</span>
+              <span className="font-mono text-[10px] text-slate-700">{auditModalRecord?.id}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-slate-400 font-medium">Original Amount:</span>
+              <span className="font-extrabold text-slate-900">{formatCurrency(auditModalRecord?.amount || 0, currency)}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-slate-400 font-medium">Payer → Recipient:</span>
+              <span className="font-bold text-slate-800">{auditModalRecord?.fromUser.name} → {auditModalRecord?.toUser.name}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-slate-400 font-medium">Status:</span>
+              {auditModalRecord && renderStatusBadge(auditModalRecord.status)}
+            </div>
+          </div>
+
+          {auditModalRecord?.reversalReason && (
+            <div className="bg-amber-50 p-3 rounded-2xl border border-amber-100 space-y-1">
+              <span className="font-bold text-[10px] text-amber-800 uppercase block">Reversal Request Reason</span>
+              <p className="font-medium text-amber-950">{auditModalRecord.reversalReason}</p>
+              {auditModalRecord.reversalProofUrl && (
+                <a href={auditModalRecord.reversalProofUrl} target="_blank" rel="noreferrer" className="text-[11px] font-bold text-amber-700 hover:underline inline-flex items-center gap-1 pt-1">
+                  <ExternalLink className="w-3 h-3" /> View Attachment
+                </a>
+              )}
+            </div>
+          )}
+
+          {auditModalRecord?.reversalRecipientReason && (
+            <div className="bg-rose-50 p-3 rounded-2xl border border-rose-100 space-y-1">
+              <span className="font-bold text-[10px] text-rose-800 uppercase block">Recipient Decline Reason</span>
+              <p className="font-medium text-rose-950">{auditModalRecord.reversalRecipientReason}</p>
+            </div>
+          )}
+
+          {auditModalRecord?.reversalHostReason && (
+            <div className="bg-purple-50 p-3 rounded-2xl border border-purple-100 space-y-1">
+              <span className="font-bold text-[10px] text-purple-800 uppercase block">Host Decision Note ({auditModalRecord.reversalHostDecision})</span>
+              <p className="font-medium text-purple-950">{auditModalRecord.reversalHostReason}</p>
+            </div>
+          )}
+
+          <div className="flex justify-end pt-2">
+            <Button type="button" variant="ghost" onClick={() => setAuditModalRecord(null)}>
+              Close
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Cancel Settlement Confirmation Modal */}
       {cancellingSettlementId && (

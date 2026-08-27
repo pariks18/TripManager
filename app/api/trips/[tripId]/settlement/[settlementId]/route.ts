@@ -12,36 +12,51 @@ export async function PATCH(
   }
 
   try {
-    const { action, note } = await request.json();
+    const body = await request.json();
+    const { action, note, reason, proofUrl, declineReason, hostReason } = body;
 
-    if (!action || !['APPROVE', 'REJECT', 'CONFIRM', 'REQUEST_ROLLBACK', 'APPROVE_ROLLBACK', 'REJECT_ROLLBACK'].includes(action)) {
+    const validActions = [
+      'APPROVE',
+      'CONFIRM',
+      'REJECT',
+      'REQUEST_REVERSAL',
+      'ACCEPT_REVERSAL',
+      'DECLINE_REVERSAL',
+      'HOST_APPROVE_REVERSAL',
+      'HOST_REJECT_REVERSAL',
+      'REQUEST_ROLLBACK',
+      'APPROVE_ROLLBACK',
+      'REJECT_ROLLBACK',
+    ];
+
+    if (!action || !validActions.includes(action)) {
       return NextResponse.json({ error: 'Invalid settlement action' }, { status: 400 });
     }
 
-    let targetStatus: 'CONFIRMED' | 'REJECTED' | 'ROLLBACK_REQUESTED' | 'ROLLED_BACK' = 'CONFIRMED';
-    if (action === 'REJECT') {
-      targetStatus = 'REJECTED';
-    } else if (action === 'REQUEST_ROLLBACK') {
-      targetStatus = 'ROLLBACK_REQUESTED';
-    } else if (action === 'APPROVE_ROLLBACK') {
-      targetStatus = 'ROLLED_BACK';
-    } else if (action === 'REJECT_ROLLBACK') {
-      targetStatus = 'CONFIRMED';
-    } else {
-      targetStatus = 'CONFIRMED';
-    }
+    let mappedAction: any = action;
+    if (action === 'APPROVE' || action === 'CONFIRM') mappedAction = 'CONFIRMED';
+    else if (action === 'REQUEST_ROLLBACK') mappedAction = 'REQUEST_REVERSAL';
+    else if (action === 'APPROVE_ROLLBACK') mappedAction = 'HOST_APPROVE_REVERSAL';
+    else if (action === 'REJECT_ROLLBACK') mappedAction = 'HOST_REJECT_REVERSAL';
 
     const record = await dbStore.updateSettlementStatus(
       params.tripId,
       params.settlementId,
       user.id,
-      targetStatus,
-      note
+      mappedAction,
+      {
+        note,
+        reason,
+        proofUrl,
+        declineReason,
+        hostReason,
+      }
     );
 
     return NextResponse.json({ record });
   } catch (error: any) {
-    return NextResponse.json({ error: error.message || 'Failed to update settlement status' }, { status: 400 });
+    const status = error.message?.includes('Forbidden') ? 403 : 400;
+    return NextResponse.json({ error: error.message || 'Failed to update settlement status' }, { status });
   }
 }
 

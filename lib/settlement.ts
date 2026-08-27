@@ -40,8 +40,9 @@ export function calculateMemberBalances(
     });
   });
 
-  // Track CONFIRMED / SETTLED / PARTIALLY_SETTLED / COMPLETED / ROLLBACK_REQUESTED settlements
+  // Track active settlements (CONFIRMED / SETTLED / COMPLETED / PENDING_REVERSAL / REVERSAL_DECLINED_PENDING_HOST)
   // Note: Settlements MUST NOT modify expense paid or share values. They ONLY adjust the net outstanding balance.
+  // Reversal status 'REVERSED' automatically excludes the settlement, restoring debt & recalculating Advance Credit.
   if (settlements && settlements.length > 0) {
     const validSettlements = settlements.filter(
       (s) =>
@@ -49,6 +50,8 @@ export function calculateMemberBalances(
         s.status === 'SETTLED' ||
         s.status === 'PARTIALLY_SETTLED' ||
         s.status === 'COMPLETED' ||
+        s.status === 'PENDING_REVERSAL' ||
+        s.status === 'REVERSAL_DECLINED_PENDING_HOST' ||
         s.status === 'ROLLBACK_REQUESTED'
     );
 

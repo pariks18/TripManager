@@ -150,8 +150,20 @@ model Settlement {
   amount          Float
   settledAmount   Float    @default(0)
   remainingAmount Float?
-  status          String   @default("PENDING") // PENDING, PARTIALLY_SETTLED, SETTLED, CONFIRMED, REJECTED, COMPLETED, ROLLBACK_REQUESTED, ROLLED_BACK
+  status          String   @default("PENDING") // PENDING, PARTIALLY_SETTLED, SETTLED, CONFIRMED, REJECTED, COMPLETED, PENDING_REVERSAL, REVERSAL_DECLINED_PENDING_HOST, REVERSED, REVERSAL_REJECTED
   note            String?
+
+  // Reversal Audit Trail
+  reversalReason            String?
+  reversalProofUrl          String?
+  reversalRequestedById     String?
+  reversalRequestedAt       DateTime?
+  reversalRecipientDecision String? // ACCEPTED, DECLINED
+  reversalRecipientReason   String?
+  reversalRecipientProofUrl String?
+  reversalHostDecision      String? // APPROVED_OVERRIDE, REJECTED
+  reversalHostReason        String?
+
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 

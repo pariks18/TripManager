@@ -596,6 +596,15 @@ export const dbStore = {
       remainingAmount: s.remainingAmount,
       status: s.status as SettlementRecordDetail['status'],
       note: s.note,
+      reversalReason: s.reversalReason,
+      reversalProofUrl: s.reversalProofUrl,
+      reversalRequestedById: s.reversalRequestedById,
+      reversalRequestedAt: s.reversalRequestedAt ? s.reversalRequestedAt.toISOString() : null,
+      reversalRecipientDecision: s.reversalRecipientDecision as any,
+      reversalRecipientReason: s.reversalRecipientReason,
+      reversalRecipientProofUrl: s.reversalRecipientProofUrl,
+      reversalHostDecision: s.reversalHostDecision as any,
+      reversalHostReason: s.reversalHostReason,
       createdAt: s.createdAt.toISOString(),
       updatedAt: s.updatedAt.toISOString(),
     }));
@@ -1065,6 +1074,9 @@ export const dbStore = {
     const settlementRecords: SettlementRecordDetail[] = trip.settlements.map((s) => ({
       ...s,
       status: s.status as any,
+      reversalRequestedAt: s.reversalRequestedAt ? s.reversalRequestedAt.toISOString() : null,
+      reversalRecipientDecision: s.reversalRecipientDecision as any,
+      reversalHostDecision: s.reversalHostDecision as any,
       createdAt: s.createdAt.toISOString(),
       updatedAt: s.updatedAt.toISOString(),
     }));
@@ -1192,6 +1204,9 @@ export const dbStore = {
       const settlementRecords: SettlementRecordDetail[] = trip.settlements.map((s) => ({
         ...s,
         status: s.status as any,
+        reversalRequestedAt: s.reversalRequestedAt ? s.reversalRequestedAt.toISOString() : null,
+        reversalRecipientDecision: s.reversalRecipientDecision as any,
+        reversalHostDecision: s.reversalHostDecision as any,
         createdAt: s.createdAt.toISOString(),
         updatedAt: s.updatedAt.toISOString(),
       }));
@@ -1274,8 +1289,24 @@ export const dbStore = {
     tripId: string,
     settlementId: string,
     currentUserId: string,
-    targetStatus: 'CONFIRMED' | 'REJECTED' | 'COMPLETED' | 'ROLLBACK_REQUESTED' | 'ROLLED_BACK',
-    note?: string
+    action:
+      | 'CONFIRMED'
+      | 'REJECTED'
+      | 'REQUEST_REVERSAL'
+      | 'ACCEPT_REVERSAL'
+      | 'DECLINE_REVERSAL'
+      | 'HOST_APPROVE_REVERSAL'
+      | 'HOST_REJECT_REVERSAL'
+      | 'REQUEST_ROLLBACK'
+      | 'APPROVE_ROLLBACK'
+      | 'REJECT_ROLLBACK',
+    payload?: {
+      note?: string;
+      reason?: string;
+      proofUrl?: string;
+      declineReason?: string;
+      hostReason?: string;
+    }
   ): Promise<SettlementRecordDetail> {
     await ensureDatabaseSeeded();
 
@@ -1293,77 +1324,126 @@ export const dbStore = {
       const isReceiver = settlement.toUserId === currentUserId;
       const isPayer = settlement.fromUserId === currentUserId;
 
-      if (targetStatus === 'CONFIRMED' || targetStatus === 'REJECTED') {
-        if (settlement.status === 'ROLLBACK_REQUESTED') {
-          if (!isPayer && !isAdmin) {
-            throw new Error('Forbidden: Only the client (payer) or Super Host/Admin can reject a rollback request.');
-          }
-        } else {
-          if (settlement.status !== 'PENDING') {
-            throw new Error('Invalid action: Settlement request is not pending approval or has already been processed.');
-          }
-          if (!isReceiver && !isAdmin) {
-            throw new Error('Forbidden: Only the payment recipient or Super Host/Admin can approve/reject settlement requests.');
-          }
+      let finalStatus: string = settlement.status;
+      let actionType: ActivityDetail['actionType'] = 'SETTLEMENT_CONFIRMED';
+      let activityText = '';
+
+      const reason = payload?.reason?.trim();
+      const declineReason = payload?.declineReason?.trim();
+      const hostReason = payload?.hostReason?.trim();
+      const proofUrl = payload?.proofUrl?.trim();
+      const note = payload?.note?.trim();
+
+      const updateData: any = { updatedAt: new Date() };
+
+      if (action === 'CONFIRMED') {
+        if (settlement.status !== 'PENDING') {
+          throw new Error('Invalid action: Settlement request is not pending approval.');
         }
-      } else if (targetStatus === 'ROLLBACK_REQUESTED') {
         if (!isReceiver && !isAdmin) {
-          throw new Error('Forbidden: Only the Super Host/Admin or recipient can request a settlement rollback.');
+          throw new Error('Forbidden: Only the payment recipient or Super Host/Admin can approve settlement requests.');
         }
-        if (settlement.status !== 'CONFIRMED' && settlement.status !== 'COMPLETED') {
-          throw new Error('Invalid action: Only confirmed settlements can be requested for rollback.');
+        finalStatus = 'CONFIRMED';
+        updateData.status = 'CONFIRMED';
+        updateData.settledAmount = settlement.amount;
+        updateData.remainingAmount = 0;
+        if (note) updateData.note = note;
+        actionType = 'SETTLEMENT_CONFIRMED';
+        activityText = `${settlement.toUser.name} confirmed settlement payment of ${settlement.trip.currency || '₹'}${settlement.amount} from ${settlement.fromUser.name}.`;
+      } else if (action === 'REJECTED') {
+        if (settlement.status !== 'PENDING') {
+          throw new Error('Invalid action: Settlement request is not pending approval.');
         }
-      } else if (targetStatus === 'ROLLED_BACK') {
-        if (!isPayer && !isAdmin) {
-          throw new Error('Forbidden: Only the client (payer) or Super Host/Admin can approve a settlement rollback.');
+        if (!isReceiver && !isAdmin) {
+          throw new Error('Forbidden: Only the payment recipient or Super Host/Admin can reject settlement requests.');
         }
-        if (settlement.status !== 'ROLLBACK_REQUESTED') {
-          throw new Error('Invalid action: No rollback request is currently pending for this settlement.');
+        finalStatus = 'REJECTED';
+        updateData.status = 'REJECTED';
+        if (note) updateData.note = note;
+        actionType = 'SETTLEMENT_REJECTED';
+        activityText = `${settlement.toUser.name} rejected settlement request of ${settlement.trip.currency || '₹'}${settlement.amount} from ${settlement.fromUser.name}.`;
+      } else if (action === 'REQUEST_REVERSAL' || action === 'REQUEST_ROLLBACK') {
+        if (!isPayer && !isReceiver && !isAdmin) {
+          throw new Error('Forbidden: Only members involved in the settlement or Trip Host can request a reversal.');
         }
-      }
-
-      let newSettledAmount = settlement.settledAmount || 0;
-      let newRemainingAmount = settlement.remainingAmount ?? settlement.amount;
-
-      if (targetStatus === 'CONFIRMED' && settlement.status === 'PENDING') {
-        newSettledAmount = settlement.amount;
-        newRemainingAmount = 0;
+        if (settlement.status !== 'CONFIRMED' && settlement.status !== 'COMPLETED' && settlement.status !== 'SETTLED') {
+          throw new Error('Invalid action: Only completed/confirmed settlements can be requested for reversal.');
+        }
+        if (!reason && action === 'REQUEST_REVERSAL') {
+          throw new Error('A mandatory reason must be provided when requesting a settlement reversal.');
+        }
+        finalStatus = 'PENDING_REVERSAL';
+        updateData.status = 'PENDING_REVERSAL';
+        updateData.reversalReason = reason || note || 'Requested reversal';
+        updateData.reversalProofUrl = proofUrl || null;
+        updateData.reversalRequestedById = currentUserId;
+        updateData.reversalRequestedAt = new Date();
+        actionType = 'SETTLEMENT_REVERSAL_REQUESTED';
+        activityText = `${currentUserId === settlement.fromUserId ? settlement.fromUser.name : settlement.toUser.name} requested reversal for settlement (${settlement.trip.currency || '₹'}${settlement.amount}). Reason: ${reason || note || 'N/A'}`;
+      } else if (action === 'ACCEPT_REVERSAL') {
+        if (!isReceiver && !isAdmin) {
+          throw new Error('Forbidden: Only the payment recipient or Trip Host can accept a reversal request.');
+        }
+        if (settlement.status !== 'PENDING_REVERSAL' && settlement.status !== 'REVERSAL_DECLINED_PENDING_HOST' && settlement.status !== 'ROLLBACK_REQUESTED') {
+          throw new Error('Invalid action: No reversal request is pending for this settlement.');
+        }
+        finalStatus = 'REVERSED';
+        updateData.status = 'REVERSED';
+        updateData.reversalRecipientDecision = 'ACCEPTED';
+        actionType = 'SETTLEMENT_REVERSAL_ACCEPTED';
+        activityText = `${settlement.toUser.name} accepted settlement reversal. Settlement (${settlement.trip.currency || '₹'}${settlement.amount}) between ${settlement.fromUser.name} and ${settlement.toUser.name} has been reversed.`;
+      } else if (action === 'DECLINE_REVERSAL') {
+        if (!isReceiver && !isAdmin) {
+          throw new Error('Forbidden: Only the payment recipient can decline a reversal request.');
+        }
+        if (settlement.status !== 'PENDING_REVERSAL') {
+          throw new Error('Invalid action: No reversal request is pending for this settlement.');
+        }
+        if (!declineReason) {
+          throw new Error('A mandatory reason must be provided when declining a settlement reversal.');
+        }
+        finalStatus = 'REVERSAL_DECLINED_PENDING_HOST';
+        updateData.status = 'REVERSAL_DECLINED_PENDING_HOST';
+        updateData.reversalRecipientDecision = 'DECLINED';
+        updateData.reversalRecipientReason = declineReason;
+        updateData.reversalRecipientProofUrl = proofUrl || null;
+        actionType = 'SETTLEMENT_REVERSAL_DECLINED';
+        activityText = `${settlement.toUser.name} declined reversal request for settlement (${settlement.trip.currency || '₹'}${settlement.amount}). Submitted to Trip Host for review. Reason: ${declineReason}`;
+      } else if (action === 'HOST_APPROVE_REVERSAL' || action === 'APPROVE_ROLLBACK') {
+        if (!isAdmin) {
+          throw new Error('Forbidden: Only the Trip Host/Organizer can perform a Host Override to approve reversal.');
+        }
+        if (settlement.status !== 'PENDING_REVERSAL' && settlement.status !== 'REVERSAL_DECLINED_PENDING_HOST' && settlement.status !== 'ROLLBACK_REQUESTED') {
+          throw new Error('Invalid action: Settlement does not have an active reversal request.');
+        }
+        finalStatus = 'REVERSED';
+        updateData.status = 'REVERSED';
+        updateData.reversalHostDecision = 'APPROVED_OVERRIDE';
+        updateData.reversalHostReason = hostReason || reason || 'Host Override Approved';
+        actionType = 'SETTLEMENT_REVERSAL_HOST_APPROVED';
+        activityText = `Trip Host approved reversal (Host Override) for settlement (${settlement.trip.currency || '₹'}${settlement.amount}). Settlement reversed and balances restored.`;
+      } else if (action === 'HOST_REJECT_REVERSAL' || action === 'REJECT_ROLLBACK') {
+        if (!isAdmin && !isPayer) {
+          throw new Error('Forbidden: Only the Trip Host/Organizer can reject a reversal review.');
+        }
+        if (settlement.status !== 'PENDING_REVERSAL' && settlement.status !== 'REVERSAL_DECLINED_PENDING_HOST' && settlement.status !== 'ROLLBACK_REQUESTED') {
+          throw new Error('Invalid action: Settlement does not have an active reversal request.');
+        }
+        finalStatus = 'REVERSAL_REJECTED';
+        updateData.status = 'REVERSAL_REJECTED';
+        updateData.reversalHostDecision = 'REJECTED';
+        updateData.reversalHostReason = hostReason || reason || 'Reversal Rejected';
+        actionType = 'SETTLEMENT_REVERSAL_HOST_REJECTED';
+        activityText = `Trip Host rejected reversal request for settlement (${settlement.trip.currency || '₹'}${settlement.amount}). Settlement remains completed.`;
+      } else {
+        throw new Error(`Unsupported settlement action: ${action}`);
       }
 
       const updated = await tx.settlement.update({
         where: { id: settlementId },
-        data: {
-          status: targetStatus,
-          settledAmount: newSettledAmount,
-          remainingAmount: newRemainingAmount,
-          note: note !== undefined ? note : settlement.note,
-          updatedAt: new Date(),
-        },
+        data: updateData,
         include: { fromUser: true, toUser: true },
       });
-
-      const currentUser = await tx.user.findUnique({ where: { id: currentUserId } });
-      let actionType: ActivityDetail['actionType'] = 'SETTLEMENT_CONFIRMED';
-      let activityText = '';
-
-      if (targetStatus === 'CONFIRMED') {
-        if (settlement.status === 'ROLLBACK_REQUESTED') {
-          actionType = 'SETTLEMENT_ROLLBACK_REJECTED';
-          activityText = `${currentUser?.name || 'User'} rejected settlement rollback. Settlement of ${settlement.trip.currency || '₹'}${settlement.amount} between ${settlement.fromUser.name} and ${settlement.toUser.name} remains valid.`;
-        } else {
-          actionType = 'SETTLEMENT_CONFIRMED';
-          activityText = `${currentUser?.name || 'User'} approved settlement of ${settlement.trip.currency || '₹'}${settlement.amount} from ${settlement.fromUser.name} to ${settlement.toUser.name}`;
-        }
-      } else if (targetStatus === 'REJECTED') {
-        actionType = 'SETTLEMENT_REJECTED';
-        activityText = `${currentUser?.name || 'User'} rejected settlement request of ${settlement.trip.currency || '₹'}${settlement.amount} from ${settlement.fromUser.name} to ${settlement.toUser.name}`;
-      } else if (targetStatus === 'ROLLBACK_REQUESTED') {
-        actionType = 'SETTLEMENT_ROLLBACK_REQUESTED';
-        activityText = `${currentUser?.name || 'User'} requested rollback of settlement (${settlement.trip.currency || '₹'}${settlement.amount}) with ${settlement.fromUser.name} (Pending client approval)`;
-      } else if (targetStatus === 'ROLLED_BACK') {
-        actionType = 'SETTLEMENT_ROLLBACK_APPROVED';
-        activityText = `${currentUser?.name || 'User'} approved rollback of settlement (${settlement.trip.currency || '₹'}${settlement.amount}). Settlement reversed to unsettled.`;
-      }
 
       await tx.activity.create({
         data: {
@@ -1383,14 +1463,31 @@ export const dbStore = {
       id: result.id,
       tripId: result.tripId,
       fromUserId: result.fromUserId,
-      fromUser: { id: result.fromUser.id, name: result.fromUser.name, email: result.fromUser.email },
+      fromUser: {
+        id: result.fromUser?.id || result.fromUserId,
+        name: result.fromUser?.name || 'User',
+        email: result.fromUser?.email || '',
+      },
       toUserId: result.toUserId,
-      toUser: { id: result.toUser.id, name: result.toUser.name, email: result.toUser.email },
+      toUser: {
+        id: result.toUser?.id || result.toUserId,
+        name: result.toUser?.name || 'User',
+        email: result.toUser?.email || '',
+      },
       amount: result.amount,
       settledAmount: result.settledAmount || 0,
-      remainingAmount: result.remainingAmount || 0,
+      remainingAmount: result.remainingAmount || result.amount,
       status: result.status as SettlementRecordDetail['status'],
       note: result.note,
+      reversalReason: result.reversalReason,
+      reversalProofUrl: result.reversalProofUrl,
+      reversalRequestedById: result.reversalRequestedById,
+      reversalRequestedAt: result.reversalRequestedAt ? result.reversalRequestedAt.toISOString() : null,
+      reversalRecipientDecision: result.reversalRecipientDecision as any,
+      reversalRecipientReason: result.reversalRecipientReason,
+      reversalRecipientProofUrl: result.reversalRecipientProofUrl,
+      reversalHostDecision: result.reversalHostDecision as any,
+      reversalHostReason: result.reversalHostReason,
       createdAt: result.createdAt.toISOString(),
       updatedAt: result.updatedAt.toISOString(),
     };
@@ -1661,6 +1758,15 @@ export const dbStore = {
       remainingAmount: s.remainingAmount,
       status: s.status as SettlementRecordDetail['status'],
       note: s.note,
+      reversalReason: s.reversalReason,
+      reversalProofUrl: s.reversalProofUrl,
+      reversalRequestedById: s.reversalRequestedById,
+      reversalRequestedAt: s.reversalRequestedAt ? s.reversalRequestedAt.toISOString() : null,
+      reversalRecipientDecision: s.reversalRecipientDecision as any,
+      reversalRecipientReason: s.reversalRecipientReason,
+      reversalRecipientProofUrl: s.reversalRecipientProofUrl,
+      reversalHostDecision: s.reversalHostDecision as any,
+      reversalHostReason: s.reversalHostReason,
       createdAt: s.createdAt.toISOString(),
       updatedAt: s.updatedAt.toISOString(),
     }));

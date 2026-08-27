@@ -140,6 +140,11 @@ export interface ActivityDetail {
     | 'SETTLEMENT_MARKED' 
     | 'SETTLEMENT_CONFIRMED'
     | 'SETTLEMENT_REJECTED'
+    | 'SETTLEMENT_REVERSAL_REQUESTED'
+    | 'SETTLEMENT_REVERSAL_ACCEPTED'
+    | 'SETTLEMENT_REVERSAL_DECLINED'
+    | 'SETTLEMENT_REVERSAL_HOST_APPROVED'
+    | 'SETTLEMENT_REVERSAL_HOST_REJECTED'
     | 'SETTLEMENT_ROLLBACK_REQUESTED'
     | 'SETTLEMENT_ROLLBACK_APPROVED'
     | 'SETTLEMENT_ROLLBACK_REJECTED'
@@ -169,8 +174,29 @@ export interface SettlementRecordDetail {
   amount: number;
   settledAmount?: number;
   remainingAmount?: number | null;
-  status: 'PENDING' | 'PARTIALLY_SETTLED' | 'SETTLED' | 'CONFIRMED' | 'REJECTED' | 'COMPLETED' | 'ROLLBACK_REQUESTED' | 'ROLLED_BACK';
+  status:
+    | 'PENDING'
+    | 'PARTIALLY_SETTLED'
+    | 'SETTLED'
+    | 'CONFIRMED'
+    | 'REJECTED'
+    | 'COMPLETED'
+    | 'PENDING_REVERSAL'
+    | 'REVERSAL_DECLINED_PENDING_HOST'
+    | 'REVERSED'
+    | 'REVERSAL_REJECTED'
+    | 'ROLLBACK_REQUESTED'
+    | 'ROLLED_BACK';
   note?: string | null;
+  reversalReason?: string | null;
+  reversalProofUrl?: string | null;
+  reversalRequestedById?: string | null;
+  reversalRequestedAt?: string | null;
+  reversalRecipientDecision?: 'ACCEPTED' | 'DECLINED' | null;
+  reversalRecipientReason?: string | null;
+  reversalRecipientProofUrl?: string | null;
+  reversalHostDecision?: 'APPROVED_OVERRIDE' | 'REJECTED' | null;
+  reversalHostReason?: string | null;
   createdAt: string;
   updatedAt: string;
 }
