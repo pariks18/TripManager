@@ -342,7 +342,7 @@ export default function TripDashboardPage() {
             )}
             <button
               onClick={() => setIsAdvanceCreditOpen(true)}
-              className={`flex items-center gap-1.5 text-[11px] font-extrabold px-2.5 sm:px-3 py-1 rounded-xl border transition-all shadow-xs active:scale-[0.98] ${
+              className={`flex items-center gap-1 text-[11px] font-extrabold px-2 py-1 rounded-xl border transition-all shadow-xs active:scale-[0.98] cursor-pointer ${
                 userAdvanceCredit > 0
                   ? 'bg-emerald-50 text-emerald-700 border-emerald-200/90 hover:bg-emerald-100'
                   : 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200'
@@ -352,8 +352,8 @@ export default function TripDashboardPage() {
               <CreditCard className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
               <span>
                 {userAdvanceCredit > 0
-                  ? `${formatCurrency(userAdvanceCredit, trip.currency)} Advance Credit`
-                  : `${formatCurrency(0, trip.currency)} Advance Credit`}
+                  ? `+${formatCurrency(userAdvanceCredit, trip.currency)}`
+                  : formatCurrency(0, trip.currency)}
               </span>
             </button>
             <button
@@ -826,11 +826,28 @@ export default function TripDashboardPage() {
       <TripSettingsModal
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
-        tripId={trip.id}
-        currency={trip.currency}
-        currentApprovalMode={trip.approvalMode}
-        currentBudget={trip.budget}
+        trip={trip}
+        currentUserId={user.id}
         onSettingsUpdated={fetchTripDetails}
+        onDeleteTrip={() => {
+          setIsSettingsOpen(false);
+          setConfirmModalConfig({
+            isOpen: true,
+            title: `Delete "${trip.name}"?`,
+            message: 'Deleting this trip will permanently remove all trip data, expenses, settlements, members, and related records. This action cannot be undone.',
+            confirmText: 'Delete Trip',
+            variant: 'danger',
+            onConfirm: async () => {
+              try {
+                const res = await fetch(`/api/trips/${trip.id}`, { method: 'DELETE' });
+                if (!res.ok) throw new Error('Failed to delete trip');
+                router.push('/dashboard');
+              } catch (err: any) {
+                showToast(err.message || 'Error deleting trip', 'error');
+              }
+            },
+          });
+        }}
       />
 
       {/* Confirmation & Alert Modal */}

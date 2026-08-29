@@ -11,10 +11,18 @@ import { formatCurrency } from '@/lib/utils';
 interface TripCardProps {
   trip: TripSummary;
   currentUserId?: string;
+  onRename?: (trip: TripSummary) => void;
+  onSettings?: (trip: TripSummary) => void;
   onDelete?: (trip: TripSummary) => void;
 }
 
-export const TripCard: React.FC<TripCardProps> = React.memo(({ trip, currentUserId, onDelete }) => {
+export const TripCard: React.FC<TripCardProps> = React.memo(({
+  trip,
+  currentUserId,
+  onRename,
+  onSettings,
+  onDelete,
+}) => {
   const router = useRouter();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -52,13 +60,21 @@ export const TripCard: React.FC<TripCardProps> = React.memo(({ trip, currentUser
   const handleRename = (e: React.MouseEvent) => {
     e.stopPropagation();
     setIsMenuOpen(false);
-    router.push(`/dashboard/trip/${trip.id}`);
+    if (onRename) {
+      onRename(trip);
+    } else {
+      router.push(`/dashboard/trip/${trip.id}`);
+    }
   };
 
   const handleSettings = (e: React.MouseEvent) => {
     e.stopPropagation();
     setIsMenuOpen(false);
-    router.push(`/dashboard/trip/${trip.id}`);
+    if (onSettings) {
+      onSettings(trip);
+    } else {
+      router.push(`/dashboard/trip/${trip.id}`);
+    }
   };
 
   const handleDelete = (e: React.MouseEvent) => {

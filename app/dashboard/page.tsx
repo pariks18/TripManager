@@ -8,7 +8,8 @@ import { CreateTripModal } from '@/components/trip/CreateTripModal';
 import { JoinTripModal } from '@/components/trip/JoinTripModal';
 import { Modal } from '@/components/ui/Modal';
 import { useToast } from '@/components/ui/Toast';
-import { BottomNav } from '@/components/ui/BottomNav';
+import { RenameTripModal } from '@/components/trip/RenameTripModal';
+import { TripSettingsModal } from '@/components/trip/TripSettingsModal';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { Button } from '@/components/ui/Button';
 import { formatCurrency } from '@/lib/utils';
@@ -26,6 +27,8 @@ export default function DashboardPage() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isJoinOpen, setIsJoinOpen] = useState(false);
   const [deletingTrip, setDeletingTrip] = useState<TripSummary | null>(null);
+  const [renamingTrip, setRenamingTrip] = useState<TripSummary | null>(null);
+  const [editingSettingsTrip, setEditingSettingsTrip] = useState<TripSummary | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
@@ -229,6 +232,8 @@ export default function DashboardPage() {
                 key={trip.id}
                 trip={trip}
                 currentUserId={user?.id}
+                onRename={(t) => setRenamingTrip(t)}
+                onSettings={(t) => setEditingSettingsTrip(t)}
                 onDelete={(t) => setDeletingTrip(t)}
               />
             ))}
@@ -262,7 +267,7 @@ export default function DashboardPage() {
       {/* Floating Action Button (FAB) on Mobile */}
       <button
         onClick={() => setIsCreateOpen(true)}
-        className="fixed right-5 bottom-20 z-40 w-14 h-14 bg-emerald-600 hover:bg-emerald-700 text-white rounded-full flex items-center justify-center shadow-lg active:scale-95 transition-all sm:hidden"
+        className="fixed right-5 bottom-8 z-40 w-14 h-14 bg-emerald-600 hover:bg-emerald-700 text-white rounded-full flex items-center justify-center shadow-lg active:scale-95 transition-all sm:hidden cursor-pointer"
         aria-label="Create Trip"
       >
         <Plus className="w-7 h-7" />
@@ -281,6 +286,32 @@ export default function DashboardPage() {
         onSuccess={() => fetchTrips()}
       />
 
+      {/* Rename Trip Modal */}
+      {renamingTrip && (
+        <RenameTripModal
+          isOpen={!!renamingTrip}
+          onClose={() => setRenamingTrip(null)}
+          tripId={renamingTrip.id}
+          currentName={renamingTrip.name}
+          onSuccess={() => fetchTrips()}
+        />
+      )}
+
+      {/* Trip Settings Modal */}
+      {editingSettingsTrip && (
+        <TripSettingsModal
+          isOpen={!!editingSettingsTrip}
+          onClose={() => setEditingSettingsTrip(null)}
+          trip={editingSettingsTrip}
+          currentUserId={user?.id || ''}
+          onSettingsUpdated={() => fetchTrips()}
+          onDeleteTrip={(t) => {
+            setEditingSettingsTrip(null);
+            setDeletingTrip(t);
+          }}
+        />
+      )}
+
       {/* Delete Trip Confirmation Modal */}
       <Modal
         isOpen={!!deletingTrip}
@@ -292,9 +323,11 @@ export default function DashboardPage() {
           <div className="bg-rose-50 border border-rose-200/80 rounded-2xl p-4 flex items-start gap-3">
             <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
             <div className="space-y-1.5 text-xs text-rose-900">
-              <p className="font-extrabold text-rose-700">Permanent Action Warning</p>
+              <p className="font-extrabold text-rose-700 font-sans uppercase tracking-wide">
+                Delete this trip?
+              </p>
               <p className="leading-relaxed font-medium">
-                This will permanently delete <span className="font-bold text-rose-950">{deletingTrip?.name}</span> and erase all associated data from the database.
+                This action will permanently remove <span className="font-bold text-rose-950">{deletingTrip?.name}</span> and erase all associated trip data, expenses, settlements, members, and related records.
               </p>
               <ul className="list-disc list-inside space-y-0.5 text-[11px] text-rose-800 pt-1 font-medium">
                 <li>Expense logs & receipt uploads</li>
@@ -323,7 +356,7 @@ export default function DashboardPage() {
               type="button"
               disabled={isDeleting}
               onClick={handleConfirmDeleteTrip}
-              className="bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-sm gap-1.5"
+              className="bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-sm gap-1.5 cursor-pointer"
             >
               {isDeleting ? (
                 <>
@@ -337,9 +370,6 @@ export default function DashboardPage() {
           </div>
         </div>
       </Modal>
-
-      {/* Bottom Nav Bar */}
-      <BottomNav />
     </div>
   );
 }

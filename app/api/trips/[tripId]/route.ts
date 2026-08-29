@@ -23,6 +23,17 @@ export async function PUT(
   request: Request,
   { params }: { params: { tripId: string } }
 ) {
+  return handleUpdate(request, params.tripId);
+}
+
+export async function PATCH(
+  request: Request,
+  { params }: { params: { tripId: string } }
+) {
+  return handleUpdate(request, params.tripId);
+}
+
+async function handleUpdate(request: Request, tripId: string) {
   const user = await getSessionUser();
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -30,7 +41,7 @@ export async function PUT(
 
   try {
     const body = await request.json();
-    const { budget, approvalMode } = body;
+    const { name, startDate, endDate, budget, currency, approvalMode } = body;
 
     const numBudget =
       budget !== undefined
@@ -39,12 +50,16 @@ export async function PUT(
           : null
         : undefined;
 
-    await dbStore.updateTripSettings(params.tripId, user.id, {
+    await dbStore.updateTripSettings(tripId, user.id, {
+      name: typeof name === 'string' ? name : undefined,
+      startDate: startDate !== undefined ? startDate : undefined,
+      endDate: endDate !== undefined ? endDate : undefined,
       budget: numBudget,
+      currency: typeof currency === 'string' ? currency : undefined,
       approvalMode: typeof approvalMode === 'boolean' ? approvalMode : undefined,
     });
 
-    const updatedTrip = await dbStore.getTripById(params.tripId, user.id);
+    const updatedTrip = await dbStore.getTripById(tripId, user.id);
 
     return NextResponse.json({ trip: updatedTrip });
   } catch (error: any) {

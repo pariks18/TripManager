@@ -528,8 +528,6 @@ export default function ProfilePage() {
           </form>
         </Modal>
       )}
-
-      <BottomNav />
     </div>
   );
 }

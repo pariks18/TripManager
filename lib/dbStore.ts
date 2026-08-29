@@ -2227,7 +2227,14 @@ export const dbStore = {
   async updateTripSettings(
     tripId: string,
     adminUserId: string,
-    data: { budget?: number | null; approvalMode?: boolean }
+    data: {
+      name?: string;
+      startDate?: string | null | Date;
+      endDate?: string | null | Date;
+      budget?: number | null;
+      currency?: string;
+      approvalMode?: boolean;
+    }
   ) {
     await ensureDatabaseSeeded();
     const trip = await prisma.trip.findUnique({
@@ -2242,12 +2249,26 @@ export const dbStore = {
       throw new Error('Forbidden: Only Super Host / Trip Admin can update trip settings.');
     }
 
-    const adminUser = await prisma.user.findUnique({ where: { id: adminUserId } });
+    const updateData: any = {};
 
-    const updateData: { budget?: number | null; approvalMode?: boolean } = {};
+    if (data.name !== undefined && data.name.trim()) {
+      updateData.name = data.name.trim();
+    }
+
+    if (data.startDate !== undefined) {
+      updateData.startDate = data.startDate ? new Date(data.startDate) : null;
+    }
+
+    if (data.endDate !== undefined) {
+      updateData.endDate = data.endDate ? new Date(data.endDate) : null;
+    }
 
     if (data.budget !== undefined) {
       updateData.budget = data.budget !== null && data.budget > 0 ? data.budget : null;
+    }
+
+    if (data.currency !== undefined && data.currency.trim()) {
+      updateData.currency = data.currency.trim();
     }
 
     if (data.approvalMode !== undefined) {
@@ -2264,7 +2285,7 @@ export const dbStore = {
         tripId,
         adminUserId,
         'TRIP_UPDATED',
-        `${adminUser?.name || 'Admin'} ${data.approvalMode ? 'enabled' : 'disabled'} expense verification workflow`
+        `Host ${data.approvalMode ? 'enabled' : 'disabled'} expense verification workflow`
       );
     }
 
@@ -2273,7 +2294,7 @@ export const dbStore = {
         tripId,
         adminUserId,
         'BUDGET_UPDATED',
-        `${adminUser?.name || 'Admin'} updated total trip budget to ${data.budget && data.budget > 0 ? `${trip.currency}${data.budget}` : 'Unlimited'}`
+        `Host updated total trip budget to ${data.budget && data.budget > 0 ? `${trip.currency}${data.budget}` : 'Unlimited'}`
       );
     }
 
