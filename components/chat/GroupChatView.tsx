@@ -4,12 +4,14 @@ import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import { MessageDetail, UserSummary } from '@/types';
 import { Avatar } from '@/components/ui/Avatar';
 import { formatTime } from '@/lib/utils';
-import { Send, MessageSquare, ArrowDown, Loader2 } from 'lucide-react';
+import { LivePollsView } from '@/components/trip/LivePollsView';
+import { Send, MessageSquare, ArrowDown, Loader2, Vote } from 'lucide-react';
 
 interface GroupChatViewProps {
   tripId: string;
   tripName: string;
   currentUser: UserSummary;
+  isAdmin?: boolean;
 }
 
 const formatDateHeader = (dateString: string) => {
@@ -31,7 +33,8 @@ const formatDateHeader = (dateString: string) => {
   });
 };
 
-export const GroupChatView: React.FC<GroupChatViewProps> = React.memo(({ tripId, tripName, currentUser }) => {
+export const GroupChatView: React.FC<GroupChatViewProps> = React.memo(({ tripId, tripName, currentUser, isAdmin = false }) => {
+  const [chatTab, setChatTab] = useState<'messages' | 'polls'>('messages');
   const [messages, setMessages] = useState<MessageDetail[]>([]);
   const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -222,8 +225,8 @@ export const GroupChatView: React.FC<GroupChatViewProps> = React.memo(({ tripId,
   return (
     <div className="flex flex-col h-[580px] sm:h-[620px] max-h-[78vh] w-full max-w-4xl mx-auto bg-white rounded-3xl border border-slate-200/90 shadow-sm overflow-hidden">
       {/* 1. Header (Fixed Top) */}
-      <div className="shrink-0 bg-slate-50/90 backdrop-blur-sm px-5 py-3.5 border-b border-slate-200/80 flex items-center justify-between z-10">
-        <div className="flex items-center gap-3">
+      <div className="shrink-0 bg-slate-50/90 backdrop-blur-sm px-4 py-3 border-b border-slate-200/80 flex items-center justify-between z-10 flex-wrap gap-2">
+        <div className="flex items-center gap-2.5">
           <div className="p-2 bg-emerald-100/80 text-emerald-700 rounded-xl">
             <MessageSquare className="w-4.5 h-4.5" />
           </div>
@@ -235,9 +238,35 @@ export const GroupChatView: React.FC<GroupChatViewProps> = React.memo(({ tripId,
             </div>
           </div>
         </div>
+
+        {/* Sub-Tab Switcher: Messages vs Polls */}
+        <div className="flex items-center gap-1 bg-slate-200/70 p-1 rounded-xl text-xs font-bold">
+          <button
+            onClick={() => setChatTab('messages')}
+            className={`px-3 py-1 rounded-lg transition-all flex items-center gap-1 cursor-pointer ${
+              chatTab === 'messages' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <MessageSquare className="w-3.5 h-3.5 text-emerald-600" /> Messages
+          </button>
+          <button
+            onClick={() => setChatTab('polls')}
+            className={`px-3 py-1 rounded-lg transition-all flex items-center gap-1 cursor-pointer ${
+              chatTab === 'polls' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <Vote className="w-3.5 h-3.5 text-emerald-600" /> Live Polls
+          </button>
+        </div>
       </div>
 
-      {/* 2. Messages List (Scrollable Center Area) */}
+      {chatTab === 'polls' ? (
+        <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-5 bg-slate-50/40">
+          <LivePollsView tripId={tripId} isAdmin={isAdmin} currentUserId={currentUser.id} />
+        </div>
+      ) : (
+        <>
+          {/* 2. Messages List (Scrollable Center Area) */}
       <div
         ref={messagesContainerRef}
         onScroll={handleScroll}
@@ -361,6 +390,8 @@ export const GroupChatView: React.FC<GroupChatViewProps> = React.memo(({ tripId,
           )}
         </button>
       </form>
+        </>
+      )}
     </div>
   );
 });

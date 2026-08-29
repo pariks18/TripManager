@@ -2,25 +2,26 @@
   "app/dashboard/trip/[tripId]/page.tsx -> @/components/chat/GroupChatView": {
     "id": 7842,
     "files": [
-      "static/chunks/842.84cd7e8faa250837.js"
+      "static/chunks/803.5d7f60748580e07b.js",
+      "static/chunks/842.eac89856af7bf3e5.js"
     ]
   },
   "app/dashboard/trip/[tripId]/page.tsx -> @/components/expense/PendingApprovalsView": {
     "id": 47,
     "files": [
-      "static/chunks/47.1f7b388932341999.js"
+      "static/chunks/47.ac18931a05b1b052.js"
     ]
   },
   "app/dashboard/trip/[tripId]/page.tsx -> @/components/memories/TripMemoriesView": {
     "id": 1242,
     "files": [
-      "static/chunks/242.9563b2573f003fd9.js"
+      "static/chunks/242.0c3f8b5f884a1211.js"
     ]
   },
   "app/dashboard/trip/[tripId]/page.tsx -> @/components/settlement/SettlementList": {
     "id": 208,
     "files": [
-      "static/chunks/208.86f65e379d6b50ee.js"
+      "static/chunks/208.4337484e1d52b4f9.js"
     ]
   },
   "app/dashboard/trip/[tripId]/page.tsx -> @/components/trip/AnalyticsView": {
@@ -32,31 +33,31 @@
   "app/dashboard/trip/[tripId]/page.tsx -> @/components/trip/ItineraryView": {
     "id": 3178,
     "files": [
-      "static/chunks/178.7f810e8364237afa.js"
+      "static/chunks/178.c8496de24141e58d.js"
     ]
   },
   "app/dashboard/trip/[tripId]/page.tsx -> @/components/trip/LiveLocationView": {
-    "id": 8823,
+    "id": 291,
     "files": [
-      "static/chunks/823.2bb82ca08ed3e90e.js"
+      "static/chunks/291.d0ce5cb4e892ab6b.js"
     ]
   },
   "app/dashboard/trip/[tripId]/page.tsx -> @/components/trip/LivePollsView": {
     "id": 3803,
     "files": [
-      "static/chunks/803.b4a5e7b5651fddd3.js"
+      "static/chunks/803.5d7f60748580e07b.js"
     ]
   },
   "app/dashboard/trip/[tripId]/page.tsx -> @/components/trip/StayView": {
     "id": 6563,
     "files": [
-      "static/chunks/563.6f32a539d7efe128.js"
+      "static/chunks/563.e5c4a5f2f16c5cfb.js"
     ]
   },
   "app/dashboard/trip/[tripId]/page.tsx -> @/components/trip/TripTimeline": {
     "id": 616,
     "files": [
-      "static/chunks/616.cb2de43312b4656c.js"
+      "static/chunks/616.ddda18844f3f7962.js"
     ]
   },
   "app/dashboard/trip/[tripId]/page.tsx -> @/components/wallet/AdvanceCreditModal": {

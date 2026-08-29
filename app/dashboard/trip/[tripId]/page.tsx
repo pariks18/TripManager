@@ -32,6 +32,8 @@ import { TripSettingsModal } from '@/components/trip/TripSettingsModal';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { useToast } from '@/components/ui/Toast';
 
+import { Modal } from '@/components/ui/Modal';
+
 import {
   ArrowLeft,
   Plus,
@@ -72,7 +74,9 @@ export default function TripDashboardPage() {
   const [user, setUser] = useState<UserSession | null>(null);
   const [trip, setTrip] = useState<TripSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'overview' | 'trip' | 'polls' | 'location' | 'expenses' | 'itinerary' | 'stay' | 'approvals' | 'settlement' | 'timeline' | 'analytics' | 'chat' | 'memories'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'trip' | 'polls' | 'location' | 'expenses' | 'itinerary' | 'stay' | 'approvals' | 'settlement' | 'timeline' | 'analytics' | 'memories' | 'tripplan'>('overview');
+  const [planSubTab, setPlanSubTab] = useState<'itinerary' | 'stay'>('itinerary');
+  const [isChatModalOpen, setIsChatModalOpen] = useState(false);
   const [copiedCode, setCopiedCode] = useState(false);
 
   // Expense & Advance Credit modal state
@@ -338,10 +342,19 @@ export default function TripDashboardPage() {
             )}
             <button
               onClick={() => setIsAdvanceCreditOpen(true)}
-              className="flex items-center gap-1 text-[11px] font-extrabold bg-emerald-50 text-emerald-700 border border-emerald-200/90 px-2.5 sm:px-3 py-1 rounded-xl hover:bg-emerald-100 transition-all shadow-sm active:scale-[0.98]"
+              className={`flex items-center gap-1.5 text-[11px] font-extrabold px-2.5 sm:px-3 py-1 rounded-xl border transition-all shadow-xs active:scale-[0.98] ${
+                userAdvanceCredit > 0
+                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200/90 hover:bg-emerald-100'
+                  : 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200'
+              }`}
               title="View Advance Credit Details"
             >
-              <span>{userAdvanceCredit > 0 ? `💰 +${formatCurrency(userAdvanceCredit, trip.currency)}` : `💰 ${formatCurrency(0, trip.currency)}`}</span>
+              <CreditCard className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+              <span>
+                {userAdvanceCredit > 0
+                  ? `${formatCurrency(userAdvanceCredit, trip.currency)} Advance Credit`
+                  : `${formatCurrency(0, trip.currency)} Advance Credit`}
+              </span>
             </button>
             <button
               onClick={() => router.push('/dashboard/profile')}
@@ -363,11 +376,11 @@ export default function TripDashboardPage() {
 
       {/* Main Workspace */}
       <main className="w-full max-w-4xl mx-auto px-3 py-4 sm:px-6 space-y-5">
-        {/* Primary 5 Navigation Tabs */}
+        {/* Primary 4 Navigation Tabs */}
         <div className="flex items-center p-1 bg-slate-200/60 rounded-2xl text-xs font-bold text-slate-600 overflow-x-auto no-scrollbar scroll-smooth whitespace-nowrap min-w-0">
           <button
             onClick={() => setActiveTab('overview')}
-            className={`flex-shrink-0 sm:flex-1 py-2.5 px-3 rounded-xl transition-all flex items-center justify-center gap-1.5 whitespace-nowrap ${
+            className={`flex-1 py-2.5 px-3 rounded-xl transition-all flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer ${
               activeTab === 'overview'
                 ? 'bg-white text-slate-900 shadow-sm font-extrabold'
                 : 'hover:text-slate-900'
@@ -378,7 +391,7 @@ export default function TripDashboardPage() {
 
           <button
             onClick={() => setActiveTab('expenses')}
-            className={`flex-shrink-0 sm:flex-1 py-2.5 px-3 rounded-xl transition-all flex items-center justify-center gap-1.5 whitespace-nowrap ${
+            className={`flex-1 py-2.5 px-3 rounded-xl transition-all flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer ${
               activeTab === 'expenses'
                 ? 'bg-white text-slate-900 shadow-sm font-extrabold'
                 : 'hover:text-slate-900'
@@ -389,7 +402,7 @@ export default function TripDashboardPage() {
 
           <button
             onClick={() => setActiveTab('settlement')}
-            className={`flex-shrink-0 sm:flex-1 py-2.5 px-3 rounded-xl transition-all flex items-center justify-center gap-1.5 whitespace-nowrap ${
+            className={`flex-1 py-2.5 px-3 rounded-xl transition-all flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer ${
               activeTab === 'settlement'
                 ? 'bg-white text-slate-900 shadow-sm font-extrabold'
                 : 'hover:text-slate-900'
@@ -399,20 +412,9 @@ export default function TripDashboardPage() {
           </button>
 
           <button
-            onClick={() => setActiveTab('chat')}
-            className={`flex-shrink-0 sm:flex-1 py-2.5 px-3 rounded-xl transition-all flex items-center justify-center gap-1.5 whitespace-nowrap ${
-              activeTab === 'chat'
-                ? 'bg-white text-slate-900 shadow-sm font-extrabold'
-                : 'hover:text-slate-900'
-            }`}
-          >
-            <MessageSquare className="w-4 h-4 text-emerald-600" /> Chat
-          </button>
-
-          <button
             onClick={() => setActiveTab('trip')}
-            className={`flex-shrink-0 sm:flex-1 py-2.5 px-3 rounded-xl transition-all flex items-center justify-center gap-1.5 whitespace-nowrap ${
-              activeTab === 'trip' || ['polls', 'location', 'itinerary', 'stay', 'approvals', 'timeline', 'analytics'].includes(activeTab)
+            className={`flex-1 py-2.5 px-3 rounded-xl transition-all flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer ${
+              activeTab === 'trip' || ['approvals', 'timeline', 'analytics'].includes(activeTab)
                 ? 'bg-white text-slate-900 shadow-sm font-extrabold'
                 : 'hover:text-slate-900'
             }`}
@@ -467,161 +469,74 @@ export default function TripDashboardPage() {
               onOpenSettings={() => setIsSettingsOpen(true)}
             />
 
-            {/* Trip Features Grid */}
+            {/* Trip Features Grid - EXACTLY 3 FEATURES matching mock design */}
             <div className="space-y-3">
               <div className="flex items-center justify-between px-1">
-                <h4 className="text-sm font-bold text-slate-900">Trip Tools & Features</h4>
-                <span className="text-xs text-slate-400 font-medium">8 Features</span>
+                <div>
+                  <h4 className="text-base font-extrabold text-slate-900">Trip Details</h4>
+                  <p className="text-xs text-slate-400 font-medium">Manage and control your trip</p>
+                </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                {/* 1. Itinerary */}
-                <div
-                  onClick={() => setActiveTab('itinerary')}
-                  className="bg-white rounded-2xl p-4 border border-slate-100/90 shadow-sm hover:shadow-md cursor-pointer transition-all space-y-2 group active:scale-[0.98]"
-                >
-                  <div className="p-2.5 bg-indigo-50 text-indigo-600 rounded-xl w-fit group-hover:scale-105 transition-transform">
-                    <Calendar className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h5 className="text-xs font-bold text-slate-900">Itinerary Schedule</h5>
-                    <p className="text-[10px] text-slate-400 mt-0.5 leading-tight">Day plans & events</p>
-                  </div>
-                </div>
-
-                {/* 2. Trip Memories & Journey */}
-                <div
-                  onClick={() => setActiveTab('memories')}
-                  className="bg-white rounded-2xl p-4 border border-rose-100/90 shadow-sm hover:shadow-md cursor-pointer transition-all space-y-2 group active:scale-[0.98]"
-                >
-                  <div className="p-2.5 bg-rose-50 text-rose-600 rounded-xl w-fit group-hover:scale-105 transition-transform">
-                    <Heart className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h5 className="text-xs font-bold text-slate-900">Trip Memories</h5>
-                    <p className="text-[10px] text-slate-400 mt-0.5 leading-tight">My Journey & Our Journey</p>
-                  </div>
-                </div>
-
-                {/* 3. Stay */}
-                <div
-                  onClick={() => setActiveTab('stay')}
-                  className="bg-white rounded-2xl p-4 border border-slate-100/90 shadow-sm hover:shadow-md cursor-pointer transition-all space-y-2 group active:scale-[0.98]"
-                >
-                  <div className="p-2.5 bg-pink-50 text-pink-600 rounded-xl w-fit group-hover:scale-105 transition-transform">
-                    <Hotel className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h5 className="text-xs font-bold text-slate-900">Stay & Hotel</h5>
-                    <p className="text-[10px] text-slate-400 mt-0.5 leading-tight">Bookings & locations</p>
-                  </div>
-                </div>
-
-                {/* 3. Live Polls */}
-                <div
-                  onClick={() => setActiveTab('polls')}
-                  className="bg-white rounded-2xl p-4 border border-slate-100/90 shadow-sm hover:shadow-md cursor-pointer transition-all space-y-2 group active:scale-[0.98]"
-                >
-                  <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-xl w-fit group-hover:scale-105 transition-transform">
-                    <Vote className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h5 className="text-xs font-bold text-slate-900">Live Decision Polls</h5>
-                    <p className="text-[10px] text-slate-400 mt-0.5 leading-tight">Group voting & choices</p>
-                  </div>
-                </div>
-
-                {/* 4. Live Map */}
-                <div
-                  onClick={() => setActiveTab('location')}
-                  className="bg-white rounded-2xl p-4 border border-slate-100/90 shadow-sm hover:shadow-md cursor-pointer transition-all space-y-2 group active:scale-[0.98]"
-                >
-                  <div className="p-2.5 bg-blue-50 text-blue-600 rounded-xl w-fit group-hover:scale-105 transition-transform">
-                    <Radio className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h5 className="text-xs font-bold text-slate-900">Live Map</h5>
-                    <p className="text-[10px] text-slate-400 mt-0.5 leading-tight">Member GPS sharing</p>
-                  </div>
-                </div>
-
-                {/* 5. Advance Credit */}
-                <div
-                  onClick={() => setActiveTab('overview')}
-                  className="bg-white rounded-2xl p-4 border border-slate-100/90 shadow-sm hover:shadow-md cursor-pointer transition-all space-y-2 group active:scale-[0.98]"
-                >
-                  <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-xl w-fit group-hover:scale-105 transition-transform">
-                    <CreditCard className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h5 className="text-xs font-bold text-slate-900">Advance Credit</h5>
-                    <p className="text-[10px] text-slate-400 mt-0.5 leading-tight">Excess settlement credit</p>
-                  </div>
-                </div>
-
-                {/* 6. Group Chat */}
-                <div
-                  onClick={() => setActiveTab('chat')}
-                  className="bg-white rounded-2xl p-4 border border-slate-100/90 shadow-sm hover:shadow-md cursor-pointer transition-all space-y-2 group active:scale-[0.98]"
-                >
-                  <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-xl w-fit group-hover:scale-105 transition-transform">
-                    <MessageSquare className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h5 className="text-xs font-bold text-slate-900">Group Chat</h5>
-                    <p className="text-[10px] text-slate-400 mt-0.5 leading-tight">Real-time trip discussion</p>
-                  </div>
-                </div>
-
-                {/* 6. Host Approvals */}
+              <div className="space-y-3">
+                {/* 1. Host Approvals */}
                 {isAdmin && (
                   <div
                     onClick={() => setActiveTab('approvals')}
-                    className="bg-white rounded-2xl p-4 border border-slate-100/90 shadow-sm hover:shadow-md cursor-pointer transition-all space-y-2 group active:scale-[0.98] relative"
+                    className="bg-white rounded-3xl p-5 border border-slate-200/90 shadow-sm hover:shadow-md cursor-pointer transition-all flex items-center justify-between group active:scale-[0.98]"
                   >
-                    <div className="p-2.5 bg-amber-50 text-amber-600 rounded-xl w-fit group-hover:scale-105 transition-transform">
-                      <ShieldCheck className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <div className="flex items-center justify-between">
-                        <h5 className="text-xs font-bold text-slate-900">Host Approvals</h5>
-                        {totalPendingCount > 0 && (
-                          <span className="bg-amber-500 text-white text-[9px] font-black px-1.5 py-0.2 rounded-full">
-                            {totalPendingCount}
-                          </span>
-                        )}
+                    <div className="flex items-center gap-3.5">
+                      <div className="p-3 bg-emerald-50 text-emerald-600 rounded-2xl group-hover:scale-105 transition-transform">
+                        <ShieldCheck className="w-6 h-6" />
                       </div>
-                      <p className="text-[10px] text-slate-400 mt-0.5 leading-tight">Verify member expenses</p>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h5 className="text-sm font-extrabold text-slate-900">Host Approvals</h5>
+                          {totalPendingCount > 0 && (
+                            <span className="bg-amber-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full">
+                              {totalPendingCount}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-slate-500 mt-0.5">Verify member expenses & requests</p>
+                      </div>
                     </div>
+                    <span className="text-slate-400 group-hover:text-slate-900 text-lg font-bold">›</span>
                   </div>
                 )}
 
-                {/* 7. Audit Log */}
-                <div
-                  onClick={() => setActiveTab('timeline')}
-                  className="bg-white rounded-2xl p-4 border border-slate-100/90 shadow-sm hover:shadow-md cursor-pointer transition-all space-y-2 group active:scale-[0.98]"
-                >
-                  <div className="p-2.5 bg-purple-50 text-purple-600 rounded-xl w-fit group-hover:scale-105 transition-transform">
-                    <History className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h5 className="text-xs font-bold text-slate-900">Audit Log</h5>
-                    <p className="text-[10px] text-slate-400 mt-0.5 leading-tight">Activity change history</p>
-                  </div>
-                </div>
-
-                {/* 8. Analytics */}
+                {/* 2. Analytics */}
                 <div
                   onClick={() => setActiveTab('analytics')}
-                  className="bg-white rounded-2xl p-4 border border-slate-100/90 shadow-sm hover:shadow-md cursor-pointer transition-all space-y-2 group active:scale-[0.98]"
+                  className="bg-white rounded-3xl p-5 border border-slate-200/90 shadow-sm hover:shadow-md cursor-pointer transition-all flex items-center justify-between group active:scale-[0.98]"
                 >
-                  <div className="p-2.5 bg-teal-50 text-teal-600 rounded-xl w-fit group-hover:scale-105 transition-transform">
-                    <PieChart className="w-5 h-5" />
+                  <div className="flex items-center gap-3.5">
+                    <div className="p-3 bg-purple-50 text-purple-600 rounded-2xl group-hover:scale-105 transition-transform">
+                      <PieChart className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h5 className="text-sm font-extrabold text-slate-900">Analytics</h5>
+                      <p className="text-xs text-slate-500 mt-0.5">Spending insights and charts</p>
+                    </div>
                   </div>
-                  <div>
-                    <h5 className="text-xs font-bold text-slate-900">Analytics</h5>
-                    <p className="text-[10px] text-slate-400 mt-0.5 leading-tight">Spending charts & insights</p>
+                  <span className="text-slate-400 group-hover:text-slate-900 text-lg font-bold">›</span>
+                </div>
+
+                {/* 3. Audit Log */}
+                <div
+                  onClick={() => setActiveTab('timeline')}
+                  className="bg-white rounded-3xl p-5 border border-slate-200/90 shadow-sm hover:shadow-md cursor-pointer transition-all flex items-center justify-between group active:scale-[0.98]"
+                >
+                  <div className="flex items-center gap-3.5">
+                    <div className="p-3 bg-amber-50 text-amber-600 rounded-2xl group-hover:scale-105 transition-transform">
+                      <History className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h5 className="text-sm font-extrabold text-slate-900">Audit Log</h5>
+                      <p className="text-xs text-slate-500 mt-0.5">Activity change history</p>
+                    </div>
                   </div>
+                  <span className="text-slate-400 group-hover:text-slate-900 text-lg font-bold">›</span>
                 </div>
               </div>
             </div>
@@ -775,14 +690,51 @@ export default function TripDashboardPage() {
           </div>
         )}
 
-        {/* TAB 3: ITINERARY SCHEDULE */}
-        {activeTab === 'itinerary' && (
-          <ItineraryView
-            tripId={trip.id}
-            itinerary={trip.itinerary || []}
-            isAdmin={isAdmin}
-            onRefresh={fetchTripDetails}
-          />
+        {/* TAB: TRIP PLAN (ITINERARY + STAY/HOTEL DETAILS) */}
+        {(activeTab === 'tripplan' || activeTab === 'itinerary' || activeTab === 'stay') && (
+          <div className="space-y-4">
+            {/* Trip Plan Top Sub-Tab Switcher */}
+            <div className="flex items-center justify-between bg-white p-2 rounded-2xl border border-slate-200/90 shadow-sm">
+              <div className="flex items-center gap-1 w-full bg-slate-100/80 p-1 rounded-xl font-bold text-xs">
+                <button
+                  onClick={() => setPlanSubTab('itinerary')}
+                  className={`flex-1 py-2.5 px-4 rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                    planSubTab === 'itinerary'
+                      ? 'bg-white text-slate-900 shadow-xs font-extrabold'
+                      : 'text-slate-500 hover:text-slate-900'
+                  }`}
+                >
+                  <Calendar className="w-4 h-4 text-emerald-600" /> Itinerary
+                </button>
+                <button
+                  onClick={() => setPlanSubTab('stay')}
+                  className={`flex-1 py-2.5 px-4 rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                    planSubTab === 'stay'
+                      ? 'bg-white text-slate-900 shadow-xs font-extrabold'
+                      : 'text-slate-500 hover:text-slate-900'
+                  }`}
+                >
+                  <Hotel className="w-4 h-4 text-emerald-600" /> Stay / Hotel
+                </button>
+              </div>
+            </div>
+
+            {planSubTab === 'itinerary' ? (
+              <ItineraryView
+                tripId={trip.id}
+                itinerary={trip.itinerary || []}
+                isAdmin={isAdmin}
+                onRefresh={fetchTripDetails}
+              />
+            ) : (
+              <StayView
+                tripId={trip.id}
+                stays={trip.stays || []}
+                isAdmin={isAdmin}
+                onRefresh={fetchTripDetails}
+              />
+            )}
+          </div>
         )}
 
         {/* TAB: TRIP MEMORIES & JOURNEY */}
@@ -790,16 +742,6 @@ export default function TripDashboardPage() {
           <TripMemoriesView
             trip={trip}
             currentUser={user}
-          />
-        )}
-
-        {/* TAB 4: STAY & ACCOMMODATION */}
-        {activeTab === 'stay' && (
-          <StayView
-            tripId={trip.id}
-            stays={trip.stays || []}
-            isAdmin={isAdmin}
-            onRefresh={fetchTripDetails}
           />
         )}
 
@@ -811,15 +753,6 @@ export default function TripDashboardPage() {
             pendingExpenses={pendingExpenses}
             pendingRequests={pendingRequests}
             onActionComplete={fetchTripDetails}
-          />
-        )}
-
-        {/* TAB: REAL-TIME GROUP CHAT */}
-        {activeTab === 'chat' && (
-          <GroupChatView
-            tripId={trip.id}
-            tripName={trip.name}
-            currentUser={user}
           />
         )}
 
@@ -848,6 +781,33 @@ export default function TripDashboardPage() {
           <AnalyticsView tripId={trip.id} currency={trip.currency} />
         )}
       </main>
+
+      {/* Floating Group Chat Button */}
+      <button
+        onClick={() => setIsChatModalOpen(true)}
+        className="fixed bottom-20 right-4 sm:right-6 z-40 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white p-3.5 rounded-full shadow-xl transition-all flex items-center justify-center cursor-pointer group"
+        title="Open Group Chat & Live Polls"
+      >
+        <MessageSquare className="w-6 h-6" />
+        <span className="absolute -top-1 -right-1 bg-rose-500 text-white text-[10px] font-black w-5 h-5 rounded-full flex items-center justify-center border-2 border-white shadow-xs">
+          3
+        </span>
+      </button>
+
+      {/* Group Chat Modal */}
+      <Modal
+        isOpen={isChatModalOpen}
+        onClose={() => setIsChatModalOpen(false)}
+        title=""
+        maxWidth="max-w-4xl"
+      >
+        <GroupChatView
+          tripId={trip.id}
+          tripName={trip.name}
+          currentUser={user}
+          isAdmin={isAdmin}
+        />
+      </Modal>
 
       {/* Add / Edit Expense Modal */}
       <AddExpenseModal
@@ -897,7 +857,7 @@ export default function TripDashboardPage() {
         />
       )}
 
-      <BottomNav />
+      <BottomNav activeTab={activeTab} onTabChange={(tab) => setActiveTab(tab as any)} />
     </div>
   );
 }
