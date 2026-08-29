@@ -76,11 +76,12 @@ model Trip {
 }
 
 model TripMember {
-  id       String   @id @default(auto()) @map("_id") @db.ObjectId
-  tripId   String   @db.ObjectId
-  userId   String   @db.ObjectId
-  role     String   @default("MEMBER") // ADMIN or MEMBER
-  joinedAt DateTime @default(now())
+  id         String    @id @default(auto()) @map("_id") @db.ObjectId
+  tripId     String    @db.ObjectId
+  userId     String    @db.ObjectId
+  role       String    @default("MEMBER") // ADMIN or MEMBER
+  lastReadAt DateTime?
+  joinedAt   DateTime  @default(now())
 
   trip Trip @relation(fields: [tripId], references: [id], onDelete: Cascade)
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)

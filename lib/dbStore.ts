@@ -415,6 +415,31 @@ export const dbStore = {
 
   const processingStart = performance.now();
 
+  const tripIds = userMemberships.map((m) => m.tripId);
+  const lastMessages = await prisma.message.findMany({
+    where: { tripId: { in: tripIds } },
+    orderBy: { createdAt: 'desc' },
+    distinct: ['tripId'],
+    include: {
+      sender: { select: { id: true, name: true, email: true } },
+    },
+  });
+  const lastMsgMap = new Map(lastMessages.map((msg) => [msg.tripId, msg]));
+
+  const unreadCounts = await Promise.all(
+    userMemberships.map(async (m) => {
+      const count = await prisma.message.count({
+        where: {
+          tripId: m.tripId,
+          senderId: { not: userId },
+          ...(m.lastReadAt ? { createdAt: { gt: m.lastReadAt } } : {}),
+        },
+      });
+      return [m.tripId, count] as const;
+    })
+  );
+  const unreadMap = new Map(unreadCounts);
+
   const result = userMemberships.map((m) => {
     const trip = m.trip;
     const totalExpense = trip.expenses.reduce(
@@ -451,6 +476,8 @@ export const dbStore = {
     });
 
     const userBalance = Math.round(((paid - share) + settlementsPaid - settlementsReceived) * 100) / 100;
+    const lastMsg = lastMsgMap.get(trip.id);
+    const unreadCount = unreadMap.get(trip.id) || 0;
 
     return {
       id: trip.id,
@@ -492,7 +519,25 @@ export const dbStore = {
       userBalance,
       userTotalPaid: Math.round(paid * 100) / 100,
       userTotalShare: Math.round(share * 100) / 100,
+      unreadCount,
+      lastMessage: lastMsg
+        ? {
+            id: lastMsg.id,
+            tripId: lastMsg.tripId,
+            senderId: lastMsg.senderId,
+            sender: { id: lastMsg.sender.id, name: lastMsg.sender.name, email: lastMsg.sender.email },
+            content: lastMsg.content,
+            createdAt: lastMsg.createdAt.toISOString(),
+            updatedAt: lastMsg.updatedAt.toISOString(),
+          }
+        : null,
     };
+  });
+
+  result.sort((a, b) => {
+    const timeA = a.lastMessage ? new Date(a.lastMessage.createdAt).getTime() : new Date(a.createdAt).getTime();
+    const timeB = b.lastMessage ? new Date(b.lastMessage.createdAt).getTime() : new Date(b.createdAt).getTime();
+    return timeB - timeA;
   });
 
   const processingEnd = performance.now();
@@ -3120,6 +3165,12 @@ export const dbStore = {
       },
     });
 
+    // Auto-update sender's lastReadAt timestamp
+    await prisma.tripMember.updateMany({
+      where: { tripId, userId: senderId },
+      data: { lastReadAt: msg.createdAt },
+    });
+
     return {
       id: msg.id,
       tripId: msg.tripId,
@@ -3129,6 +3180,16 @@ export const dbStore = {
       createdAt: msg.createdAt.toISOString(),
       updatedAt: msg.updatedAt.toISOString(),
     };
+  },
+
+  async markTripMessagesAsRead(tripId: string, userId: string): Promise<boolean> {
+    await ensureDatabaseSeeded();
+    const now = new Date();
+    await prisma.tripMember.updateMany({
+      where: { tripId, userId },
+      data: { lastReadAt: now },
+    });
+    return true;
   },
 
   async getTripMemories(

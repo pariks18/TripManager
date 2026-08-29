@@ -66,6 +66,63 @@ export default function DashboardPage() {
     fetchTrips();
   }, []);
 
+  // Real-time unread messages & conversation sorting listener on dashboard
+  useEffect(() => {
+    if (!trips.length || !user?.id) return;
+
+    const eventSources: EventSource[] = [];
+
+    trips.forEach((t) => {
+      try {
+        const es = new EventSource(`/api/trips/${t.id}/messages/stream`);
+        es.onmessage = (event) => {
+          try {
+            if (event.data && event.data.startsWith('{')) {
+              const newMsg = JSON.parse(event.data);
+              if (newMsg.content === '__READ_RECEIPT__') {
+                fetchTrips();
+                return;
+              }
+
+              if (newMsg.senderId !== user.id) {
+                setTrips((prevTrips) => {
+                  const updated = prevTrips.map((item) => {
+                    if (item.id === t.id) {
+                      return {
+                        ...item,
+                        unreadCount: (item.unreadCount || 0) + 1,
+                        lastMessage: newMsg,
+                      };
+                    }
+                    return item;
+                  });
+
+                  updated.sort((a, b) => {
+                    const timeA = a.lastMessage ? new Date(a.lastMessage.createdAt).getTime() : new Date(a.createdAt).getTime();
+                    const timeB = b.lastMessage ? new Date(b.lastMessage.createdAt).getTime() : new Date(b.createdAt).getTime();
+                    return timeB - timeA;
+                  });
+
+                  return updated;
+                });
+              }
+            }
+          } catch (e) {}
+        };
+        eventSources.push(es);
+      } catch (e) {}
+    });
+
+    const syncInterval = setInterval(() => {
+      fetchTrips();
+    }, 3000);
+
+    return () => {
+      eventSources.forEach((es) => es.close());
+      clearInterval(syncInterval);
+    };
+  }, [trips.length, user?.id]);
+
   const handleLogout = async () => {
     clearClientSession();
     await fetch('/api/auth/logout', { method: 'POST' });

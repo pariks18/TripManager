@@ -258,6 +258,8 @@ export interface TripSummary {
   userBalance: number;
   userTotalPaid: number;
   userTotalShare: number;
+  unreadCount?: number;
+  lastMessage?: MessageDetail | null;
 }
 
 export interface PollVoteDetail {

@@ -89,7 +89,10 @@ export const GroupChatView: React.FC<GroupChatViewProps> = React.memo(({ tripId,
       setIsLoading(true);
 
       try {
-        const res = await fetch(`/api/trips/${tripId}/messages`);
+        const [res] = await Promise.all([
+          fetch(`/api/trips/${tripId}/messages`),
+          fetch(`/api/trips/${tripId}/messages/read`, { method: 'POST' }),
+        ]);
         const data = await res.json();
         if (data.messages) {
           setMessages(data.messages);
@@ -108,10 +111,15 @@ export const GroupChatView: React.FC<GroupChatViewProps> = React.memo(({ tripId,
           try {
             if (event.data && event.data.startsWith('{')) {
               const newMsg: MessageDetail = JSON.parse(event.data);
+              if (newMsg.content === '__READ_RECEIPT__') return;
+
               setMessages((prev) => {
                 if (prev.some((m) => m.id === newMsg.id)) return prev;
                 return [...prev, newMsg];
               });
+
+              // Mark as read immediately when active chat view is open
+              fetch(`/api/trips/${tripId}/messages/read`, { method: 'POST' }).catch(() => {});
             }
           } catch (e) {
             console.error('Error parsing real-time message stream event:', e);
@@ -124,7 +132,7 @@ export const GroupChatView: React.FC<GroupChatViewProps> = React.memo(({ tripId,
 
     initChat();
 
-    // Periodic sync fallback
+    // Periodic sync fallback (every 2 seconds)
     const syncInterval = setInterval(async () => {
       try {
         const res = await fetch(`/api/trips/${tripId}/messages?limit=20`);
@@ -140,7 +148,7 @@ export const GroupChatView: React.FC<GroupChatViewProps> = React.memo(({ tripId,
           });
         }
       } catch (e) {}
-    }, 4000);
+    }, 2000);
 
     return () => {
       if (eventSource) eventSource.close();

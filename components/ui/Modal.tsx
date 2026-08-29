@@ -11,6 +11,8 @@ interface ModalProps {
   title: string;
   children: React.ReactNode;
   maxWidth?: string;
+  contentClassName?: string;
+  noPadding?: boolean;
 }
 
 export const Modal: React.FC<ModalProps> = ({
@@ -19,6 +21,8 @@ export const Modal: React.FC<ModalProps> = ({
   title,
   children,
   maxWidth = 'max-w-md',
+  contentClassName,
+  noPadding = false,
 }) => {
   useEffect(() => {
     if (isOpen) {
@@ -66,8 +70,17 @@ export const Modal: React.FC<ModalProps> = ({
               </button>
             </div>
 
-            {/* Scrollable Content */}
-            <div className="p-4 sm:p-6 overflow-y-auto space-y-4">{children}</div>
+            {/* Modal Body Content */}
+            <div
+              className={cn(
+                noPadding
+                  ? 'flex-1 min-h-0 flex flex-col overflow-hidden'
+                  : 'p-4 sm:p-6 overflow-y-auto space-y-4',
+                contentClassName
+              )}
+            >
+              {children}
+            </div>
           </motion.div>
         </div>
       )}

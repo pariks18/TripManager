@@ -83,6 +83,19 @@ export default function TripDashboardPage() {
   // Listen for real-time incoming chat messages when modal is closed
   useEffect(() => {
     if (!tripId) return;
+
+    let lastSeenMsgId: string | null = null;
+
+    // Fetch initial latest message ID on load without setting unread dot
+    fetch(`/api/trips/${tripId}/messages?limit=1`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.messages && data.messages.length > 0) {
+          lastSeenMsgId = data.messages[data.messages.length - 1].id;
+        }
+      })
+      .catch(() => {});
+
     let eventSource: EventSource | null = null;
     try {
       eventSource = new EventSource(`/api/trips/${tripId}/messages/stream`);
@@ -91,15 +104,37 @@ export default function TripDashboardPage() {
           if (event.data && event.data.startsWith('{')) {
             const newMsg = JSON.parse(event.data);
             if (newMsg.senderId && newMsg.senderId !== user?.id && !isChatModalOpen) {
-              setHasUnreadChat(true);
+              if (lastSeenMsgId !== newMsg.id) {
+                lastSeenMsgId = newMsg.id;
+                setHasUnreadChat(true);
+              }
             }
           }
         } catch (e) {}
       };
     } catch (e) {}
 
+    // Polling fallback every 2 seconds
+    const pollInterval = setInterval(async () => {
+      if (isChatModalOpen) return;
+      try {
+        const res = await fetch(`/api/trips/${tripId}/messages?limit=1`);
+        const data = await res.json();
+        if (data.messages && data.messages.length > 0) {
+          const latest = data.messages[data.messages.length - 1];
+          if (lastSeenMsgId && latest.id !== lastSeenMsgId) {
+            if (latest.senderId !== user?.id) {
+              setHasUnreadChat(true);
+            }
+          }
+          lastSeenMsgId = latest.id;
+        }
+      } catch (e) {}
+    }, 2000);
+
     return () => {
       if (eventSource) eventSource.close();
+      clearInterval(pollInterval);
     };
   }, [tripId, user?.id, isChatModalOpen]);
 
@@ -811,6 +846,7 @@ export default function TripDashboardPage() {
         onClick={() => {
           setIsChatModalOpen(true);
           setHasUnreadChat(false);
+          fetch(`/api/trips/${trip.id}/messages/read`, { method: 'POST' }).catch(() => {});
         }}
         className="fixed bottom-20 right-4 sm:right-6 z-40 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white p-3.5 rounded-full shadow-xl transition-all flex items-center justify-center cursor-pointer group"
         title="Open Group Chat & Live Polls"
@@ -827,6 +863,7 @@ export default function TripDashboardPage() {
         onClose={() => setIsChatModalOpen(false)}
         title=""
         maxWidth="max-w-4xl"
+        noPadding
       >
         <GroupChatView
           tripId={trip.id}

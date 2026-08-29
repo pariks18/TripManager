@@ -111,6 +111,12 @@ export const TripCard: React.FC<TripCardProps> = React.memo(({
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
+            {typeof trip.unreadCount === 'number' && trip.unreadCount > 0 && (
+              <span className="bg-rose-500 text-white text-[11px] font-black min-w-5 h-5 px-1.5 rounded-full flex items-center justify-center border-2 border-white shadow-sm animate-pulse" title={`${trip.unreadCount} unread messages`}>
+                {trip.unreadCount}
+              </span>
+            )}
+
             <span className="bg-slate-100 group-hover:bg-emerald-50 text-slate-700 group-hover:text-emerald-700 text-[11px] font-mono font-bold px-2.5 py-1 rounded-xl border border-slate-200/60 transition-colors">
               {trip.code}
             </span>

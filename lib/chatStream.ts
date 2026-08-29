@@ -1,7 +1,16 @@
 import { MessageDetail } from '@/types';
 
-// In-memory stream subscriber registry by tripId
-const tripSubscribers = new Map<string, Set<(message: MessageDetail) => void>>();
+// Use globalThis to maintain subscriber registry across Next.js API route invocations
+const globalForChat = globalThis as unknown as {
+  tripSubscribers?: Map<string, Set<(message: MessageDetail) => void>>;
+};
+
+const tripSubscribers =
+  globalForChat.tripSubscribers || new Map<string, Set<(message: MessageDetail) => void>>();
+
+if (process.env.NODE_ENV !== 'production') {
+  globalForChat.tripSubscribers = tripSubscribers;
+}
 
 export function addSubscriber(tripId: string, send: (message: MessageDetail) => void) {
   if (!tripSubscribers.has(tripId)) {
