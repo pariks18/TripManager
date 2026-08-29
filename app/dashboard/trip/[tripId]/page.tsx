@@ -77,7 +77,31 @@ export default function TripDashboardPage() {
   const [activeTab, setActiveTab] = useState<'overview' | 'trip' | 'polls' | 'location' | 'expenses' | 'itinerary' | 'stay' | 'approvals' | 'settlement' | 'timeline' | 'analytics' | 'memories' | 'tripplan'>('overview');
   const [planSubTab, setPlanSubTab] = useState<'itinerary' | 'stay'>('itinerary');
   const [isChatModalOpen, setIsChatModalOpen] = useState(false);
+  const [hasUnreadChat, setHasUnreadChat] = useState(false);
   const [copiedCode, setCopiedCode] = useState(false);
+
+  // Listen for real-time incoming chat messages when modal is closed
+  useEffect(() => {
+    if (!tripId) return;
+    let eventSource: EventSource | null = null;
+    try {
+      eventSource = new EventSource(`/api/trips/${tripId}/messages/stream`);
+      eventSource.onmessage = (event) => {
+        try {
+          if (event.data && event.data.startsWith('{')) {
+            const newMsg = JSON.parse(event.data);
+            if (newMsg.senderId && newMsg.senderId !== user?.id && !isChatModalOpen) {
+              setHasUnreadChat(true);
+            }
+          }
+        } catch (e) {}
+      };
+    } catch (e) {}
+
+    return () => {
+      if (eventSource) eventSource.close();
+    };
+  }, [tripId, user?.id, isChatModalOpen]);
 
   // Expense & Advance Credit modal state
   const [isAddExpenseOpen, setIsAddExpenseOpen] = useState(false);
@@ -784,14 +808,17 @@ export default function TripDashboardPage() {
 
       {/* Floating Group Chat Button */}
       <button
-        onClick={() => setIsChatModalOpen(true)}
+        onClick={() => {
+          setIsChatModalOpen(true);
+          setHasUnreadChat(false);
+        }}
         className="fixed bottom-20 right-4 sm:right-6 z-40 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white p-3.5 rounded-full shadow-xl transition-all flex items-center justify-center cursor-pointer group"
         title="Open Group Chat & Live Polls"
       >
         <MessageSquare className="w-6 h-6" />
-        <span className="absolute -top-1 -right-1 bg-rose-500 text-white text-[10px] font-black w-5 h-5 rounded-full flex items-center justify-center border-2 border-white shadow-xs">
-          3
-        </span>
+        {hasUnreadChat && (
+          <span className="absolute top-1 right-1 w-3 h-3 bg-rose-500 rounded-full border-2 border-white animate-pulse" />
+        )}
       </button>
 
       {/* Group Chat Modal */}
