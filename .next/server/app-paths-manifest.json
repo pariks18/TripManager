@@ -1,3 +1,12 @@
 {
-  "/api/trips/[tripId]/itinerary/[itemId]/route": "app/api/trips/[tripId]/itinerary/[itemId]/route.js"
+  "/_not-found/page": "app/_not-found/page.js",
+  "/page": "app/page.js",
+  "/api/auth/me/route": "app/api/auth/me/route.js",
+  "/dashboard/page": "app/dashboard/page.js",
+  "/api/trips/[tripId]/messages/route": "app/api/trips/[tripId]/messages/route.js",
+  "/api/trips/[tripId]/messages/stream/route": "app/api/trips/[tripId]/messages/stream/route.js",
+  "/dashboard/trip/[tripId]/page": "app/dashboard/trip/[tripId]/page.js",
+  "/api/trips/[tripId]/route": "app/api/trips/[tripId]/route.js",
+  "/api/trips/[tripId]/itinerary/[itemId]/route": "app/api/trips/[tripId]/itinerary/[itemId]/route.js",
+  "/api/trips/route": "app/api/trips/route.js"
 }
