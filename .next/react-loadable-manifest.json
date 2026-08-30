@@ -1,15 +1,15 @@
 {
   "app/dashboard/trip/[tripId]/page.tsx -> @/components/chat/GroupChatView": {
-    "id": 7842,
+    "id": 8121,
     "files": [
-      "static/chunks/803.89f0e94058388c12.js",
-      "static/chunks/842.50c3b25096dd4268.js"
+      "static/chunks/803.5d7f60748580e07b.js",
+      "static/chunks/121.b7ea4cc5d13ea45e.js"
     ]
   },
   "app/dashboard/trip/[tripId]/page.tsx -> @/components/expense/PendingApprovalsView": {
     "id": 47,
     "files": [
-      "static/chunks/47.1f7b388932341999.js"
+      "static/chunks/47.ac18931a05b1b052.js"
     ]
   },
   "app/dashboard/trip/[tripId]/page.tsx -> @/components/memories/TripMemoriesView": {
@@ -19,9 +19,9 @@
     ]
   },
   "app/dashboard/trip/[tripId]/page.tsx -> @/components/settlement/SettlementList": {
-    "id": 208,
+    "id": 1286,
     "files": [
-      "static/chunks/208.86f65e379d6b50ee.js"
+      "static/chunks/286.ee7e7649627df52c.js"
     ]
   },
   "app/dashboard/trip/[tripId]/page.tsx -> @/components/trip/AnalyticsView": {
@@ -45,7 +45,7 @@
   "app/dashboard/trip/[tripId]/page.tsx -> @/components/trip/LivePollsView": {
     "id": 3803,
     "files": [
-      "static/chunks/803.89f0e94058388c12.js"
+      "static/chunks/803.5d7f60748580e07b.js"
     ]
   },
   "app/dashboard/trip/[tripId]/page.tsx -> @/components/trip/StayView": {
@@ -57,7 +57,7 @@
   "app/dashboard/trip/[tripId]/page.tsx -> @/components/trip/TripTimeline": {
     "id": 616,
     "files": [
-      "static/chunks/616.cb2de43312b4656c.js"
+      "static/chunks/616.ddda18844f3f7962.js"
     ]
   },
   "app/dashboard/trip/[tripId]/page.tsx -> @/components/wallet/AdvanceCreditModal": {

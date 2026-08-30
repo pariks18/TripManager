@@ -326,6 +326,8 @@ model Message {
   tripId    String   @db.ObjectId
   senderId  String   @db.ObjectId
   content   String
+  isEdited  Boolean  @default(false)
+  isUnsent  Boolean  @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

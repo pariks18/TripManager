@@ -3129,6 +3129,8 @@ export const dbStore = {
       senderId: m.senderId,
       sender: { id: m.sender.id, name: m.sender.name, email: m.sender.email },
       content: m.content,
+      isEdited: m.isEdited || false,
+      isUnsent: m.isUnsent || false,
       createdAt: m.createdAt.toISOString(),
       updatedAt: m.updatedAt.toISOString(),
     }));
@@ -3177,8 +3179,105 @@ export const dbStore = {
       senderId: msg.senderId,
       sender: { id: msg.sender.id, name: msg.sender.name, email: msg.sender.email },
       content: msg.content,
+      isEdited: false,
+      isUnsent: false,
       createdAt: msg.createdAt.toISOString(),
       updatedAt: msg.updatedAt.toISOString(),
+    };
+  },
+
+  async editTripMessage(
+    messageId: string,
+    userId: string,
+    newContent: string
+  ): Promise<MessageDetail> {
+    await ensureDatabaseSeeded();
+    const trimmed = newContent.trim();
+    if (!trimmed) throw new Error('Edited message content cannot be empty.');
+
+    const msg = await prisma.message.findUnique({
+      where: { id: messageId },
+      include: { sender: { select: { id: true, name: true, email: true } } },
+    });
+    if (!msg) throw new Error('Message not found.');
+    if (msg.senderId !== userId) throw new Error('Forbidden: You can only edit your own messages.');
+    if (msg.isUnsent) throw new Error('Unsent messages cannot be edited.');
+
+    const elapsedMs = Date.now() - new Date(msg.createdAt).getTime();
+    if (elapsedMs > 5 * 60 * 1000) {
+      throw new Error('Editing is only allowed within 5 minutes of sending.');
+    }
+
+    const updated = await prisma.message.update({
+      where: { id: messageId },
+      data: {
+        content: trimmed,
+        isEdited: true,
+      },
+      include: { sender: { select: { id: true, name: true, email: true } } },
+    });
+
+    return {
+      id: updated.id,
+      tripId: updated.tripId,
+      senderId: updated.senderId,
+      sender: { id: updated.sender.id, name: updated.sender.name, email: updated.sender.email },
+      content: updated.content,
+      isEdited: true,
+      isUnsent: updated.isUnsent || false,
+      createdAt: updated.createdAt.toISOString(),
+      updatedAt: updated.updatedAt.toISOString(),
+    };
+  },
+
+  async unsendTripMessage(
+    messageId: string,
+    userId: string
+  ): Promise<MessageDetail> {
+    await ensureDatabaseSeeded();
+
+    const msg = await prisma.message.findUnique({
+      where: { id: messageId },
+      include: { sender: { select: { id: true, name: true, email: true } } },
+    });
+    if (!msg) throw new Error('Message not found.');
+    if (msg.senderId !== userId) throw new Error('Forbidden: You can only unsend your own messages.');
+    if (msg.isUnsent) return {
+      id: msg.id,
+      tripId: msg.tripId,
+      senderId: msg.senderId,
+      sender: { id: msg.sender.id, name: msg.sender.name, email: msg.sender.email },
+      content: '',
+      isEdited: msg.isEdited || false,
+      isUnsent: true,
+      createdAt: msg.createdAt.toISOString(),
+      updatedAt: msg.updatedAt.toISOString(),
+    };
+
+    const elapsedMs = Date.now() - new Date(msg.createdAt).getTime();
+    if (elapsedMs > 10 * 60 * 1000) {
+      throw new Error('Unsending is only allowed within 10 minutes of sending.');
+    }
+
+    const updated = await prisma.message.update({
+      where: { id: messageId },
+      data: {
+        content: '',
+        isUnsent: true,
+      },
+      include: { sender: { select: { id: true, name: true, email: true } } },
+    });
+
+    return {
+      id: updated.id,
+      tripId: updated.tripId,
+      senderId: updated.senderId,
+      sender: { id: updated.sender.id, name: updated.sender.name, email: updated.sender.email },
+      content: '',
+      isEdited: updated.isEdited || false,
+      isUnsent: true,
+      createdAt: updated.createdAt.toISOString(),
+      updatedAt: updated.updatedAt.toISOString(),
     };
   },
 

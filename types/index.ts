@@ -346,6 +346,8 @@ export interface MessageDetail {
   senderId: string;
   sender: UserSummary;
   content: string;
+  isEdited?: boolean;
+  isUnsent?: boolean;
   createdAt: string;
   updatedAt: string;
 }
