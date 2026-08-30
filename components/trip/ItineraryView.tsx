@@ -26,6 +26,8 @@ import {
   ExternalLink,
 } from 'lucide-react';
 
+import { ItineraryAISummary } from '@/components/trip/ItineraryAISummary';
+
 interface ItineraryViewProps {
   tripId: string;
   itinerary: ItineraryItemDetail[];
@@ -293,6 +295,8 @@ export const ItineraryView: React.FC<ItineraryViewProps> = React.memo(({
                             {item.description}
                           </p>
                         )}
+
+                        <ItineraryAISummary tripId={tripId} itemId={item.id} />
                       </div>
                     );
                   })}
