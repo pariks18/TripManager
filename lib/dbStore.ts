@@ -2,7 +2,7 @@ import { prisma } from './prisma';
 import { hashPassword, comparePassword } from './auth';
 import { generateTripCode, generateObjectId } from './utils';
 import { calculateMemberBalances, computeSettlements } from './settlement';
-import { CategoryType, ExpenseDetail, TripSummary, UserSummary, ActivityDetail, SettlementRecordDetail, MemberBalance, MemberAnalytics, DocumentType, UserDocumentDetail, ItineraryItemDetail, StayDetail, PollDetail, PollOptionDetail, PollVoteDetail, MemberLocationDetail, MessageDetail, TripMemoryDetail, MemoryQuestionnaireAnswers, MemoryShareRequestDetail } from '@/types';
+import { CategoryType, ExpenseDetail, TripSummary, UserSummary, ActivityDetail, SettlementRecordDetail, MemberBalance, MemberAnalytics, DocumentType, UserDocumentDetail, ItineraryItemDetail, StayDetail, PollDetail, PollOptionDetail, PollVoteDetail, MemberLocationDetail, MessageDetail, TripMemoryDetail, MemoryQuestionnaireAnswers, MemoryShareRequestDetail, ChecklistItemDetail } from '@/types';
 
 const SEED_USERS = [
   {
@@ -3438,6 +3438,7 @@ export const dbStore = {
       content: m.content,
       isEdited: m.isEdited || false,
       isUnsent: m.isUnsent || false,
+      readByUserIds: m.readByUserIds || [m.senderId],
       createdAt: m.createdAt.toISOString(),
       updatedAt: m.updatedAt.toISOString(),
     }));
@@ -3466,6 +3467,7 @@ export const dbStore = {
         tripId,
         senderId,
         content: trimmedContent,
+        readByUserIds: [senderId],
       },
       include: {
         sender: {
@@ -3488,6 +3490,7 @@ export const dbStore = {
       content: msg.content,
       isEdited: false,
       isUnsent: false,
+      readByUserIds: msg.readByUserIds || [senderId],
       createdAt: msg.createdAt.toISOString(),
       updatedAt: msg.updatedAt.toISOString(),
     };
@@ -3532,6 +3535,7 @@ export const dbStore = {
       content: updated.content,
       isEdited: true,
       isUnsent: updated.isUnsent || false,
+      readByUserIds: updated.readByUserIds || [updated.senderId],
       createdAt: updated.createdAt.toISOString(),
       updatedAt: updated.updatedAt.toISOString(),
     };
@@ -3557,6 +3561,7 @@ export const dbStore = {
       content: '',
       isEdited: msg.isEdited || false,
       isUnsent: true,
+      readByUserIds: msg.readByUserIds || [msg.senderId],
       createdAt: msg.createdAt.toISOString(),
       updatedAt: msg.updatedAt.toISOString(),
     };
@@ -3583,6 +3588,7 @@ export const dbStore = {
       content: '',
       isEdited: updated.isEdited || false,
       isUnsent: true,
+      readByUserIds: updated.readByUserIds || [updated.senderId],
       createdAt: updated.createdAt.toISOString(),
       updatedAt: updated.updatedAt.toISOString(),
     };
@@ -3595,6 +3601,17 @@ export const dbStore = {
       where: { tripId, userId },
       data: { lastReadAt: now },
     });
+
+    await prisma.message.updateMany({
+      where: {
+        tripId,
+        NOT: { readByUserIds: { has: userId } },
+      },
+      data: {
+        readByUserIds: { push: userId },
+      },
+    });
+
     return true;
   },
 
@@ -4092,6 +4109,393 @@ export const dbStore = {
       where: { id: tripId },
     });
 
+    return true;
+  },
+
+  async getTripChecklist(
+    tripId: string,
+    currentUserId: string
+  ): Promise<{
+    groupItems: ChecklistItemDetail[];
+    personalItems: ChecklistItemDetail[];
+    userGender?: string | null;
+  }> {
+    await ensureDatabaseSeeded();
+    const userSelect = { select: { id: true, name: true, email: true } };
+
+    const member = await prisma.tripMember.findUnique({
+      where: { tripId_userId: { tripId, userId: currentUserId } },
+    });
+    if (!member) {
+      throw new Error('Forbidden: You are not a member of this trip.');
+    }
+
+    const currentUser = await prisma.user.findUnique({
+      where: { id: currentUserId },
+    });
+
+    const isFemale = currentUser?.gender
+      ? ['female', 'woman', 'w', 'f'].includes(currentUser.gender.trim().toLowerCase())
+      : false;
+
+    // Fetch existing group items
+    let groupItemsRaw = await prisma.checklistItem.findMany({
+      where: { tripId, type: 'GROUP' },
+      include: {
+        assignedTo: userSelect,
+        completedBy: userSelect,
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    // Seed default Group items if empty
+    if (groupItemsRaw.length === 0) {
+      const defaultGroupDefaults = [
+        { category: '🍿 Food & Drinks', title: 'Snacks' },
+        { category: '🍿 Food & Drinks', title: 'Drinking Water' },
+        { category: '🩹 Health', title: 'General Medicines' },
+        { category: '🩹 Health', title: 'ORS' },
+        { category: '🩹 Health', title: 'First-aid Kit' },
+        { category: '🩹 Health', title: 'Bandages' },
+        { category: '🧻 Hygiene', title: 'Tissues' },
+        { category: '🧻 Hygiene', title: 'Wet Wipes' },
+        { category: '🧻 Hygiene', title: 'Hand Sanitizer' },
+        { category: '🎫 Travel', title: 'Tickets Confirmed' },
+        { category: '🎫 Travel', title: 'Return Tickets' },
+        { category: '🎫 Travel', title: 'Booking Details' },
+        { category: '🏨 Stay', title: 'Hotel Booking Confirmed' },
+        { category: '🏨 Stay', title: 'Check-in Details' },
+        { category: '🚗 Transport', title: 'Station/Airport Transfer Arranged' },
+      ];
+
+      await prisma.checklistItem.createMany({
+        data: defaultGroupDefaults.map((item) => ({
+          id: generateObjectId(),
+          tripId,
+          type: 'GROUP',
+          userId: null,
+          title: item.title,
+          category: item.category,
+          status: 'PENDING',
+          isCustom: false,
+        })),
+      });
+
+      groupItemsRaw = await prisma.checklistItem.findMany({
+        where: { tripId, type: 'GROUP' },
+        include: {
+          assignedTo: userSelect,
+          completedBy: userSelect,
+        },
+        orderBy: { createdAt: 'asc' },
+      });
+    }
+
+    // Fetch existing personal items for this current user
+    let personalItemsRaw = await prisma.checklistItem.findMany({
+      where: { tripId, type: 'PERSONAL', userId: currentUserId },
+      include: {
+        assignedTo: userSelect,
+        completedBy: userSelect,
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    // Seed default Personal items if empty
+    if (personalItemsRaw.length === 0) {
+      const defaultPersonalDefaults = [
+        { category: '🧴 Toiletries', title: 'Toothbrush' },
+        { category: '🧴 Toiletries', title: 'Toothpaste' },
+        { category: '🧴 Toiletries', title: 'Towel' },
+        { category: '🧴 Toiletries', title: 'Shampoo' },
+        { category: '🧴 Toiletries', title: 'Soap / Body Wash' },
+        { category: '🧴 Toiletries', title: 'Comb' },
+        { category: '👕 Clothing', title: 'Clothes' },
+        { category: '👕 Clothing', title: 'Innerwear' },
+        { category: '👕 Clothing', title: 'Extra Clothes' },
+        { category: '👕 Clothing', title: 'Sleepwear' },
+        { category: '🔌 Electronics', title: 'Charger' },
+        { category: '🔌 Electronics', title: 'Power Bank' },
+        { category: '🔌 Electronics', title: 'Earphones' },
+        { category: '🪪 Documents', title: 'ID Proof' },
+        { category: '🪪 Documents', title: 'Driving Licence' },
+        { category: '🪪 Documents', title: 'Important Documents' },
+        { category: '💊 Health', title: 'Personal Medicines' },
+        { category: '💊 Health', title: 'Prescription' },
+        { category: '🕶️ Accessories', title: 'Sunglasses' },
+        { category: '🕶️ Accessories', title: 'Cap' },
+        { category: '🕶️ Accessories', title: 'Watch' },
+        { category: '🌦️ Weather', title: 'Umbrella' },
+        { category: '🌦️ Weather', title: 'Raincoat' },
+        { category: '🌦️ Weather', title: 'Sunscreen' },
+      ];
+
+      if (isFemale) {
+        defaultPersonalDefaults.push(
+          { category: "🌸 Women's Essentials", title: 'Period Products' },
+          { category: "🌸 Women's Essentials", title: 'Panty Liners' },
+          { category: "🌸 Women's Essentials", title: 'Extra Underwear' },
+          { category: "🌸 Women's Essentials", title: 'Disposal Bags' },
+          { category: "🌸 Women's Essentials", title: 'Personal Hygiene Essentials' },
+          { category: "🌸 Women's Essentials", title: 'Heat Patch / Heating Pad' },
+          { category: "🌸 Women's Essentials", title: 'Other Personal Requirements' }
+        );
+      }
+
+      await prisma.checklistItem.createMany({
+        data: defaultPersonalDefaults.map((item) => ({
+          id: generateObjectId(),
+          tripId,
+          type: 'PERSONAL',
+          userId: currentUserId,
+          title: item.title,
+          category: item.category,
+          status: 'PENDING',
+          isCustom: false,
+        })),
+      });
+
+      personalItemsRaw = await prisma.checklistItem.findMany({
+        where: { tripId, type: 'PERSONAL', userId: currentUserId },
+        include: {
+          assignedTo: userSelect,
+          completedBy: userSelect,
+        },
+        orderBy: { createdAt: 'asc' },
+      });
+    } else if (isFemale) {
+      // Check if Women's Essentials need to be appended for existing personal checklist
+      const hasWomensCat = personalItemsRaw.some((i) => i.category === "🌸 Women's Essentials");
+      if (!hasWomensCat) {
+        const womensDefaults = [
+          { category: "🌸 Women's Essentials", title: 'Period Products' },
+          { category: "🌸 Women's Essentials", title: 'Panty Liners' },
+          { category: "🌸 Women's Essentials", title: 'Extra Underwear' },
+          { category: "🌸 Women's Essentials", title: 'Disposal Bags' },
+          { category: "🌸 Women's Essentials", title: 'Personal Hygiene Essentials' },
+          { category: "🌸 Women's Essentials", title: 'Heat Patch / Heating Pad' },
+          { category: "🌸 Women's Essentials", title: 'Other Personal Requirements' },
+        ];
+
+        await prisma.checklistItem.createMany({
+          data: womensDefaults.map((item) => ({
+            id: generateObjectId(),
+            tripId,
+            type: 'PERSONAL',
+            userId: currentUserId,
+            title: item.title,
+            category: item.category,
+            status: 'PENDING',
+            isCustom: false,
+          })),
+        });
+
+        personalItemsRaw = await prisma.checklistItem.findMany({
+          where: { tripId, type: 'PERSONAL', userId: currentUserId },
+          include: {
+            assignedTo: userSelect,
+            completedBy: userSelect,
+          },
+          orderBy: { createdAt: 'asc' },
+        });
+      }
+    }
+
+    const mapItem = (item: any): ChecklistItemDetail => ({
+      id: item.id,
+      tripId: item.tripId,
+      type: item.type as 'GROUP' | 'PERSONAL',
+      userId: item.userId,
+      title: item.title,
+      category: item.category,
+      status: item.status as 'PENDING' | 'DONE' | 'NO_NEED',
+      assignedToId: item.assignedToId,
+      assignedTo: item.assignedTo ? { id: item.assignedTo.id, name: item.assignedTo.name, email: item.assignedTo.email } : null,
+      completedById: item.completedById,
+      completedBy: item.completedBy ? { id: item.completedBy.id, name: item.completedBy.name, email: item.completedBy.email } : null,
+      completedAt: item.completedAt ? item.completedAt.toISOString() : null,
+      isCustom: item.isCustom || false,
+      createdAt: item.createdAt.toISOString(),
+      updatedAt: item.updatedAt.toISOString(),
+    });
+
+    return {
+      groupItems: groupItemsRaw.map(mapItem),
+      personalItems: personalItemsRaw.map(mapItem),
+      userGender: currentUser?.gender || null,
+    };
+  },
+
+  async addChecklistItem(
+    tripId: string,
+    currentUserId: string,
+    data: {
+      type: 'GROUP' | 'PERSONAL';
+      title: string;
+      category?: string;
+      assignedToId?: string | null;
+    }
+  ): Promise<ChecklistItemDetail> {
+    await ensureDatabaseSeeded();
+    const userSelect = { select: { id: true, name: true, email: true } };
+
+    const member = await prisma.tripMember.findUnique({
+      where: { tripId_userId: { tripId, userId: currentUserId } },
+    });
+    if (!member) {
+      throw new Error('Forbidden: You are not a member of this trip.');
+    }
+
+    const trimmedTitle = data.title.trim();
+    if (!trimmedTitle) throw new Error('Item name cannot be empty.');
+
+    const category = data.category?.trim() || (data.type === 'GROUP' ? '🍿 Food & Drinks' : '🧴 Toiletries');
+    const targetUserId = data.type === 'PERSONAL' ? currentUserId : null;
+
+    const item = await prisma.checklistItem.create({
+      data: {
+        id: generateObjectId(),
+        tripId,
+        type: data.type,
+        userId: targetUserId,
+        title: trimmedTitle,
+        category,
+        status: 'PENDING',
+        assignedToId: data.assignedToId || null,
+        isCustom: true,
+      },
+      include: {
+        assignedTo: userSelect,
+        completedBy: userSelect,
+      },
+    });
+
+    return {
+      id: item.id,
+      tripId: item.tripId,
+      type: item.type as 'GROUP' | 'PERSONAL',
+      userId: item.userId,
+      title: item.title,
+      category: item.category,
+      status: item.status as 'PENDING' | 'DONE' | 'NO_NEED',
+      assignedToId: item.assignedToId,
+      assignedTo: item.assignedTo ? { id: item.assignedTo.id, name: item.assignedTo.name, email: item.assignedTo.email } : null,
+      completedById: item.completedById,
+      completedBy: item.completedBy ? { id: item.completedBy.id, name: item.completedBy.name, email: item.completedBy.email } : null,
+      completedAt: item.completedAt ? item.completedAt.toISOString() : null,
+      isCustom: item.isCustom || false,
+      createdAt: item.createdAt.toISOString(),
+      updatedAt: item.updatedAt.toISOString(),
+    };
+  },
+
+  async updateChecklistItem(
+    itemId: string,
+    currentUserId: string,
+    data: {
+      status?: 'PENDING' | 'DONE' | 'NO_NEED';
+      assignedToId?: string | null;
+      title?: string;
+    }
+  ): Promise<ChecklistItemDetail> {
+    await ensureDatabaseSeeded();
+    const userSelect = { select: { id: true, name: true, email: true } };
+
+    const item = await prisma.checklistItem.findUnique({
+      where: { id: itemId },
+    });
+    if (!item) throw new Error('Checklist item not found.');
+
+    const member = await prisma.tripMember.findUnique({
+      where: { tripId_userId: { tripId: item.tripId, userId: currentUserId } },
+    });
+    if (!member) throw new Error('Forbidden: You are not a member of this trip.');
+
+    if (item.type === 'PERSONAL' && item.userId !== currentUserId) {
+      throw new Error('Forbidden: You cannot modify another member’s personal checklist.');
+    }
+
+    const updateData: any = {};
+
+    if (data.title !== undefined) {
+      const trimmed = data.title.trim();
+      if (!trimmed) throw new Error('Title cannot be empty');
+      updateData.title = trimmed;
+    }
+
+    if (data.assignedToId !== undefined) {
+      updateData.assignedToId = data.assignedToId || null;
+    }
+
+    if (data.status !== undefined) {
+      updateData.status = data.status;
+      if (data.status === 'DONE') {
+        updateData.completedById = currentUserId;
+        updateData.completedAt = new Date();
+      } else {
+        updateData.completedById = null;
+        updateData.completedAt = null;
+      }
+    }
+
+    const updated = await prisma.checklistItem.update({
+      where: { id: itemId },
+      data: updateData,
+      include: {
+        assignedTo: userSelect,
+        completedBy: userSelect,
+      },
+    });
+
+    return {
+      id: updated.id,
+      tripId: updated.tripId,
+      type: updated.type as 'GROUP' | 'PERSONAL',
+      userId: updated.userId,
+      title: updated.title,
+      category: updated.category,
+      status: updated.status as 'PENDING' | 'DONE' | 'NO_NEED',
+      assignedToId: updated.assignedToId,
+      assignedTo: updated.assignedTo ? { id: updated.assignedTo.id, name: updated.assignedTo.name, email: updated.assignedTo.email } : null,
+      completedById: updated.completedById,
+      completedBy: updated.completedBy ? { id: updated.completedBy.id, name: updated.completedBy.name, email: updated.completedBy.email } : null,
+      completedAt: updated.completedAt ? updated.completedAt.toISOString() : null,
+      isCustom: updated.isCustom || false,
+      createdAt: updated.createdAt.toISOString(),
+      updatedAt: updated.updatedAt.toISOString(),
+    };
+  },
+
+  async deleteChecklistItem(itemId: string, currentUserId: string): Promise<boolean> {
+    await ensureDatabaseSeeded();
+
+    const item = await prisma.checklistItem.findUnique({
+      where: { id: itemId },
+    });
+    if (!item) throw new Error('Checklist item not found.');
+
+    const member = await prisma.tripMember.findUnique({
+      where: { tripId_userId: { tripId: item.tripId, userId: currentUserId } },
+    });
+    if (!member) throw new Error('Forbidden: You are not a member of this trip.');
+
+    if (item.type === 'PERSONAL' && item.userId !== currentUserId) {
+      throw new Error('Forbidden: You cannot delete another member’s personal checklist item.');
+    }
+
+    await prisma.checklistItem.delete({
+      where: { id: itemId },
+    });
+
+    return true;
+  },
+
+  async updateUserGender(userId: string, gender: string): Promise<boolean> {
+    await ensureDatabaseSeeded();
+    await prisma.user.update({
+      where: { id: userId },
+      data: { gender: gender.trim() },
+    });
     return true;
   },
 };

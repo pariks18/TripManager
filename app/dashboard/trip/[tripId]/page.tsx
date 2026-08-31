@@ -22,6 +22,7 @@ const LivePollsView = dynamic(() => import('@/components/trip/LivePollsView').th
 const LiveLocationView = dynamic(() => import('@/components/trip/LiveLocationView').then((m) => m.LiveLocationView));
 const GroupChatView = dynamic(() => import('@/components/chat/GroupChatView').then((m) => m.GroupChatView));
 const TripMemoriesView = dynamic(() => import('@/components/memories/TripMemoriesView').then((m) => m.TripMemoriesView));
+const TripChecklistView = dynamic(() => import('@/components/checklist/TripChecklistView').then((m) => m.TripChecklistView));
 const AdvanceCreditModal = dynamic(() => import('@/components/wallet/AdvanceCreditModal').then((m) => m.AdvanceCreditModal));
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
@@ -64,6 +65,7 @@ import {
   Compass,
   MessageSquare,
   Heart,
+  CheckSquare,
 } from 'lucide-react';
 
 export default function TripDashboardPage() {
@@ -74,7 +76,7 @@ export default function TripDashboardPage() {
   const [user, setUser] = useState<UserSession | null>(null);
   const [trip, setTrip] = useState<TripSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'overview' | 'trip' | 'polls' | 'location' | 'expenses' | 'itinerary' | 'stay' | 'approvals' | 'settlement' | 'timeline' | 'analytics' | 'memories' | 'tripplan'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'trip' | 'polls' | 'location' | 'expenses' | 'itinerary' | 'stay' | 'approvals' | 'settlement' | 'timeline' | 'analytics' | 'memories' | 'tripplan' | 'checklist'>('overview');
   const [planSubTab, setPlanSubTab] = useState<'itinerary' | 'stay'>('itinerary');
   const [isChatModalOpen, setIsChatModalOpen] = useState(false);
   const [hasUnreadChat, setHasUnreadChat] = useState(false);
@@ -597,13 +599,30 @@ export default function TripDashboardPage() {
                   </div>
                   <span className="text-slate-400 group-hover:text-slate-900 text-lg font-bold">›</span>
                 </div>
+
+                {/* 4. Trip Checklist */}
+                <div
+                  onClick={() => setActiveTab('checklist')}
+                  className="bg-white rounded-3xl p-5 border border-slate-200/90 shadow-sm hover:shadow-md cursor-pointer transition-all flex items-center justify-between group active:scale-[0.98]"
+                >
+                  <div className="flex items-center gap-3.5">
+                    <div className="p-3 bg-emerald-50 text-emerald-600 rounded-2xl group-hover:scale-105 transition-transform">
+                      <CheckSquare className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h5 className="text-sm font-extrabold text-slate-900">Trip Checklist</h5>
+                      <p className="text-xs text-slate-500 mt-0.5">Group & Personal packing list</p>
+                    </div>
+                  </div>
+                  <span className="text-slate-400 group-hover:text-slate-900 text-lg font-bold">›</span>
+                </div>
               </div>
             </div>
           </div>
         )}
 
         {/* Feature Sub-Page Header for Direct Features */}
-        {['polls', 'location', 'itinerary', 'stay', 'approvals', 'timeline', 'analytics', 'memories'].includes(activeTab) && (
+        {['polls', 'location', 'itinerary', 'stay', 'approvals', 'timeline', 'analytics', 'memories', 'checklist'].includes(activeTab) && (
           <div className="flex items-center justify-between pb-1 border-b border-slate-100">
             <button
               onClick={() => setActiveTab('trip')}
@@ -626,6 +645,8 @@ export default function TripDashboardPage() {
                 ? 'Host Approvals'
                 : activeTab === 'timeline'
                 ? 'Audit Log'
+                : activeTab === 'checklist'
+                ? 'Trip Checklist'
                 : 'Analytics'}
             </span>
           </div>
@@ -648,6 +669,16 @@ export default function TripDashboardPage() {
             currentUserId={user.id}
             isAdmin={isAdmin}
             onRefreshTrip={fetchTripDetails}
+          />
+        )}
+
+        {/* TAB: TRIP CHECKLIST */}
+        {activeTab === 'checklist' && (
+          <TripChecklistView
+            tripId={trip.id}
+            currentUser={user}
+            members={trip.members}
+            isAdmin={isAdmin}
           />
         )}
 
@@ -870,6 +901,7 @@ export default function TripDashboardPage() {
           tripName={trip.name}
           currentUser={user}
           isAdmin={isAdmin}
+          members={trip.members}
         />
       </Modal>
 

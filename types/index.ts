@@ -357,6 +357,7 @@ export interface MessageDetail {
   content: string;
   isEdited?: boolean;
   isUnsent?: boolean;
+  readByUserIds?: string[];
   createdAt: string;
   updatedAt: string;
 }
@@ -398,6 +399,24 @@ export interface MemoryShareRequestDetail {
   targetUserId: string;
   targetUser: UserSummary;
   status: 'PENDING' | 'ACCEPTED' | 'DECLINED';
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ChecklistItemDetail {
+  id: string;
+  tripId: string;
+  type: 'GROUP' | 'PERSONAL';
+  userId?: string | null;
+  title: string;
+  category: string;
+  status: 'PENDING' | 'DONE' | 'NO_NEED';
+  assignedToId?: string | null;
+  assignedTo?: UserSummary | null;
+  completedById?: string | null;
+  completedBy?: UserSummary | null;
+  completedAt?: string | null;
+  isCustom?: boolean;
   createdAt: string;
   updatedAt: string;
 }

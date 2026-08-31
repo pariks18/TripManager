@@ -46,6 +46,9 @@ model User {
   sentMemoryShares      MemoryShareRequest[] @relation("MemoryShareOwner")
   receivedMemoryShares  MemoryShareRequest[] @relation("MemoryShareTarget")
   expensePayers         ExpensePayer[]       @relation("ExpensePayerUser")
+  personalChecklists    ChecklistItem[]      @relation("PersonalChecklistOwner")
+  checklistAssignments  ChecklistItem[]      @relation("ChecklistAssignedTo")
+  checklistCompletions  ChecklistItem[]      @relation("ChecklistCompletedBy")
 }
 
 model Trip {
@@ -72,8 +75,9 @@ model Trip {
   stays     StayDetail[]
   polls     Poll[]
   locations MemberLocation[]
-  messages  Message[]
-  memories  TripMemory[]
+  messages       Message[]
+  memories       TripMemory[]
+  checklistItems ChecklistItem[]
 }
 
 model TripMember {
@@ -339,11 +343,12 @@ model Message {
   id        String   @id @default(auto()) @map("_id") @db.ObjectId
   tripId    String   @db.ObjectId
   senderId  String   @db.ObjectId
-  content   String
-  isEdited  Boolean  @default(false)
-  isUnsent  Boolean  @default(false)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  content       String
+  isEdited      Boolean  @default(false)
+  isUnsent      Boolean  @default(false)
+  readByUserIds String[] @default([])
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   trip   Trip @relation(fields: [tripId], references: [id], onDelete: Cascade)
   sender User @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
@@ -390,4 +395,27 @@ model MemoryShareRequest {
 
   @@unique([memoryId, targetUserId])
   @@index([targetUserId, status])
+}
+
+model ChecklistItem {
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  tripId        String    @db.ObjectId
+  type          String    // "GROUP" or "PERSONAL"
+  userId        String?   @db.ObjectId // Owner for PERSONAL items (null for GROUP items)
+  title         String
+  category      String    @default("General")
+  status        String    @default("PENDING") // "PENDING", "DONE", "NO_NEED"
+  assignedToId  String?   @db.ObjectId // Optional assignment for GROUP items
+  completedById String?   @db.ObjectId // Member who marked it DONE
+  completedAt   DateTime?
+  isCustom      Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  trip        Trip   @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  user        User?  @relation("PersonalChecklistOwner", fields: [userId], references: [id], onDelete: Cascade)
+  assignedTo  User?  @relation("ChecklistAssignedTo", fields: [assignedToId], references: [id])
+  completedBy User?  @relation("ChecklistCompletedBy", fields: [completedById], references: [id])
+
+  @@index([tripId, type, userId])
 }

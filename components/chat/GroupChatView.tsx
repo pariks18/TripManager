@@ -17,6 +17,8 @@ import {
   X,
   AlertTriangle,
   RotateCcw,
+  Check,
+  CheckCheck,
 } from 'lucide-react';
 
 interface GroupChatViewProps {
@@ -24,6 +26,7 @@ interface GroupChatViewProps {
   tripName: string;
   currentUser: UserSummary;
   isAdmin?: boolean;
+  members?: { user: UserSummary; role?: string }[];
 }
 
 const formatDateHeader = (dateString: string) => {
@@ -45,7 +48,7 @@ const formatDateHeader = (dateString: string) => {
   });
 };
 
-export const GroupChatView: React.FC<GroupChatViewProps> = React.memo(({ tripId, tripName, currentUser, isAdmin = false }) => {
+export const GroupChatView: React.FC<GroupChatViewProps> = React.memo(({ tripId, tripName, currentUser, isAdmin = false, members = [] }) => {
   const [chatTab, setChatTab] = useState<'messages' | 'polls'>('messages');
   const [messages, setMessages] = useState<MessageDetail[]>([]);
   const [inputText, setInputText] = useState('');
@@ -58,6 +61,7 @@ export const GroupChatView: React.FC<GroupChatViewProps> = React.memo(({ tripId,
   const [unsendConfirmMessage, setUnsendConfirmMessage] = useState<MessageDetail | null>(null);
   const [activeMenuMsgId, setActiveMenuMsgId] = useState<string | null>(null);
   const [isActionLoading, setIsActionLoading] = useState(false);
+  const [seenByModalMsg, setSeenByModalMsg] = useState<MessageDetail | null>(null);
 
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -143,7 +147,23 @@ export const GroupChatView: React.FC<GroupChatViewProps> = React.memo(({ tripId,
           try {
             if (event.data && event.data.startsWith('{')) {
               const newMsg: MessageDetail = JSON.parse(event.data);
-              if (newMsg.content === '__READ_RECEIPT__') return;
+
+              if (newMsg.content === '__READ_RECEIPT__') {
+                if (newMsg.senderId) {
+                  setMessages((prev) =>
+                    prev.map((m) => {
+                      if (m.senderId !== newMsg.senderId) {
+                        const reads = m.readByUserIds || [m.senderId];
+                        if (!reads.includes(newMsg.senderId)) {
+                          return { ...m, readByUserIds: [...reads, newMsg.senderId] };
+                        }
+                      }
+                      return m;
+                    })
+                  );
+                }
+                return;
+              }
 
               setMessages((prev) => {
                 const index = prev.findIndex((m) => m.id === newMsg.id);
@@ -435,6 +455,14 @@ export const GroupChatView: React.FC<GroupChatViewProps> = React.memo(({ tripId,
                     const hasActions = isMe && !msg.isUnsent && (showEdit || showUnsend);
                     const isMenuOpen = activeMenuMsgId === msg.id;
 
+                    const readList = msg.readByUserIds || [msg.senderId];
+                    const otherMembersList = members
+                      ? members.map((m) => m.user).filter((u) => u.id !== currentUser.id)
+                      : [];
+                    const seenCount = otherMembersList.filter((u) => readList.includes(u.id)).length;
+                    const totalOtherCount = otherMembersList.length;
+                    const isSeenByAnyone = seenCount > 0;
+
                     return (
                       <div
                         key={msg.id}
@@ -516,12 +544,34 @@ export const GroupChatView: React.FC<GroupChatViewProps> = React.memo(({ tripId,
                                 <>
                                   <p className="whitespace-pre-wrap">{msg.content}</p>
                                   <div
-                                    className={`flex items-center justify-end gap-1 mt-1 font-semibold text-[9px] ${
+                                    className={`flex items-center justify-end gap-1.5 mt-1 font-semibold text-[9px] ${
                                       isMe ? 'text-emerald-100/90' : 'text-slate-400'
                                     }`}
                                   >
                                     {msg.isEdited && <span className="italic">(edited)</span>}
                                     <span>{formatTime(msg.createdAt)}</span>
+
+                                    {/* Seen By Status Indicator for own messages */}
+                                    {isMe && (
+                                      <button
+                                        type="button"
+                                        onClick={() => setSeenByModalMsg(msg)}
+                                        className="inline-flex items-center gap-0.5 hover:underline cursor-pointer opacity-90 hover:opacity-100 transition-opacity ml-0.5"
+                                        title={`Seen by ${seenCount} of ${totalOtherCount} members`}
+                                      >
+                                        {isSeenByAnyone ? (
+                                          <span className="flex items-center gap-0.5 text-emerald-200 font-extrabold text-[9px]">
+                                            <CheckCheck className="w-3 h-3 text-emerald-200 shrink-0" />
+                                            <span>Seen</span>
+                                          </span>
+                                        ) : (
+                                          <span className="flex items-center gap-0.5 text-emerald-100/80 font-bold text-[9px]">
+                                            <Check className="w-3 h-3 text-emerald-100/80 shrink-0" />
+                                            <span>Sent</span>
+                                          </span>
+                                        )}
+                                      </button>
+                                    )}
                                   </div>
                                 </>
                               )}
@@ -637,6 +687,86 @@ export const GroupChatView: React.FC<GroupChatViewProps> = React.memo(({ tripId,
           </div>
         </div>
       )}
+
+      {/* "Seen By" Info Bottom Sheet / Modal */}
+      {seenByModalMsg && (() => {
+        const readList = seenByModalMsg.readByUserIds || [seenByModalMsg.senderId];
+        const groupMembers = members
+          ? members.map((m) => m.user).filter((u) => u.id !== currentUser.id)
+          : [];
+        const seenMembers = groupMembers.filter((u) => readList.includes(u.id));
+        const unseenMembers = groupMembers.filter((u) => !readList.includes(u.id));
+        const totalCount = groupMembers.length;
+        const seenCount = seenMembers.length;
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/60 backdrop-blur-xs">
+            <div className="bg-white rounded-t-3xl sm:rounded-3xl p-5 sm:p-6 max-w-md w-full shadow-2xl border border-slate-100 space-y-4 animate-in slide-in-from-bottom-5 sm:zoom-in-95 duration-150 max-h-[85vh] flex flex-col">
+              {/* Header */}
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3 shrink-0">
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-900">Message Info</h3>
+                  <p className="text-xs font-semibold text-slate-500 mt-0.5">
+                    Seen by {seenCount} of {totalCount} {totalCount === 1 ? 'member' : 'members'}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSeenByModalMsg(null)}
+                  className="p-1.5 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-colors cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Members List */}
+              <div className="flex-1 overflow-y-auto space-y-2 pr-1 divide-y divide-slate-100 no-scrollbar">
+                {/* Seen Members */}
+                {seenMembers.map((u) => (
+                  <div key={u.id} className="pt-2 flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-2.5">
+                      <Avatar name={u.name} size="sm" />
+                      <span className="font-bold text-slate-900">{u.name}</span>
+                    </div>
+                    <span className="flex items-center gap-1 font-bold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200/80">
+                      <Check className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>Seen</span>
+                    </span>
+                  </div>
+                ))}
+
+                {/* Unseen Members */}
+                {unseenMembers.map((u) => (
+                  <div key={u.id} className="pt-2 flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-2.5">
+                      <Avatar name={u.name} size="sm" />
+                      <span className="font-medium text-slate-600">{u.name}</span>
+                    </div>
+                    <span className="font-bold text-slate-300 text-sm px-2">
+                      —
+                    </span>
+                  </div>
+                ))}
+
+                {groupMembers.length === 0 && (
+                  <p className="text-xs text-slate-400 text-center py-6">No other members in this trip.</p>
+                )}
+              </div>
+
+              {/* Footer Close Button */}
+              <div className="pt-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setSeenByModalMsg(null)}
+                  className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-2xl transition-colors cursor-pointer"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 });
