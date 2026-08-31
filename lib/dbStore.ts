@@ -1330,6 +1330,204 @@ export const dbStore = {
     };
   },
 
+  async recordHostPayment(
+    tripId: string,
+    sessionUserId: string,
+    fromUserId: string,
+    toUserId: string,
+    paymentAmount: number,
+    note?: string
+  ): Promise<SettlementRecordDetail> {
+    await ensureDatabaseSeeded();
+
+    if (!paymentAmount || isNaN(paymentAmount) || paymentAmount <= 0) {
+      throw new Error('Payment amount must be greater than zero.');
+    }
+
+    const roundedPaymentAmount = Math.round(paymentAmount * 100) / 100;
+    const userSelect = { select: { id: true, name: true, email: true } };
+
+    const result = await prisma.$transaction(async (tx) => {
+      const trip = await tx.trip.findUnique({
+        where: { id: tripId },
+        include: {
+          members: { include: { user: userSelect } },
+          expenses: {
+            include: {
+              paidBy: userSelect,
+              createdBy: userSelect,
+              participants: { include: { user: userSelect } },
+            },
+          },
+          settlements: { include: { fromUser: userSelect, toUser: userSelect } },
+        },
+      });
+      if (!trip) throw new Error('Trip not found.');
+
+      // Check Host / Admin permission
+      const hostMember = trip.members.find((m) => m.userId === sessionUserId);
+      const isHost = trip.createdById === sessionUserId || hostMember?.role === 'ADMIN';
+      if (!isHost) {
+        throw new Error('Forbidden: Only the Host/Organizer can directly record settlement payments.');
+      }
+
+      const hostUser = await tx.user.findUnique({ where: { id: sessionUserId } });
+      const fromUser = await tx.user.findUnique({ where: { id: fromUserId } });
+      const toUser = await tx.user.findUnique({ where: { id: toUserId } });
+
+      if (!hostUser || !fromUser || !toUser) {
+        throw new Error('User not found.');
+      }
+
+      // DUPLICATE PROTECTION: Ensure the same payment is not accidentally recorded twice.
+      const sixtySecondsAgo = new Date(Date.now() - 60 * 1000);
+      const recentDuplicate = await tx.settlement.findFirst({
+        where: {
+          tripId,
+          fromUserId,
+          toUserId,
+          amount: roundedPaymentAmount,
+          createdAt: { gte: sixtySecondsAgo },
+        },
+      });
+
+      if (recentDuplicate) {
+        throw new Error(
+          `Duplicate payment detected: A payment of ${trip.currency || '₹'}${roundedPaymentAmount} from ${fromUser.name} to ${toUser.name} was already recorded less than a minute ago.`
+        );
+      }
+
+      // Calculate current outstanding debt between fromUserId and toUserId
+      const approvedExpenses: ExpenseDetail[] = trip.expenses
+        .filter((e) => e.status === 'APPROVED')
+        .map((e) => ({
+          ...e,
+          category: e.category as CategoryType,
+          date: e.date.toISOString(),
+          createdAt: e.createdAt.toISOString(),
+          updatedAt: e.updatedAt.toISOString(),
+          status: e.status as any,
+          participants: e.participants.map((p) => ({ ...p, user: p.user })),
+        }));
+
+      const settlementRecords: SettlementRecordDetail[] = trip.settlements.map((s) => ({
+        ...s,
+        status: s.status as any,
+        reversalRequestedAt: s.reversalRequestedAt ? s.reversalRequestedAt.toISOString() : null,
+        reversalRecipientDecision: s.reversalRecipientDecision as any,
+        reversalHostDecision: s.reversalHostDecision as any,
+        createdAt: s.createdAt.toISOString(),
+        updatedAt: s.updatedAt.toISOString(),
+      }));
+
+      const mappedMembers = trip.members.map((m) => ({
+        user: { id: m.user.id, name: m.user.name, email: m.user.email },
+      }));
+
+      const computedSettlements = computeSettlements(mappedMembers, approvedExpenses, settlementRecords);
+      const pairTx = computedSettlements.find(
+        (txItem) => txItem.fromUser.id === fromUserId && txItem.toUser.id === toUserId
+      );
+      const currentOutstanding = pairTx ? pairTx.amount : 0;
+
+      // Determine Settlement Status & Remaining Amount
+      let status: 'SETTLED' | 'PARTIALLY_SETTLED' = 'SETTLED';
+      let remainingAmount = 0;
+
+      if (currentOutstanding > 0 && roundedPaymentAmount < currentOutstanding) {
+        status = 'PARTIALLY_SETTLED';
+        remainingAmount = Math.round((currentOutstanding - roundedPaymentAmount) * 100) / 100;
+      } else {
+        status = 'SETTLED';
+        remainingAmount = 0;
+      }
+
+      // Check if an existing PENDING settlement from member to recipient exists that matches
+      const existingPending = await tx.settlement.findFirst({
+        where: {
+          tripId,
+          fromUserId,
+          toUserId,
+          status: 'PENDING',
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      let updatedOrCreatedSettlement;
+      if (existingPending && existingPending.amount === roundedPaymentAmount) {
+        updatedOrCreatedSettlement = await tx.settlement.update({
+          where: { id: existingPending.id },
+          data: {
+            settledAmount: roundedPaymentAmount,
+            remainingAmount,
+            status,
+            note: note ? note.trim() : existingPending.note,
+          },
+          include: { fromUser: true, toUser: true },
+        });
+      } else {
+        updatedOrCreatedSettlement = await tx.settlement.create({
+          data: {
+            id: generateObjectId(),
+            tripId,
+            fromUserId,
+            toUserId,
+            amount: roundedPaymentAmount,
+            settledAmount: roundedPaymentAmount,
+            remainingAmount,
+            status,
+            note: note ? note.trim() : null,
+          },
+          include: { fromUser: true, toUser: true },
+        });
+      }
+
+      // AUDIT LOG:
+      // "Whenever the Host records a payment, create an audit entry such as:
+      //  'Yash (Host) recorded ₹2,000 payment received from Parikshit.'
+      //  Also store the date/time of the action."
+      const auditDetails = `${hostUser.name} (Host) recorded ${trip.currency || '₹'}${roundedPaymentAmount} payment received from ${fromUser.name}.`;
+
+      await tx.activity.create({
+        data: {
+          id: generateObjectId(),
+          tripId,
+          userId: sessionUserId,
+          actionType: 'SETTLEMENT_CONFIRMED',
+          details: auditDetails,
+          amount: roundedPaymentAmount,
+          createdAt: new Date(),
+        },
+      });
+
+      return updatedOrCreatedSettlement;
+    });
+
+    return {
+      id: result.id,
+      tripId: result.tripId,
+      fromUserId: result.fromUserId,
+      fromUser: {
+        id: (result as any).fromUser?.id || fromUserId,
+        name: (result as any).fromUser?.name || 'User',
+        email: (result as any).fromUser?.email || '',
+      },
+      toUserId: result.toUserId,
+      toUser: {
+        id: (result as any).toUser?.id || toUserId,
+        name: (result as any).toUser?.name || 'User',
+        email: (result as any).toUser?.email || '',
+      },
+      amount: result.amount,
+      settledAmount: result.settledAmount || 0,
+      remainingAmount: result.remainingAmount ?? 0,
+      status: result.status as SettlementRecordDetail['status'],
+      note: result.note,
+      createdAt: result.createdAt.toISOString(),
+      updatedAt: result.updatedAt.toISOString(),
+    };
+  },
+
   async updateSettlementStatus(
     tripId: string,
     settlementId: string,

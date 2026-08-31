@@ -57,6 +57,9 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
 
   const outstandingAmount = transaction ? transaction.amount : 0;
 
+  // Determine if this is a Host recording payment received on behalf of a member
+  const isHostRecord = isAdmin && !!fromUser && fromUser.id !== currentUserId;
+
   useEffect(() => {
     if (transaction) {
       setCustomAmount(transaction.amount.toString());
@@ -67,16 +70,21 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
       setSelectedFromUserId(transaction.fromUser.id);
       setSelectedToUserId(transaction.toUser.id);
     } else if (members.length >= 2) {
-      setSelectedFromUserId(currentUserId);
       const firstOther = members.find((m) => m.userId !== currentUserId);
-      if (firstOther) setSelectedToUserId(firstOther.userId);
+      if (isAdmin && firstOther) {
+        setSelectedFromUserId(firstOther.userId);
+        setSelectedToUserId(currentUserId);
+      } else {
+        setSelectedFromUserId(currentUserId);
+        if (firstOther) setSelectedToUserId(firstOther.userId);
+      }
       setCustomAmount('');
       setIsEditingAmount(true);
       setNote('');
       setError('');
       setSuccessResult(null);
     }
-  }, [transaction, isOpen, currentUserId, members]);
+  }, [transaction, isOpen, currentUserId, members, isAdmin]);
 
   const numCustomAmount = parseFloat(customAmount);
   const amountToSettle = isNaN(numCustomAmount) ? 0 : Math.round(numCustomAmount * 100) / 100;
@@ -111,6 +119,7 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
           toUserId: toUser.id,
           paymentAmount: amountToSettle,
           note: note.trim() || undefined,
+          isHostRecord,
         }),
       });
 
@@ -123,10 +132,17 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
         fromUserName: fromUser.id === currentUserId ? 'You' : fromUser.name,
       });
 
-      showToast(
-        `✓ Sent ${formatCurrency(amountToSettle, currency)} to ${toUser.name} for approval`,
-        'success'
-      );
+      if (isHostRecord) {
+        showToast(
+          `✓ Recorded ${formatCurrency(amountToSettle, currency)} payment received from ${fromUser.name}`,
+          'success'
+        );
+      } else {
+        showToast(
+          `✓ Sent ${formatCurrency(amountToSettle, currency)} to ${toUser.name} for approval`,
+          'success'
+        );
+      }
 
       onSuccess();
     } catch (err: any) {
@@ -142,7 +158,11 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={handleDoneSuccess} title="Settle Up">
+    <Modal
+      isOpen={isOpen}
+      onClose={handleDoneSuccess}
+      title={isHostRecord ? 'Record Payment Received' : 'Settle Up'}
+    >
       {successResult ? (
         <div className="space-y-4 py-2 text-center animate-fade-in">
           <div className="w-14 h-14 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto">
@@ -154,7 +174,16 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
               {formatCurrency(successResult.paidAmount, currency)}
             </h3>
             <p className="text-xs font-semibold text-slate-600 mt-1">
-              Sent to <span className="text-slate-900 font-bold">{successResult.toUserName}</span> for host approval
+              {isHostRecord ? (
+                <>
+                  Recorded payment received from{' '}
+                  <span className="text-slate-900 font-bold">{successResult.fromUserName}</span>
+                </>
+              ) : (
+                <>
+                  Sent to <span className="text-slate-900 font-bold">{successResult.toUserName}</span> for approval
+                </>
+              )}
             </p>
           </div>
 
@@ -171,16 +200,72 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
             </div>
           )}
 
+          {/* Dynamic Member Dropdowns when creating payment without preselected transaction */}
+          {!transaction && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1">
+                  Payer (Who Paid?)
+                </label>
+                <select
+                  value={selectedFromUserId}
+                  onChange={(e) => setSelectedFromUserId(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 text-slate-900 text-xs font-bold rounded-xl p-2.5 focus:outline-none focus:border-emerald-500"
+                >
+                  {members.map((m) => (
+                    <option key={m.userId} value={m.userId}>
+                      {m.userId === currentUserId ? 'You (Host)' : m.user.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1">
+                  Recipient (Who Received?)
+                </label>
+                <select
+                  value={selectedToUserId}
+                  onChange={(e) => setSelectedToUserId(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 text-slate-900 text-xs font-bold rounded-xl p-2.5 focus:outline-none focus:border-emerald-500"
+                >
+                  {members.map((m) => (
+                    <option key={m.userId} value={m.userId}>
+                      {m.userId === currentUserId ? 'You (Host)' : m.user.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          )}
+
           {/* Simple Debt Summary Headline */}
           {fromUser && toUser && (
             <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 flex items-center gap-3">
-              <Avatar name={toUser.name} size="md" />
+              <Avatar name={isHostRecord ? fromUser.name : toUser.name} size="md" />
               <div>
-                <span className="text-xs text-slate-500 font-medium block">Debt Settlement</span>
+                <span className="text-xs text-slate-500 font-medium block">
+                  {isHostRecord ? 'Host Manual Record' : 'Debt Settlement'}
+                </span>
                 <h4 className="text-base font-extrabold text-slate-900">
-                  {fromUser.id === currentUserId ? 'You owe' : `${fromUser.name} owes`}{' '}
-                  <span className="text-emerald-700">{formatCurrency(outstandingAmount || amountToSettle, currency)}</span> to{' '}
-                  <span className="text-slate-900">{toUser.id === currentUserId ? 'You' : toUser.name}</span>
+                  {isHostRecord ? (
+                    <>
+                      Record payment received from{' '}
+                      <span className="text-slate-900 font-bold">{fromUser.name}</span>
+                      {outstandingAmount > 0 && (
+                        <>
+                          {' '}(owes{' '}
+                          <span className="text-emerald-700">{formatCurrency(outstandingAmount, currency)}</span>)
+                        </>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      {fromUser.id === currentUserId ? 'You owe' : `${fromUser.name} owes`}{' '}
+                      <span className="text-emerald-700">{formatCurrency(outstandingAmount || amountToSettle, currency)}</span> to{' '}
+                      <span className="text-slate-900">{toUser.id === currentUserId ? 'You' : toUser.name}</span>
+                    </>
+                  )}
                 </h4>
               </div>
             </div>
@@ -246,9 +331,9 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
             <Button
               type="submit"
               isLoading={isLoading}
-              className="flex-1 text-xs font-bold py-3"
+              className="flex-1 text-xs font-bold py-3 bg-emerald-600 hover:bg-emerald-700 text-white"
             >
-              Confirm Payment
+              {isHostRecord ? 'Record Payment Received' : 'Confirm Payment'}
             </Button>
           </div>
         </form>

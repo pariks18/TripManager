@@ -12,10 +12,22 @@ export async function POST(
   }
 
   try {
-    const { fromUserId, toUserId, paymentAmount, note } = await request.json();
+    const { fromUserId, toUserId, paymentAmount, note, isHostRecord } = await request.json();
 
     if (!fromUserId || !toUserId || !paymentAmount || paymentAmount <= 0) {
       return NextResponse.json({ error: 'Invalid settlement payment payload' }, { status: 400 });
+    }
+
+    if (isHostRecord) {
+      const record = await dbStore.recordHostPayment(
+        params.tripId,
+        user.id,
+        fromUserId,
+        toUserId,
+        paymentAmount,
+        note
+      );
+      return NextResponse.json({ record });
     }
 
     if (fromUserId !== user.id) {
@@ -36,6 +48,7 @@ export async function POST(
 
     return NextResponse.json({ record });
   } catch (error: any) {
-    return NextResponse.json({ error: error.message || 'Failed to process settlement payment' }, { status: 400 });
+    const status = error.message?.includes('Forbidden') ? 403 : 400;
+    return NextResponse.json({ error: error.message || 'Failed to process settlement payment' }, { status });
   }
 }

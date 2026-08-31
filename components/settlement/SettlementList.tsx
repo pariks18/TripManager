@@ -882,9 +882,19 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
                     </button>
                   </div>
 
-                  <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-800 bg-emerald-50 px-3 py-1.5 rounded-2xl border border-emerald-200">
-                    Awaiting payment
-                  </span>
+                  {isAdmin ? (
+                    <button
+                      onClick={() => handleOpenSettleModal(tx)}
+                      className="flex items-center gap-1.5 text-xs font-extrabold px-4 py-2 rounded-2xl bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm transition-all active:scale-[0.98] cursor-pointer"
+                    >
+                      <CheckCircle2 className="w-4 h-4" />
+                      Record Payment
+                    </button>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-800 bg-emerald-50 px-3 py-1.5 rounded-2xl border border-emerald-200">
+                      Awaiting payment
+                    </span>
+                  )}
                 </div>
               </div>
             ))}
