@@ -12,16 +12,11 @@ import {
   ChevronDown,
   ChevronUp,
   CheckCircle2,
-  XCircle,
-  Clock,
   Trash2,
   Loader2,
-  Sparkles,
-  Heart,
   Ban,
   UserCheck,
-  Tag,
-  Settings,
+  RotateCcw,
 } from 'lucide-react';
 
 interface TripChecklistViewProps {
@@ -75,11 +70,6 @@ export const TripChecklistView: React.FC<TripChecklistViewProps> = React.memo(({
   const [assignedToId, setAssignedToId] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Gender Modal
-  const [isGenderModalOpen, setIsGenderModalOpen] = useState(false);
-  const [genderInput, setGenderInput] = useState('');
-  const [isSavingGender, setIsSavingGender] = useState(false);
-
   const fetchChecklist = async () => {
     setIsLoading(true);
     try {
@@ -90,9 +80,6 @@ export const TripChecklistView: React.FC<TripChecklistViewProps> = React.memo(({
       setGroupItems(data.groupItems || []);
       setPersonalItems(data.personalItems || []);
       setUserGender(data.userGender || null);
-      if (data.userGender) {
-        setGenderInput(data.userGender);
-      }
     } catch (err: any) {
       setError(err.message || 'Failed to load checklist');
     } finally {
@@ -106,40 +93,52 @@ export const TripChecklistView: React.FC<TripChecklistViewProps> = React.memo(({
     }
   }, [tripId]);
 
+  // Single Source of Truth for Profile Gender
   const isFemale = useMemo(() => {
-    if (!userGender) return false;
-    const g = userGender.trim().toLowerCase();
+    const g = (userGender || (currentUser as any)?.gender || '').trim().toLowerCase();
     return ['female', 'woman', 'w', 'f'].includes(g);
-  }, [userGender]);
+  }, [userGender, currentUser]);
 
   const currentItems = section === 'GROUP' ? groupItems : personalItems;
 
-  // Group items by category
+  // Separate Active items vs Removed Default items
+  const activeItems = useMemo(() => {
+    return currentItems.filter((i) => i.status !== 'REMOVED');
+  }, [currentItems]);
+
+  const removedItems = useMemo(() => {
+    return currentItems.filter((i) => i.status === 'REMOVED');
+  }, [currentItems]);
+
+  // Group active items by category
   const categoriesMap = useMemo(() => {
     const map: { [cat: string]: ChecklistItemDetail[] } = {};
-    currentItems.forEach((item) => {
+    activeItems.forEach((item) => {
+      // Hide Women's Essentials category for non-female profiles
+      if (item.category.includes("Women's Essentials") && !isFemale) {
+        return;
+      }
       if (!map[item.category]) {
         map[item.category] = [];
       }
       map[item.category].push(item);
     });
     return map;
-  }, [currentItems]);
+  }, [activeItems, isFemale]);
 
   const categoriesList = useMemo(() => {
     return Object.keys(categoriesMap).sort((a, b) => {
-      // Prioritize Women's Essentials at top of Personal if present
       if (a.includes("Women's Essentials")) return -1;
       if (b.includes("Women's Essentials")) return 1;
       return a.localeCompare(b);
     });
   }, [categoriesMap]);
 
-  // Overall Progress calculation
-  const totalItemsCount = currentItems.length;
-  const noNeedCount = currentItems.filter((i) => i.status === 'NO_NEED').length;
+  // Overall Progress calculation (based strictly on active items)
+  const totalItemsCount = activeItems.length;
+  const noNeedCount = activeItems.filter((i) => i.status === 'NO_NEED').length;
   const requiredItemsCount = Math.max(0, totalItemsCount - noNeedCount);
-  const doneItemsCount = currentItems.filter((i) => i.status === 'DONE').length;
+  const doneItemsCount = activeItems.filter((i) => i.status === 'DONE').length;
   const progressPercent = requiredItemsCount > 0 ? Math.round((doneItemsCount / requiredItemsCount) * 100) : 0;
 
   const toggleCategoryCollapse = (cat: string) => {
@@ -149,7 +148,7 @@ export const TripChecklistView: React.FC<TripChecklistViewProps> = React.memo(({
     }));
   };
 
-  const handleUpdateStatus = async (item: ChecklistItemDetail, newStatus: 'PENDING' | 'DONE' | 'NO_NEED') => {
+  const handleUpdateStatus = async (item: ChecklistItemDetail, newStatus: 'PENDING' | 'DONE' | 'NO_NEED' | 'REMOVED') => {
     // Optimistic update
     const updater = (prev: ChecklistItemDetail[]) =>
       prev.map((i) =>
@@ -175,7 +174,6 @@ export const TripChecklistView: React.FC<TripChecklistViewProps> = React.memo(({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to update item status');
 
-      // Update with server response
       const serverUpdater = (prev: ChecklistItemDetail[]) =>
         prev.map((i) => (i.id === data.item.id ? data.item : i));
       if (item.type === 'GROUP') setGroupItems(serverUpdater);
@@ -212,9 +210,18 @@ export const TripChecklistView: React.FC<TripChecklistViewProps> = React.memo(({
   };
 
   const handleDeleteItem = async (item: ChecklistItemDetail) => {
-    const updater = (prev: ChecklistItemDetail[]) => prev.filter((i) => i.id !== item.id);
-    if (item.type === 'GROUP') setGroupItems(updater);
-    else setPersonalItems(updater);
+    if (!item.isCustom) {
+      // Soft-remove default item (moves to Removed Items)
+      const updater = (prev: ChecklistItemDetail[]) =>
+        prev.map((i) => (i.id === item.id ? { ...i, status: 'REMOVED' as const } : i));
+      if (item.type === 'GROUP') setGroupItems(updater);
+      else setPersonalItems(updater);
+    } else {
+      // Hard-delete custom item
+      const updater = (prev: ChecklistItemDetail[]) => prev.filter((i) => i.id !== item.id);
+      if (item.type === 'GROUP') setGroupItems(updater);
+      else setPersonalItems(updater);
+    }
 
     try {
       const res = await fetch(`/api/trips/${tripId}/checklist/${item.id}`, {
@@ -265,29 +272,13 @@ export const TripChecklistView: React.FC<TripChecklistViewProps> = React.memo(({
     }
   };
 
-  const handleSaveGender = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!genderInput.trim() || isSavingGender) return;
-
-    setIsSavingGender(true);
-    try {
-      const res = await fetch('/api/user/gender', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ gender: genderInput.trim() }),
-      });
-      if (!res.ok) throw new Error('Failed to update gender profile');
-      setUserGender(genderInput.trim());
-      setIsGenderModalOpen(false);
-      fetchChecklist();
-    } catch (err: any) {
-      setError(err.message || 'Failed to update gender profile');
-    } finally {
-      setIsSavingGender(false);
+  const categoryOptions = useMemo(() => {
+    const raw = section === 'GROUP' ? DEFAULT_GROUP_CATEGORIES : DEFAULT_PERSONAL_CATEGORIES;
+    if (section === 'PERSONAL' && !isFemale) {
+      return raw.filter((c) => !c.includes("Women's Essentials"));
     }
-  };
-
-  const categoryOptions = section === 'GROUP' ? DEFAULT_GROUP_CATEGORIES : DEFAULT_PERSONAL_CATEGORIES;
+    return raw;
+  }, [section, isFemale]);
 
   return (
     <div className="space-y-5 max-w-4xl mx-auto pb-12">
@@ -365,33 +356,20 @@ export const TripChecklistView: React.FC<TripChecklistViewProps> = React.memo(({
               : 'Private list exclusive to you'}
           </span>
 
-          <div className="flex items-center gap-2">
-            {section === 'PERSONAL' && (
-              <button
-                type="button"
-                onClick={() => setIsGenderModalOpen(true)}
-                className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer"
-              >
-                <Settings className="w-3.5 h-3.5 text-slate-500" />
-                <span>Profile Gender ({userGender || 'Not Set'})</span>
-              </button>
-            )}
-
-            <button
-              type="button"
-              onClick={() => {
-                setItemCategory(categoryOptions[0]);
-                setIsAddModalOpen(true);
-              }}
-              className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
-            >
-              <Plus className="w-4 h-4" /> Add Item
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setItemCategory(categoryOptions[0]);
+              setIsAddModalOpen(true);
+            }}
+            className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
+          >
+            <Plus className="w-4 h-4" /> Add Item
+          </button>
         </div>
       </div>
 
-      {/* Women's Essentials Banner Notice for Personal Checklist */}
+      {/* Existing Pink Women's Essentials Note (Preserved EXACTLY as originally rendered) */}
       {section === 'PERSONAL' && isFemale && (
         <div className="bg-pink-50 border border-pink-200/90 rounded-2xl p-3.5 flex items-center justify-between text-xs text-pink-900">
           <div className="flex items-center gap-2.5">
@@ -410,7 +388,7 @@ export const TripChecklistView: React.FC<TripChecklistViewProps> = React.memo(({
           <Loader2 className="w-6 h-6 animate-spin text-emerald-500" />
           <span className="text-xs font-medium">Loading checklist items...</span>
         </div>
-      ) : categoriesList.length === 0 ? (
+      ) : categoriesList.length === 0 && removedItems.length === 0 ? (
         <div className="text-center py-16 bg-white rounded-3xl border border-slate-200/80 p-6 space-y-3">
           <CheckSquare className="w-10 h-10 text-slate-300 mx-auto" />
           <h4 className="text-sm font-bold text-slate-700">No items found</h4>
@@ -464,7 +442,6 @@ export const TripChecklistView: React.FC<TripChecklistViewProps> = React.memo(({
                     {items.map((item) => {
                       const isDone = item.status === 'DONE';
                       const isNoNeed = item.status === 'NO_NEED';
-                      const isPending = item.status === 'PENDING';
 
                       return (
                         <div
@@ -560,13 +537,13 @@ export const TripChecklistView: React.FC<TripChecklistViewProps> = React.memo(({
                             </div>
                           </div>
 
-                          {/* Right Actions: Delete */}
+                          {/* Right Actions: Delete / Remove */}
                           <div className="flex items-center gap-1 shrink-0">
                             <button
                               type="button"
                               onClick={() => handleDeleteItem(item)}
                               className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer"
-                              title="Delete item"
+                              title={item.isCustom ? 'Delete custom item' : 'Remove default item'}
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
@@ -579,10 +556,58 @@ export const TripChecklistView: React.FC<TripChecklistViewProps> = React.memo(({
               </div>
             );
           })}
+
+          {/* 3. Removed Items Section (Soft-removed default items available for + Add Again) */}
+          {removedItems.length > 0 && (
+            <div className="bg-slate-50/90 rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden mt-6">
+              <div
+                onClick={() => toggleCategoryCollapse('__REMOVED__')}
+                className="p-4 bg-slate-100/90 border-b border-slate-200/80 flex items-center justify-between cursor-pointer select-none"
+              >
+                <div className="flex items-center gap-2">
+                  <h4 className="text-xs font-extrabold text-slate-700 uppercase tracking-wider">
+                    Removed Items ({removedItems.length})
+                  </h4>
+                  <span className="text-[10px] text-slate-500 font-medium hidden sm:inline">
+                    Can be restored anytime
+                  </span>
+                </div>
+                {collapsedCategories['__REMOVED__'] ? (
+                  <ChevronDown className="w-4 h-4 text-slate-400" />
+                ) : (
+                  <ChevronUp className="w-4 h-4 text-slate-400" />
+                )}
+              </div>
+
+              {!collapsedCategories['__REMOVED__'] && (
+                <div className="divide-y divide-slate-200/60 bg-white">
+                  {removedItems.map((item) => (
+                    <div key={item.id} className="p-3.5 flex items-center justify-between gap-3 text-xs">
+                      <div className="min-w-0 flex-1 flex items-center gap-2.5">
+                        <span className="font-semibold text-slate-500 line-through truncate">{item.title}</span>
+                        <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-md shrink-0">
+                          {item.category}
+                        </span>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => handleUpdateStatus(item, 'PENDING')}
+                        className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-bold rounded-xl border border-emerald-200/80 transition-colors flex items-center gap-1 cursor-pointer shrink-0"
+                      >
+                        <Plus className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>Add Again</span>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 
-      {/* 3. Add Custom Item Modal */}
+      {/* 4. Add Custom Item Modal */}
       <Modal
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
@@ -671,52 +696,6 @@ export const TripChecklistView: React.FC<TripChecklistViewProps> = React.memo(({
               className="flex-1 py-3 px-4 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white text-xs font-bold rounded-2xl shadow-sm transition-all flex items-center justify-center gap-1.5 cursor-pointer"
             >
               {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save Item'}
-            </button>
-          </div>
-        </form>
-      </Modal>
-
-      {/* 4. Edit Gender Modal */}
-      <Modal
-        isOpen={isGenderModalOpen}
-        onClose={() => setIsGenderModalOpen(false)}
-        title="Profile Gender Preference"
-      >
-        <form onSubmit={handleSaveGender} className="space-y-4 py-1">
-          <p className="text-xs text-slate-600 leading-relaxed">
-            Women's Essentials categories are displayed inside the Personal Checklist when your gender is set to Female or Woman.
-          </p>
-
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 tracking-wide uppercase mb-1.5">
-              Select Gender
-            </label>
-            <select
-              value={genderInput}
-              onChange={(e) => setGenderInput(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 text-slate-900 text-xs font-bold rounded-2xl p-3 focus:outline-none focus:border-emerald-500 focus:bg-white"
-            >
-              <option value="Female">Female / Woman</option>
-              <option value="Male">Male / Man</option>
-              <option value="Non-binary">Non-binary / Other</option>
-              <option value="Prefer not to say">Prefer not to say</option>
-            </select>
-          </div>
-
-          <div className="pt-2 flex gap-2">
-            <button
-              type="button"
-              onClick={() => setIsGenderModalOpen(false)}
-              className="flex-1 py-3 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-2xl transition-colors cursor-pointer"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={isSavingGender}
-              className="flex-1 py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-2xl shadow-sm transition-all flex items-center justify-center gap-1.5 cursor-pointer"
-            >
-              {isSavingGender ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save Gender Preference'}
             </button>
           </div>
         </form>

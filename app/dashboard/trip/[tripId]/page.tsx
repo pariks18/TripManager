@@ -437,51 +437,57 @@ export default function TripDashboardPage() {
 
       {/* Main Workspace */}
       <main className="w-full max-w-4xl mx-auto px-3 py-4 sm:px-6 space-y-5">
-        {/* Primary 4 Navigation Tabs */}
-        <div className="flex items-center p-1 bg-slate-200/60 rounded-2xl text-xs font-bold text-slate-600 overflow-x-auto no-scrollbar scroll-smooth whitespace-nowrap min-w-0">
-          <button
-            onClick={() => setActiveTab('overview')}
-            className={`flex-1 py-2.5 px-3 rounded-xl transition-all flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer ${
-              activeTab === 'overview'
-                ? 'bg-white text-slate-900 shadow-sm font-extrabold'
-                : 'hover:text-slate-900'
-            }`}
-          >
-            <LayoutDashboard className="w-4 h-4 text-emerald-600" /> Summary
-          </button>
+        {/* Primary 4 Navigation Tabs - Sticky Top & Fixed 4-Column Grid (No Horizontal Scroll) */}
+        <div className="sticky top-0 z-30 bg-slate-50/95 backdrop-blur-md py-2 -mx-1 px-1 sm:mx-0 sm:px-0">
+          <div className="grid grid-cols-4 gap-1 p-1 bg-slate-200/70 rounded-2xl text-[11px] sm:text-xs font-bold text-slate-600 w-full max-w-4xl mx-auto shadow-xs border border-slate-200/60 select-none">
+            <button
+              onClick={() => setActiveTab('overview')}
+              className={`py-2 sm:py-2.5 px-1 sm:px-3 rounded-xl transition-all flex items-center justify-center gap-1 sm:gap-1.5 cursor-pointer min-w-0 ${
+                activeTab === 'overview'
+                  ? 'bg-white text-slate-900 shadow-sm font-extrabold'
+                  : 'hover:text-slate-900'
+              }`}
+            >
+              <LayoutDashboard className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-600 shrink-0" />
+              <span className="truncate">Summary</span>
+            </button>
 
-          <button
-            onClick={() => setActiveTab('expenses')}
-            className={`flex-1 py-2.5 px-3 rounded-xl transition-all flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer ${
-              activeTab === 'expenses'
-                ? 'bg-white text-slate-900 shadow-sm font-extrabold'
-                : 'hover:text-slate-900'
-            }`}
-          >
-            <Receipt className="w-4 h-4 text-emerald-600" /> Expenses
-          </button>
+            <button
+              onClick={() => setActiveTab('expenses')}
+              className={`py-2 sm:py-2.5 px-1 sm:px-3 rounded-xl transition-all flex items-center justify-center gap-1 sm:gap-1.5 cursor-pointer min-w-0 ${
+                activeTab === 'expenses'
+                  ? 'bg-white text-slate-900 shadow-sm font-extrabold'
+                  : 'hover:text-slate-900'
+              }`}
+            >
+              <Receipt className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-600 shrink-0" />
+              <span className="truncate">Expenses</span>
+            </button>
 
-          <button
-            onClick={() => setActiveTab('settlement')}
-            className={`flex-1 py-2.5 px-3 rounded-xl transition-all flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer ${
-              activeTab === 'settlement'
-                ? 'bg-white text-slate-900 shadow-sm font-extrabold'
-                : 'hover:text-slate-900'
-            }`}
-          >
-            <ArrowLeftRight className="w-4 h-4 text-emerald-600" /> Settle
-          </button>
+            <button
+              onClick={() => setActiveTab('settlement')}
+              className={`py-2 sm:py-2.5 px-1 sm:px-3 rounded-xl transition-all flex items-center justify-center gap-1 sm:gap-1.5 cursor-pointer min-w-0 ${
+                activeTab === 'settlement'
+                  ? 'bg-white text-slate-900 shadow-sm font-extrabold'
+                  : 'hover:text-slate-900'
+              }`}
+            >
+              <ArrowLeftRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-600 shrink-0" />
+              <span className="truncate">Settle</span>
+            </button>
 
-          <button
-            onClick={() => setActiveTab('trip')}
-            className={`flex-1 py-2.5 px-3 rounded-xl transition-all flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer ${
-              activeTab === 'trip' || ['approvals', 'timeline', 'analytics'].includes(activeTab)
-                ? 'bg-white text-slate-900 shadow-sm font-extrabold'
-                : 'hover:text-slate-900'
-            }`}
-          >
-            <Compass className="w-4 h-4 text-emerald-600" /> Trip Details
-          </button>
+            <button
+              onClick={() => setActiveTab('trip')}
+              className={`py-2 sm:py-2.5 px-1 sm:px-3 rounded-xl transition-all flex items-center justify-center gap-1 sm:gap-1.5 cursor-pointer min-w-0 ${
+                activeTab === 'trip' || ['approvals', 'timeline', 'analytics', 'checklist'].includes(activeTab)
+                  ? 'bg-white text-slate-900 shadow-sm font-extrabold'
+                  : 'hover:text-slate-900'
+              }`}
+            >
+              <Compass className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-600 shrink-0" />
+              <span className="truncate">Trip Details</span>
+            </button>
+          </div>
         </div>
 
         {/* TAB 1: OVERVIEW & PERSONAL DASHBOARD */}

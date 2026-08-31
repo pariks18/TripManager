@@ -410,7 +410,7 @@ export interface ChecklistItemDetail {
   userId?: string | null;
   title: string;
   category: string;
-  status: 'PENDING' | 'DONE' | 'NO_NEED';
+  status: 'PENDING' | 'DONE' | 'NO_NEED' | 'REMOVED';
   assignedToId?: string | null;
   assignedTo?: UserSummary | null;
   completedById?: string | null;

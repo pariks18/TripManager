@@ -4308,7 +4308,7 @@ export const dbStore = {
       userId: item.userId,
       title: item.title,
       category: item.category,
-      status: item.status as 'PENDING' | 'DONE' | 'NO_NEED',
+      status: item.status as 'PENDING' | 'DONE' | 'NO_NEED' | 'REMOVED',
       assignedToId: item.assignedToId,
       assignedTo: item.assignedTo ? { id: item.assignedTo.id, name: item.assignedTo.name, email: item.assignedTo.email } : null,
       completedById: item.completedById,
@@ -4377,7 +4377,7 @@ export const dbStore = {
       userId: item.userId,
       title: item.title,
       category: item.category,
-      status: item.status as 'PENDING' | 'DONE' | 'NO_NEED',
+      status: item.status as 'PENDING' | 'DONE' | 'NO_NEED' | 'REMOVED',
       assignedToId: item.assignedToId,
       assignedTo: item.assignedTo ? { id: item.assignedTo.id, name: item.assignedTo.name, email: item.assignedTo.email } : null,
       completedById: item.completedById,
@@ -4393,7 +4393,7 @@ export const dbStore = {
     itemId: string,
     currentUserId: string,
     data: {
-      status?: 'PENDING' | 'DONE' | 'NO_NEED';
+      status?: 'PENDING' | 'DONE' | 'NO_NEED' | 'REMOVED';
       assignedToId?: string | null;
       title?: string;
     }
@@ -4454,7 +4454,7 @@ export const dbStore = {
       userId: updated.userId,
       title: updated.title,
       category: updated.category,
-      status: updated.status as 'PENDING' | 'DONE' | 'NO_NEED',
+      status: updated.status as 'PENDING' | 'DONE' | 'NO_NEED' | 'REMOVED',
       assignedToId: updated.assignedToId,
       assignedTo: updated.assignedTo ? { id: updated.assignedTo.id, name: updated.assignedTo.name, email: updated.assignedTo.email } : null,
       completedById: updated.completedById,
@@ -4483,9 +4483,21 @@ export const dbStore = {
       throw new Error('Forbidden: You cannot delete another member’s personal checklist item.');
     }
 
-    await prisma.checklistItem.delete({
-      where: { id: itemId },
-    });
+    // Default items are soft-removed (status = 'REMOVED'); Custom items are hard-deleted.
+    if (item.isCustom) {
+      await prisma.checklistItem.delete({
+        where: { id: itemId },
+      });
+    } else {
+      await prisma.checklistItem.update({
+        where: { id: itemId },
+        data: {
+          status: 'REMOVED',
+          completedById: null,
+          completedAt: null,
+        },
+      });
+    }
 
     return true;
   },
