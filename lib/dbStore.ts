@@ -381,6 +381,12 @@ export const dbStore = {
             select: {
               amount: true,
               paidById: true,
+              payers: {
+                select: {
+                  userId: true,
+                  amount: true,
+                },
+              },
               participants: {
                 select: {
                   userId: true,
@@ -451,7 +457,13 @@ export const dbStore = {
     let share = 0;
 
     trip.expenses.forEach((e) => {
-      if (e.paidById === userId) {
+      if ((e as any).payers && (e as any).payers.length > 0) {
+        (e as any).payers.forEach((p: any) => {
+          if (p.userId === userId) {
+            paid += p.amount;
+          }
+        });
+      } else if (e.paidById === userId) {
         paid += e.amount;
       }
 
@@ -567,6 +579,7 @@ export const dbStore = {
             paidBy: userSelect,
             createdBy: userSelect,
             participants: { include: { user: userSelect } },
+            payers: { include: { user: userSelect } },
             editRequests: { include: { requestedBy: userSelect } },
           },
         },
@@ -604,6 +617,13 @@ export const dbStore = {
         expenseId: p.expenseId,
         userId: p.userId,
         shareAmount: p.shareAmount,
+        user: { id: p.user.id, name: p.user.name, email: p.user.email },
+      })),
+      payers: (e as any).payers?.map((p: any) => ({
+        id: p.id,
+        expenseId: p.expenseId,
+        userId: p.userId,
+        amount: p.amount,
         user: { id: p.user.id, name: p.user.name, email: p.user.email },
       })),
       editRequests: e.editRequests?.map((req) => ({
@@ -838,7 +858,8 @@ export const dbStore = {
     paidById: string,
     createdById: string,
     participantUserIds: string[],
-    receiptUrl?: string | null
+    receiptUrl?: string | null,
+    payers?: { userId: string; amount: number }[]
   ): Promise<ExpenseDetail> {
     await ensureDatabaseSeeded();
 
@@ -852,6 +873,18 @@ export const dbStore = {
       throw new Error('Trip is locked by the organizer. New expenses cannot be added.');
     }
 
+    const payersList = payers && payers.length > 0 ? payers : [{ userId: paidById, amount }];
+
+    if (payersList.length > 1) {
+      const sumPayers = Math.round(payersList.reduce((sum, p) => sum + p.amount, 0) * 100) / 100;
+      if (Math.abs(sumPayers - amount) > 0.01) {
+        throw new Error(
+          `The sum of individual amounts paid (${trip.currency || '₹'}${sumPayers}) must equal the total expense amount (${trip.currency || '₹'}${amount}).`
+        );
+      }
+    }
+
+    const effectivePaidById = paidById || payersList[0].userId;
     const shareAmount = participantUserIds.length > 0 ? amount / participantUserIds.length : 0;
     const expenseObjectId = generateObjectId();
 
@@ -869,7 +902,7 @@ export const dbStore = {
           title,
           amount,
           category,
-          paidById,
+          paidById: effectivePaidById,
           createdById,
           status,
           receiptUrl: receiptUrl || null,
@@ -881,11 +914,21 @@ export const dbStore = {
               shareAmount,
             })),
           },
+          payers: {
+            create: payersList.map((p) => ({
+              id: generateObjectId(),
+              userId: p.userId,
+              amount: p.amount,
+            })),
+          },
         },
         include: {
           paidBy: { select: { id: true, name: true, email: true } },
           createdBy: { select: { id: true, name: true, email: true } },
           participants: {
+            include: { user: { select: { id: true, name: true, email: true } } },
+          },
+          payers: {
             include: { user: { select: { id: true, name: true, email: true } } },
           },
         },
@@ -926,6 +969,13 @@ export const dbStore = {
         shareAmount: p.shareAmount,
         user: { id: p.user.id, name: p.user.name, email: p.user.email },
       })),
+      payers: result.payers.map((p) => ({
+        id: p.id,
+        expenseId: p.expenseId,
+        userId: p.userId,
+        amount: p.amount,
+        user: { id: p.user.id, name: p.user.name, email: p.user.email },
+      })),
     };
   },
 
@@ -937,7 +987,8 @@ export const dbStore = {
     category: CategoryType,
     paidById: string,
     participantUserIds: string[],
-    receiptUrl?: string | null
+    receiptUrl?: string | null,
+    payers?: { userId: string; amount: number }[]
   ): Promise<ExpenseDetail> {
     await ensureDatabaseSeeded();
 
@@ -962,10 +1013,23 @@ export const dbStore = {
       throw new Error('Trip is locked by the organizer. Expenses cannot be updated.');
     }
 
+    const payersList = payers && payers.length > 0 ? payers : [{ userId: paidById, amount }];
+
+    if (payersList.length > 1) {
+      const sumPayers = Math.round(payersList.reduce((sum, p) => sum + p.amount, 0) * 100) / 100;
+      if (Math.abs(sumPayers - amount) > 0.01) {
+        throw new Error(
+          `The sum of individual amounts paid (${existingExpense.trip.currency || '₹'}${sumPayers}) must equal the total expense amount (${existingExpense.trip.currency || '₹'}${amount}).`
+        );
+      }
+    }
+
+    const effectivePaidById = paidById || payersList[0].userId;
     const shareAmount = participantUserIds.length > 0 ? amount / participantUserIds.length : 0;
 
     const updated = await prisma.$transaction(async (tx) => {
       await tx.expenseParticipant.deleteMany({ where: { expenseId } });
+      await tx.expensePayer.deleteMany({ where: { expenseId } });
 
       const updatedExp = await tx.expense.update({
         where: { id: expenseId },
@@ -973,7 +1037,7 @@ export const dbStore = {
           title,
           amount,
           category,
-          paidById,
+          paidById: effectivePaidById,
           lastUpdatedById: currentUserId,
           receiptUrl: receiptUrl !== undefined ? receiptUrl : existingExpense.receiptUrl,
           participants: {
@@ -983,11 +1047,19 @@ export const dbStore = {
               shareAmount,
             })),
           },
+          payers: {
+            create: payersList.map((p) => ({
+              id: generateObjectId(),
+              userId: p.userId,
+              amount: p.amount,
+            })),
+          },
         },
         include: {
           paidBy: true,
           createdBy: true,
           participants: { include: { user: true } },
+          payers: { include: { user: true } },
         },
       });
 
@@ -1024,6 +1096,13 @@ export const dbStore = {
         expenseId: p.expenseId,
         userId: p.userId,
         shareAmount: p.shareAmount,
+        user: { id: p.user.id, name: p.user.name, email: p.user.email },
+      })),
+      payers: updated.payers.map((p) => ({
+        id: p.id,
+        expenseId: p.expenseId,
+        userId: p.userId,
+        amount: p.amount,
         user: { id: p.user.id, name: p.user.name, email: p.user.email },
       })),
     };

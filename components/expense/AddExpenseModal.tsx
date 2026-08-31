@@ -77,6 +77,9 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
   const isCreatorAdmin = isAdmin;
   const isEditRequestRequired = approvalMode && existingExpense && existingExpense.status === 'APPROVED' && !isCreatorAdmin;
 
+  const [selectedPayerIds, setSelectedPayerIds] = useState<string[]>([currentUserId]);
+  const [payerAmounts, setPayerAmounts] = useState<{ [userId: string]: string }>({});
+
   useEffect(() => {
     if (existingExpense) {
       setTitle(existingExpense.title);
@@ -85,16 +88,86 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
       setPaidById(existingExpense.paidById);
       setSplitBetween(existingExpense.participants.map((p) => p.userId));
       setReceiptUrl(existingExpense.receiptUrl || null);
+
+      if (existingExpense.payers && existingExpense.payers.length > 1) {
+        setSelectedPayerIds(existingExpense.payers.map((p) => p.userId));
+        const amountsMap: { [userId: string]: string } = {};
+        existingExpense.payers.forEach((p) => {
+          amountsMap[p.userId] = p.amount.toString();
+        });
+        setPayerAmounts(amountsMap);
+      } else {
+        setSelectedPayerIds([existingExpense.paidById]);
+        setPayerAmounts({ [existingExpense.paidById]: existingExpense.amount.toString() });
+      }
     } else {
       setTitle('');
       setAmount('');
       setCategory('Food');
       setPaidById(currentUserId);
+      setSelectedPayerIds([currentUserId]);
+      setPayerAmounts({ [currentUserId]: '' });
       setSplitBetween(members.map((m) => m.userId));
       setReceiptUrl(null);
     }
     setError('');
   }, [existingExpense, isOpen, currentUserId, members]);
+
+  const togglePayer = (userId: string, isMultiMode: boolean = false) => {
+    if (!isMultiMode) {
+      // Single Payer Selection: Set exactly 1 payer
+      setSelectedPayerIds([userId]);
+      setPaidById(userId);
+      setPayerAmounts({ [userId]: amount });
+      return;
+    }
+
+    // Multiple Payers Toggle
+    if (selectedPayerIds.includes(userId)) {
+      if (selectedPayerIds.length === 1) return;
+      const nextPayerIds = selectedPayerIds.filter((id) => id !== userId);
+      setSelectedPayerIds(nextPayerIds);
+      if (nextPayerIds.length === 1) {
+        setPaidById(nextPayerIds[0]);
+      }
+    } else {
+      const nextPayerIds = [...selectedPayerIds, userId];
+      setSelectedPayerIds(nextPayerIds);
+      const numAmt = parseFloat(amount);
+      if (!isNaN(numAmt) && numAmt > 0) {
+        const equalShare = (numAmt / nextPayerIds.length).toFixed(2);
+        const newAmountsMap: { [key: string]: string } = {};
+        nextPayerIds.forEach((id) => {
+          newAmountsMap[id] = equalShare;
+        });
+        setPayerAmounts(newAmountsMap);
+      }
+    }
+  };
+
+  const autoDistributePayerAmounts = () => {
+    const numAmt = parseFloat(amount);
+    if (isNaN(numAmt) || numAmt <= 0 || selectedPayerIds.length === 0) return;
+    const equalShare = (numAmt / selectedPayerIds.length).toFixed(2);
+    const newAmountsMap: { [key: string]: string } = {};
+    selectedPayerIds.forEach((id) => {
+      newAmountsMap[id] = equalShare;
+    });
+    setPayerAmounts(newAmountsMap);
+  };
+
+  const isMultiPayer = selectedPayerIds.length >= 2;
+
+  const totalPayerAmount = isMultiPayer
+    ? selectedPayerIds.reduce((sum, uid) => {
+        const val = parseFloat(payerAmounts[uid] || '0');
+        return sum + (isNaN(val) ? 0 : val);
+      }, 0)
+    : parseFloat(amount) || 0;
+
+  const roundedTotalPayerAmount = Math.round(totalPayerAmount * 100) / 100;
+  const numExpenseAmount = parseFloat(amount) || 0;
+  const isPayerSumValid = !isMultiPayer || Math.abs(roundedTotalPayerAmount - numExpenseAmount) < 0.01;
 
   const [isUploadingReceipt, setIsUploadingReceipt] = useState(false);
 
@@ -167,8 +240,26 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
       return;
     }
 
+    if (isMultiPayer) {
+      if (!isPayerSumValid) {
+        const diff = Math.round(Math.abs(roundedTotalPayerAmount - numAmount) * 100) / 100;
+        setError(
+          `The sum of individual amounts paid (${formatCurrency(roundedTotalPayerAmount, currency)}) must equal the total expense amount (${formatCurrency(numAmount, currency)}). Difference: ${formatCurrency(diff, currency)}.`
+        );
+        return;
+      }
+    }
+
     setIsLoading(true);
     setError('');
+
+    const primaryPaidById = selectedPayerIds[0] || paidById;
+    const payersPayload = isMultiPayer
+      ? selectedPayerIds.map((uid) => ({
+          userId: uid,
+          amount: parseFloat(payerAmounts[uid]) || 0,
+        }))
+      : [{ userId: primaryPaidById, amount: numAmount }];
 
     try {
       if (isEditRequestRequired && existingExpense) {
@@ -181,9 +272,10 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
               title: title.trim(),
               amount: numAmount,
               category,
-              paidById,
+              paidById: primaryPaidById,
               participantUserIds: splitBetween,
               receiptUrl,
+              payers: payersPayload,
             },
             reason: 'User proposed expense updates',
           }),
@@ -207,9 +299,10 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
           title: title.trim(),
           amount: numAmount,
           category,
-          paidById,
+          paidById: primaryPaidById,
           participantUserIds: splitBetween,
           receiptUrl,
+          payers: payersPayload,
         }),
       });
 
@@ -280,17 +373,45 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
 
         {/* Payer Selection */}
         <div>
-          <label className="block text-xs font-semibold text-slate-700 tracking-wide uppercase mb-1.5">
-            Paid By
-          </label>
+          <div className="flex items-center justify-between mb-1.5">
+            <label className="text-xs font-semibold text-slate-700 tracking-wide uppercase">
+              Paid By
+            </label>
+            <button
+              type="button"
+              onClick={() => {
+                if (isMultiPayer) {
+                  // Switch back to single payer (current user)
+                  setSelectedPayerIds([currentUserId]);
+                  setPaidById(currentUserId);
+                  setPayerAmounts({ [currentUserId]: amount });
+                } else {
+                  // Enable multi-payer mode (select all or first 2)
+                  const defaultPayers = members.slice(0, 2).map((m) => m.userId);
+                  setSelectedPayerIds(defaultPayers);
+                  const numAmt = parseFloat(amount);
+                  if (!isNaN(numAmt) && numAmt > 0) {
+                    const share = (numAmt / defaultPayers.length).toFixed(2);
+                    const map: { [key: string]: string } = {};
+                    defaultPayers.forEach((id) => (map[id] = share));
+                    setPayerAmounts(map);
+                  }
+                }
+              }}
+              className="text-xs font-bold text-emerald-600 hover:text-emerald-700 cursor-pointer"
+            >
+              {isMultiPayer ? 'Single Payer Mode' : '+ Multiple Payers'}
+            </button>
+          </div>
+
           <div className="grid grid-cols-2 gap-2">
             {members.map((m) => {
-              const isSelected = paidById === m.userId;
+              const isSelected = selectedPayerIds.includes(m.userId);
               return (
                 <button
                   type="button"
                   key={m.userId}
-                  onClick={() => setPaidById(m.userId)}
+                  onClick={() => togglePayer(m.userId, isMultiPayer)}
                   className={`flex items-center gap-2 p-2.5 rounded-2xl border text-xs font-bold transition-all ${
                     isSelected
                       ? 'bg-emerald-50 border-emerald-500 text-emerald-950 shadow-sm'
@@ -304,6 +425,75 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
             })}
           </div>
         </div>
+
+        {/* Dynamic Amount Paid Section for Multiple Payers */}
+        {isMultiPayer && (
+          <div className="bg-slate-50 border border-slate-200/90 rounded-2xl p-4 space-y-3 animate-fade-in">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-slate-800 uppercase tracking-wide flex items-center gap-1.5">
+                <CreditCard className="w-4 h-4 text-emerald-600" /> Amount Paid ({selectedPayerIds.length} Payers)
+              </label>
+              <button
+                type="button"
+                onClick={autoDistributePayerAmounts}
+                className="text-xs font-bold text-emerald-600 hover:text-emerald-700 underline cursor-pointer"
+              >
+                Equal Split
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              {selectedPayerIds.map((uid) => {
+                const memberObj = members.find((m) => m.userId === uid);
+                if (!memberObj) return null;
+                return (
+                  <div key={uid} className="flex items-center justify-between gap-3 bg-white p-2.5 rounded-xl border border-slate-200 shadow-sm">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Avatar name={memberObj.user.name} size="sm" />
+                      <span className="text-xs font-bold text-slate-900 truncate">
+                        {memberObj.user.name} {uid === currentUserId ? '(You)' : ''}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <span className="text-xs font-semibold text-slate-400">{currency}</span>
+                      <input
+                        type="number"
+                        step="any"
+                        placeholder="0.00"
+                        value={payerAmounts[uid] || ''}
+                        onChange={(e) => {
+                          setPayerAmounts({
+                            ...payerAmounts,
+                            [uid]: e.target.value,
+                          });
+                          setError('');
+                        }}
+                        className="w-28 bg-slate-50 border border-slate-200 text-slate-900 text-xs font-bold rounded-xl p-2 focus:outline-none focus:border-emerald-500 focus:bg-white text-right"
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Sum Live Status */}
+            <div className="pt-1 flex items-center justify-between text-xs font-semibold border-t border-slate-200/80">
+              <span className="text-slate-500">Total Amounts Paid:</span>
+              <span className={`font-mono font-bold ${isPayerSumValid ? 'text-emerald-700' : 'text-rose-600'}`}>
+                {formatCurrency(roundedTotalPayerAmount, currency)} / {formatCurrency(numExpenseAmount, currency)}
+              </span>
+            </div>
+
+            {!isPayerSumValid && numExpenseAmount > 0 && (
+              <div className="bg-rose-50 border border-rose-200 rounded-xl p-2.5 text-xs text-rose-700 font-medium flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                <span>
+                  Sum of amounts paid ({formatCurrency(roundedTotalPayerAmount, currency)}) must equal total expense amount ({formatCurrency(numExpenseAmount, currency)}).
+                </span>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Category Picker */}
         <div>

@@ -84,7 +84,17 @@ export const ExpenseCard: React.FC<ExpenseCardProps> = React.memo(({
     netColorClass = 'text-slate-400 font-medium';
   }
 
-  const payerName = isPayer ? 'You' : expense.paidBy?.name || 'Someone';
+  const payerName =
+    expense.payers && expense.payers.length > 1
+      ? expense.payers
+          .map(
+            (p) =>
+              `${p.userId === currentUserId ? 'You' : p.user?.name || 'User'} (${formatCurrency(p.amount, currency)})`
+          )
+          .join(' + ')
+      : isPayer
+      ? 'You'
+      : expense.paidBy?.name || 'Someone';
 
   return (
     <>

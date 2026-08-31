@@ -65,6 +65,14 @@ export interface ExpenseParticipantDetail {
   user: UserSummary;
 }
 
+export interface ExpensePayerDetail {
+  id: string;
+  expenseId: string;
+  userId: string;
+  amount: number;
+  user: UserSummary;
+}
+
 export interface ExpenseDetail {
   id: string;
   tripId: string;
@@ -83,6 +91,7 @@ export interface ExpenseDetail {
   updatedAt?: string;
   receiptUrl?: string | null;
   participants: ExpenseParticipantDetail[];
+  payers?: ExpensePayerDetail[];
   editRequests?: ExpenseEditRequestDetail[];
 }
 

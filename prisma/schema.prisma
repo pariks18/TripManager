@@ -45,6 +45,7 @@ model User {
   memories              TripMemory[]         @relation("MemoryAuthor")
   sentMemoryShares      MemoryShareRequest[] @relation("MemoryShareOwner")
   receivedMemoryShares  MemoryShareRequest[] @relation("MemoryShareTarget")
+  expensePayers         ExpensePayer[]       @relation("ExpensePayerUser")
 }
 
 model Trip {
@@ -109,10 +110,23 @@ model Expense {
   paidBy       User                 @relation("PaidBy", fields: [paidById], references: [id])
   createdBy    User?                @relation("CreatedBy", fields: [createdById], references: [id])
   participants ExpenseParticipant[]
+  payers       ExpensePayer[]
   editRequests ExpenseEditRequest[]
 
   @@index([tripId])
   @@index([paidById])
+}
+
+model ExpensePayer {
+  id        String @id @default(auto()) @map("_id") @db.ObjectId
+  expenseId String @db.ObjectId
+  userId    String @db.ObjectId
+  amount    Float
+
+  expense Expense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  user    User    @relation("ExpensePayerUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([expenseId, userId])
 }
 
 model ExpenseParticipant {

@@ -156,12 +156,34 @@ export const ExpenseDetailModal: React.FC<ExpenseDetailModalProps> = ({
 
         {/* Paid By & Split Formula Card */}
         <div className="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-sm space-y-3">
-          <div className="flex justify-between items-center text-xs pb-2 border-b border-slate-100">
-            <span className="text-slate-500 font-medium">Paid by</span>
-            <div className="flex items-center gap-2 font-bold text-slate-900">
-              <Avatar name={expense.paidBy?.name || 'User'} size="sm" />
-              <span>{isPayer ? 'You' : expense.paidBy?.name}</span>
-            </div>
+          <div className="space-y-2 pb-2 border-b border-slate-100">
+            <span className="text-slate-500 font-medium text-xs block">
+              Paid by {expense.payers && expense.payers.length > 1 ? `(${expense.payers.length} Payers)` : ''}
+            </span>
+            {expense.payers && expense.payers.length > 1 ? (
+              <div className="space-y-1.5">
+                {expense.payers.map((p) => {
+                  const isSelfPayer = p.userId === currentUserId;
+                  return (
+                    <div key={p.id || p.userId} className="flex items-center justify-between text-xs font-bold text-slate-900 bg-slate-50 p-2 rounded-xl border border-slate-100">
+                      <div className="flex items-center gap-2">
+                        <Avatar name={p.user?.name || 'User'} size="sm" />
+                        <span>{isSelfPayer ? 'You' : p.user?.name}</span>
+                      </div>
+                      <span className="text-emerald-700 font-mono font-extrabold">{formatCurrency(p.amount, currency)}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="flex justify-between items-center text-xs font-bold text-slate-900">
+                <div className="flex items-center gap-2">
+                  <Avatar name={expense.paidBy?.name || 'User'} size="sm" />
+                  <span>{isPayer ? 'You' : expense.paidBy?.name}</span>
+                </div>
+                <span className="text-emerald-700 font-mono font-extrabold">{formatCurrency(expense.amount, currency)}</span>
+              </div>
+            )}
           </div>
 
           <div className="flex justify-between items-center text-xs">

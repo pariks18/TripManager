@@ -25,8 +25,15 @@ export function calculateMemberBalances(
   const approvedExpenses = expenses.filter((e) => e.status === 'APPROVED');
 
   approvedExpenses.forEach((expense) => {
-    // The payer is credited with having paid the expense amount (regardless of payment source)
-    if (balanceMap.has(expense.paidById)) {
+    // The payer(s) credited with having paid the expense amount
+    if (expense.payers && expense.payers.length > 0) {
+      expense.payers.forEach((p) => {
+        if (balanceMap.has(p.userId)) {
+          const payerRecord = balanceMap.get(p.userId)!;
+          payerRecord.paid += p.amount;
+        }
+      });
+    } else if (balanceMap.has(expense.paidById)) {
       const payerRecord = balanceMap.get(expense.paidById)!;
       payerRecord.paid += expense.amount;
     }

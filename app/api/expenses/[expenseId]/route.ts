@@ -14,10 +14,10 @@ export async function PUT(
 
   try {
     const body = await request.json();
-    const { title, amount, category, paidById, splitBetween, participantUserIds, receiptUrl } = body;
+    const { title, amount, category, paidById, splitBetween, participantUserIds, receiptUrl, payers } = body;
     const participants = splitBetween || participantUserIds;
 
-    if (!title || !amount || amount <= 0 || !paidById || !participants || participants.length === 0) {
+    if (!title || !amount || amount <= 0 || (!paidById && (!payers || payers.length === 0)) || !participants || participants.length === 0) {
       return NextResponse.json({ error: 'Invalid expense payload' }, { status: 400 });
     }
 
@@ -27,9 +27,10 @@ export async function PUT(
       title.trim(),
       parseFloat(amount),
       (category as CategoryType) || 'Miscellaneous',
-      paidById,
+      paidById || (payers && payers[0]?.userId),
       participants,
-      receiptUrl
+      receiptUrl,
+      payers
     );
 
     return NextResponse.json({ expense: updatedExpense });
