@@ -2519,6 +2519,46 @@ export const dbStore = {
   };
 },
 
+
+async getTripItinerary(
+  tripId: string
+): Promise<ItineraryItemDetail[]> {
+  await ensureDatabaseSeeded();
+
+  const items = await prisma.itineraryItem.findMany({
+    where: {
+      tripId,
+    },
+
+    orderBy: [
+      {
+        dayNumber: 'asc',
+      },
+      {
+        order: 'asc',
+      },
+    ],
+  });
+
+  return items.map((item) => ({
+    id: item.id,
+    tripId: item.tripId,
+    dayNumber: item.dayNumber,
+    date: item.date
+      ? item.date.toISOString()
+      : null,
+    title: item.title,
+    description: item.description,
+    location: item.location,
+    startTime: item.startTime,
+    endTime: item.endTime,
+    category: item.category,
+    order: item.order,
+    createdAt: item.createdAt.toISOString(),
+    updatedAt: item.updatedAt.toISOString(),
+  }));
+},
+
   // --- STAY METHODS ---
   async addStayDetail(
     tripId: string,

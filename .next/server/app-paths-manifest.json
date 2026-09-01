@@ -1,3 +1,6 @@
 {
+  "/api/trips/[tripId]/ai-trip-check/route": "app/api/trips/[tripId]/ai-trip-check/route.js",
+  "/api/trips/[tripId]/itinerary/[itemId]/suggestions/route": "app/api/trips/[tripId]/itinerary/[itemId]/suggestions/route.js",
+  "/api/auth/login/route": "app/api/auth/login/route.js",
   "/api/trips/[tripId]/itinerary/[itemId]/route": "app/api/trips/[tripId]/itinerary/[itemId]/route.js"
 }
