@@ -225,7 +225,7 @@ export default function ProfilePage() {
               ? 'ID Proofs'
               : activeSubScreen === 'privacy'
               ? 'Privacy & Permissions'
-              : 'About TripSplit'}
+              : 'About TripNizer'}
           </h1>
           <div className="w-12" />
         </div>
@@ -298,7 +298,7 @@ export default function ProfilePage() {
 
               <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
                 <div className="inline-flex items-center gap-1.5 bg-emerald-50 border border-emerald-200/80 text-emerald-700 px-3 py-1 rounded-full text-xs font-bold">
-                  <ShieldCheck className="w-4 h-4" /> Verified TripSplit Member
+                  <ShieldCheck className="w-4 h-4" /> Verified TripNizer Member
                 </div>
 
                 {profile.isEmailVerified && (

@@ -3,7 +3,7 @@ import { ToastProvider } from '@/components/ui/Toast';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'TripSplit - Mobile Expense Splitter for Groups',
+  title: 'TripNizer - Mobile Expense Splitter for Groups',
   description: 'Effortlessly split trip expenses with friends. No manual calculations required.',
 };
 

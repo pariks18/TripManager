@@ -1,8 +1,8 @@
-# TripManager (TripSplit) ✈️💸
+# TripNizer ✈️💸
 
 A modern, full-stack trip management, expense splitting, and group travel planning application built with **Next.js 14 (App Router)**, **TypeScript**, **Tailwind CSS**, **Prisma ORM**, and **MongoDB**.
 
-TripManager simplifies group travel by managing expenses, optimizing debt settlements using a greedy minimal-transfer algorithm, providing per-trip virtual wallets, organizing day-by-day itineraries, hosting group polls, logging trip activity, and enabling live member location sharing.
+TripNizer simplifies group travel by managing expenses, optimizing debt settlements using a greedy minimal-transfer algorithm, providing per-trip virtual wallets, organizing day-by-day itineraries, hosting group polls, logging trip activity, and enabling live member location sharing.
 
 ---
 
@@ -103,7 +103,7 @@ Create a `.env` file in the root of the project with the following keys:
 
 ```env
 # MongoDB Connection String (MongoDB Atlas or Local Replica Set)
-DATABASE_URL="mongodb+srv://<username>:<password>@cluster0.mongodb.net/tripsplit?retryWrites=true&w=majority"
+DATABASE_URL="mongodb+srv://<username>:<password>@cluster0.mongodb.net/tripnizer?retryWrites=true&w=majority"
 
 # JWT Secret Key for Session Signing
 JWT_SECRET="your-super-secret-jwt-key"
@@ -283,7 +283,7 @@ The database schema is defined in [`prisma/schema.prisma`](file:///Users/pariksh
 
 ## 🛡️ Authentication & Security
 
-- Session management uses **HttpOnly, SameSite=Lax** cookies (`tripsplit_auth_token`) signed with **HS256 JWT** via `jose`.
+- Session management uses **HttpOnly, SameSite=Lax** cookies (`tripnizer_auth_token`) signed with **HS256 JWT** via `jose`.
 - Password verification relies on `bcryptjs` with salt rounds set to 10.
 - Phone and recovery email OTPs are securely hashed on the server prior to storage in `OtpVerification`.
 

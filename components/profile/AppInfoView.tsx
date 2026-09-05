@@ -30,7 +30,7 @@ export const AppInfoView: React.FC<AppInfoViewProps> = ({ onBack }) => {
           <Sparkles className="w-7 h-7" />
         </div>
         <div>
-          <h3 className="text-lg font-extrabold text-slate-900">TripSplit</h3>
+          <h3 className="text-lg font-extrabold text-slate-900">TripNizer</h3>
           <p className="text-xs text-slate-400 mt-0.5">Smart Group Travel & Expense Management</p>
         </div>
         <span className="inline-block text-[11px] font-extrabold bg-emerald-50 text-emerald-700 px-3 py-1 rounded-full border border-emerald-200">
@@ -58,7 +58,7 @@ export const AppInfoView: React.FC<AppInfoViewProps> = ({ onBack }) => {
             </div>
           </div>
 
-          {/* About TripSplit */}
+          {/* About TripNizer */}
           <div
             onClick={() => setActiveModal('ABOUT')}
             className="p-4 rounded-2xl bg-slate-50 border border-slate-100 hover:bg-slate-100/80 cursor-pointer transition-all flex items-center justify-between"
@@ -68,7 +68,7 @@ export const AppInfoView: React.FC<AppInfoViewProps> = ({ onBack }) => {
                 <Info className="w-4 h-4" />
               </div>
               <div>
-                <span className="text-xs font-bold text-slate-900 block">About TripSplit</span>
+                <span className="text-xs font-bold text-slate-900 block">About TripNizer</span>
                 <span className="text-[11px] text-slate-400">Learn more about the platform</span>
               </div>
             </div>
@@ -135,7 +135,7 @@ export const AppInfoView: React.FC<AppInfoViewProps> = ({ onBack }) => {
           onClose={() => setActiveModal(null)}
           title={
             activeModal === 'ABOUT'
-              ? 'About TripSplit'
+              ? 'About TripNizer'
               : activeModal === 'HELP'
               ? 'Help & Support'
               : activeModal === 'TERMS'
@@ -147,10 +147,10 @@ export const AppInfoView: React.FC<AppInfoViewProps> = ({ onBack }) => {
             {activeModal === 'ABOUT' && (
               <div className="space-y-3">
                 <p>
-                  <strong>TripSplit</strong> is a modern, mobile-first group travel management platform designed to simplify expense splits, debt settlements, advance payments, itinerary planning, and stay details.
+                  <strong>TripNizer</strong> is a modern, mobile-first group travel management platform designed to simplify expense splits, debt settlements, advance payments, itinerary planning, and stay details.
                 </p>
                 <p>
-                  Built with greedy minimal debt-settlement algorithms and two-way verification protocols, TripSplit ensures every member pays accurately without friction.
+                  Built with greedy minimal debt-settlement algorithms and two-way verification protocols, TripNizer ensures every member pays accurately without friction.
                 </p>
               </div>
             )}
@@ -160,7 +160,7 @@ export const AppInfoView: React.FC<AppInfoViewProps> = ({ onBack }) => {
                 <p>Need assistance or have a question about your trip account?</p>
                 <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl space-y-1">
                   <span className="font-bold block text-slate-900">Support Email</span>
-                  <span className="font-mono text-emerald-700">support@tripsplit.app</span>
+                  <span className="font-mono text-emerald-700">support@tripnizer.in</span>
                 </div>
                 <p className="text-[11px] text-slate-500">
                   Our team typically responds within 24 hours for account or trip queries.
@@ -171,7 +171,7 @@ export const AppInfoView: React.FC<AppInfoViewProps> = ({ onBack }) => {
             {activeModal === 'TERMS' && (
               <div className="space-y-3">
                 <p>
-                  By using TripSplit, you agree to fair and accurate recording of shared group expenses and settlements.
+                  By using TripNizer, you agree to fair and accurate recording of shared group expenses and settlements.
                 </p>
                 <p>
                   Trip members are responsible for verifying their expense entries and settling outstanding balances with fellow trip participants.

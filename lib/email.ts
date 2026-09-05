@@ -33,14 +33,14 @@ export async function sendEmailOtp(
       const purposeTitle = purpose.replace(/_/g, ' ');
 
       await transporter.sendMail({
-        from: `TripManager <${gmailUser}>`,
+        from: `TripNizer <${gmailUser}>`,
         to: email,
-        subject: `🔐 Your TripManager Verification Code: ${otpCode}`,
+        subject: `🔐 Your TripNizer Verification Code: ${otpCode}`,
         html: `
           <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 24px; max-width: 480px; margin: 0 auto; background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.05);">
             <div style="text-align: center; margin-bottom: 20px;">
               <div style="display: inline-block; background: linear-gradient(135deg, #10b981, #059669); color: white; font-weight: 800; font-size: 20px; padding: 10px 18px; border-radius: 12px;">
-                TS
+                TN
               </div>
               <h2 style="color: #0f172a; font-size: 20px; font-weight: 800; margin-top: 12px; margin-bottom: 4px;">Verification Code</h2>
               <p style="color: #64748b; font-size: 13px; margin: 0;">For ${purposeTitle}</p>

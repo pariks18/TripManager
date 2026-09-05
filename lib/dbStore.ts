@@ -8,25 +8,25 @@ const SEED_USERS = [
   {
     id: '65f1a2b3c4d5e6f7a8b9c001',
     name: 'Parikshit Gole',
-    email: 'parikshit@tripsplit.app',
+    email: 'parikshit@tripnizer.in',
     password: '$2a$10$e8w.xM09L0n98QvY.wGZReHl50FwP/WjQ/119aE1k.w4lE6HjC5x.',
   },
   {
     id: '65f1a2b3c4d5e6f7a8b9c002',
     name: 'Rahul Sharma',
-    email: 'rahul@tripsplit.app',
+    email: 'rahul@tripnizer.in',
     password: '$2a$10$e8w.xM09L0n98QvY.wGZReHl50FwP/WjQ/119aE1k.w4lE6HjC5x.',
   },
   {
     id: '65f1a2b3c4d5e6f7a8b9c003',
     name: 'Akash Verma',
-    email: 'akash@tripsplit.app',
+    email: 'akash@tripnizer.in',
     password: '$2a$10$e8w.xM09L0n98QvY.wGZReHl50FwP/WjQ/119aE1k.w4lE6HjC5x.',
   },
   {
     id: '65f1a2b3c4d5e6f7a8b9c004',
     name: 'Sneha Patel',
-    email: 'sneha@tripsplit.app',
+    email: 'sneha@tripnizer.in',
     password: '$2a$10$e8w.xM09L0n98QvY.wGZReHl50FwP/WjQ/119aE1k.w4lE6HjC5x.',
   },
 ];

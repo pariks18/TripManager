@@ -29,10 +29,10 @@ export default function SplashPage() {
         <div className="relative">
           <div className="w-16 h-16 bg-gradient-to-tr from-emerald-500 to-blue-500 rounded-3xl animate-spin blur-lg opacity-60" />
           <div className="absolute inset-0 w-16 h-16 bg-emerald-500 rounded-3xl flex items-center justify-center text-white font-extrabold text-2xl shadow-2xl">
-            TS
+            TN
           </div>
         </div>
-        <h1 className="mt-6 text-xl font-bold text-white tracking-wide">TripSplit</h1>
+        <h1 className="mt-6 text-xl font-bold text-white tracking-wide">TripNizer</h1>
         <p className="text-xs text-slate-400 mt-1">Loading your trips...</p>
       </div>
     );
@@ -48,9 +48,9 @@ export default function SplashPage() {
       <header className="relative z-10 flex items-center justify-between">
         <div className="flex items-center gap-2.5">
           <div className="w-10 h-10 bg-gradient-to-tr from-emerald-400 to-emerald-600 rounded-2xl flex items-center justify-center font-extrabold text-white text-lg shadow-lg shadow-emerald-500/30">
-            TS
+            TN
           </div>
-          <span className="text-xl font-extrabold tracking-tight">TripSplit</span>
+          <span className="text-xl font-extrabold tracking-tight">TripNizer</span>
         </div>
 
         <button
@@ -115,7 +115,7 @@ export default function SplashPage() {
 
       {/* Footer */}
       <footer className="relative z-10 text-center text-xs text-slate-500">
-        Designed for effortless group trips • TripSplit 2026
+        Designed for effortless group trips • TripNizer 2026
       </footer>
     </div>
   );

@@ -170,11 +170,11 @@ export default function DashboardPage() {
         <div className="w-full max-w-4xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <div className="w-9 h-9 bg-emerald-600 rounded-2xl flex items-center justify-center text-white font-black text-sm shadow-sm">
-              TS
+              TN
             </div>
             <div>
               <h1 className="text-base font-black text-slate-900 tracking-tight leading-none">
-                TripSplit
+                TripNizer
               </h1>
               <p className="text-[11px] text-slate-500 mt-0.5 font-medium">
                 Hello, <span className="text-slate-800 font-bold">{user?.name || 'Explorer'}</span>

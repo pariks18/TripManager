@@ -4,9 +4,9 @@ import { cookies } from 'next/headers';
 import { UserSession } from '@/types';
 
 const SECRET_KEY = new TextEncoder().encode(
-  process.env.JWT_SECRET || 'tripsplit-super-secret-key-jwt-2026'
+  process.env.JWT_SECRET || 'tripnizer-super-secret-key-jwt-2026'
 );
-const TOKEN_NAME = 'tripsplit_auth_token';
+const TOKEN_NAME = 'tripnizer_auth_token';
 
 export async function hashPassword(password: string): Promise<string> {
   return await bcrypt.hash(password, 10);

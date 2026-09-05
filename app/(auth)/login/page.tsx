@@ -66,7 +66,7 @@ export default function LoginPage() {
             onClick={() => router.push('/')}
             className="w-12 h-12 bg-gradient-to-tr from-emerald-400 to-emerald-600 rounded-3xl flex items-center justify-center font-extrabold text-white text-xl shadow-xl shadow-emerald-500/30 mx-auto cursor-pointer"
           >
-            TS
+            TN
           </div>
           <h2 className="text-2xl font-extrabold tracking-tight">Welcome back</h2>
           <p className="text-xs text-slate-400">Sign in to manage your group trip expenses</p>
@@ -131,21 +131,21 @@ export default function LoginPage() {
             <div className="grid grid-cols-3 gap-2">
               <button
                 type="button"
-                onClick={() => handleQuickDemoLogin('parikshit@tripsplit.app')}
+                onClick={() => handleQuickDemoLogin('parikshit@tripnizer.in')}
                 className="bg-slate-700/60 hover:bg-slate-700 text-slate-200 border border-slate-600/60 p-2 rounded-2xl text-[11px] font-semibold text-center transition-colors"
               >
                 Parikshit
               </button>
               <button
                 type="button"
-                onClick={() => handleQuickDemoLogin('rahul@tripsplit.app')}
+                onClick={() => handleQuickDemoLogin('rahul@tripnizer.in')}
                 className="bg-slate-700/60 hover:bg-slate-700 text-slate-200 border border-slate-600/60 p-2 rounded-2xl text-[11px] font-semibold text-center transition-colors"
               >
                 Rahul
               </button>
               <button
                 type="button"
-                onClick={() => handleQuickDemoLogin('akash@tripsplit.app')}
+                onClick={() => handleQuickDemoLogin('akash@tripnizer.in')}
                 className="bg-slate-700/60 hover:bg-slate-700 text-slate-200 border border-slate-600/60 p-2 rounded-2xl text-[11px] font-semibold text-center transition-colors"
               >
                 Akash

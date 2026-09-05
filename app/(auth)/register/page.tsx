@@ -61,10 +61,10 @@ export default function RegisterPage() {
             onClick={() => router.push('/')}
             className="w-12 h-12 bg-gradient-to-tr from-emerald-400 to-emerald-600 rounded-3xl flex items-center justify-center font-extrabold text-white text-xl shadow-xl shadow-emerald-500/30 mx-auto cursor-pointer"
           >
-            TS
+            TN
           </div>
           <h2 className="text-2xl font-extrabold tracking-tight">Create an Account</h2>
-          <p className="text-xs text-slate-400">Join TripSplit to split expenses effortlessly</p>
+          <p className="text-xs text-slate-400">Join TripNizer to split expenses effortlessly</p>
         </div>
 
         {/* Form */}
