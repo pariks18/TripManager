@@ -23,10 +23,11 @@ import {
   Camera,
   Plane,
   Sparkles,
+  Lightbulb,
   ExternalLink,
+  X,
+  Loader2,
 } from 'lucide-react';
-
-import { ItineraryAISummary } from '@/components/trip/ItineraryAISummary';
 
 interface ItineraryViewProps {
   tripId: string;
@@ -54,7 +55,14 @@ export const ItineraryView: React.FC<ItineraryViewProps> = React.memo(({
   const [editingItem, setEditingItem] = useState<ItineraryItemDetail | null>(null);
 
   // AI Suggestions modal state
-  const [selectedAIItem, setSelectedAIItem] = useState<ItineraryItemDetail | null>(null);
+  const [selectedAIItem, setSelectedAIItem] = useState<{
+    item: ItineraryItemDetail;
+    initialTab: 'suggestions' | 'summary';
+  } | null>(null);
+
+  // Inline AI Summary State per item
+  const [inlineSummaries, setInlineSummaries] = useState<Record<string, string>>({});
+  const [loadingSummaryIds, setLoadingSummaryIds] = useState<Record<string, boolean>>({});
 
   // Form State
   const [dayNumber, setDayNumber] = useState('1');
@@ -169,6 +177,34 @@ export const ItineraryView: React.FC<ItineraryViewProps> = React.memo(({
     setDeletingItemId(itemId);
   };
 
+  // Toggle or Fetch Level 1 Inline Summary
+  const handleToggleInlineSummary = async (item: ItineraryItemDetail) => {
+    if (inlineSummaries[item.id]) {
+      // Toggle off
+      setInlineSummaries((prev) => {
+        const next = { ...prev };
+        delete next[item.id];
+        return next;
+      });
+      return;
+    }
+
+    setLoadingSummaryIds((prev) => ({ ...prev, [item.id]: true }));
+    try {
+      const res = await fetch(`/api/trips/${tripId}/itinerary/${item.id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to generate summary');
+      setInlineSummaries((prev) => ({ ...prev, [item.id]: data.summary }));
+    } catch (err: any) {
+      showToast(err.message || 'Failed to generate summary', 'error', 'Error');
+    } finally {
+      setLoadingSummaryIds((prev) => ({ ...prev, [item.id]: false }));
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header Banner */}
@@ -194,7 +230,7 @@ export const ItineraryView: React.FC<ItineraryViewProps> = React.memo(({
         )}
       </div>
 
-      {/* AI Trip Check Section */}
+      {/* Level 3: AI Trip Check Section */}
       <AITripCheck
         tripId={tripId}
         itemCount={itinerary.length}
@@ -234,6 +270,8 @@ export const ItineraryView: React.FC<ItineraryViewProps> = React.memo(({
                   {items.map((item) => {
                     const catStyle = CATEGORY_ICONS[item.category || 'Sightseeing'] || CATEGORY_ICONS.Sightseeing;
                     const CatIcon = catStyle.icon;
+                    const isSummaryLoading = !!loadingSummaryIds[item.id];
+                    const hasSummary = !!inlineSummaries[item.id];
 
                     return (
                       <div
@@ -265,14 +303,34 @@ export const ItineraryView: React.FC<ItineraryViewProps> = React.memo(({
                             </div>
                           </div>
 
-                          <div className="flex items-center gap-1 shrink-0">
+                          <div className="flex items-center gap-1 shrink-0 flex-wrap justify-end">
+                            {/* Level 1: ✨ AI Summary */}
                             <button
-                              onClick={() => setSelectedAIItem(item)}
-                              className="inline-flex items-center gap-1 text-[11px] font-extrabold px-2.5 py-1 rounded-xl bg-amber-50 text-amber-900 border border-amber-200/90 hover:bg-amber-100 transition-colors shadow-2xs cursor-pointer"
-                              title="Get AI Suggestions & Summary"
+                              onClick={() => handleToggleInlineSummary(item)}
+                              disabled={isSummaryLoading}
+                              className={`inline-flex items-center gap-1 text-[11px] font-extrabold px-2.5 py-1 rounded-xl transition-colors cursor-pointer border ${
+                                hasSummary
+                                  ? 'bg-indigo-600 text-white border-indigo-600'
+                                  : 'bg-indigo-50 text-indigo-700 border-indigo-200/90 hover:bg-indigo-100'
+                              }`}
+                              title="Generate Level 1 AI Summary"
                             >
-                              <Sparkles className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                              <span className="hidden xs:inline">AI Suggestions</span>
+                              {isSummaryLoading ? (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              ) : (
+                                <Sparkles className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                              )}
+                              <span>✨ AI Summary</span>
+                            </button>
+
+                            {/* Level 2: 💡 AI Suggestions */}
+                            <button
+                              onClick={() => setSelectedAIItem({ item, initialTab: 'suggestions' })}
+                              className="inline-flex items-center gap-1 text-[11px] font-extrabold px-2.5 py-1 rounded-xl bg-amber-50 text-amber-900 border border-amber-200/90 hover:bg-amber-100 transition-colors shadow-2xs cursor-pointer"
+                              title="Get Level 2 AI Reminders & Missing Info Suggestions"
+                            >
+                              <Lightbulb className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                              <span>💡 AI Suggestions</span>
                             </button>
 
                             {isAdmin && (
@@ -317,7 +375,23 @@ export const ItineraryView: React.FC<ItineraryViewProps> = React.memo(({
                           </p>
                         )}
 
-                        <ItineraryAISummary tripId={tripId} itemId={item.id} />
+                        {/* Level 1: Inline AI Summary Card */}
+                        {hasSummary && (
+                          <div className="p-3 bg-gradient-to-r from-indigo-50/90 to-purple-50/80 border border-indigo-100 rounded-xl space-y-1 text-xs">
+                            <div className="flex items-center justify-between text-[11px] font-extrabold text-indigo-900">
+                              <span className="flex items-center gap-1">✨ AI Summary</span>
+                              <button
+                                onClick={() => handleToggleInlineSummary(item)}
+                                className="text-slate-400 hover:text-slate-600 cursor-pointer"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                            <p className="text-xs text-slate-700 leading-relaxed font-medium italic">
+                              “{inlineSummaries[item.id]}”
+                            </p>
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -343,13 +417,14 @@ export const ItineraryView: React.FC<ItineraryViewProps> = React.memo(({
         </div>
       )}
 
-      {/* AI Suggestions Modal */}
+      {/* AI Suggestions & Summary Modal */}
       {selectedAIItem && (
         <AIItinerarySuggestionsModal
           isOpen={!!selectedAIItem}
           onClose={() => setSelectedAIItem(null)}
           tripId={tripId}
-          item={selectedAIItem}
+          item={selectedAIItem.item}
+          initialTab={selectedAIItem.initialTab}
           onEditItem={isAdmin ? handleOpenEditModal : undefined}
         />
       )}

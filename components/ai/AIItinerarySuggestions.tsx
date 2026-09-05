@@ -11,9 +11,9 @@ import {
   X,
   CheckCircle2,
   Edit2,
-  Calendar,
   Clock,
   MapPin,
+  Lightbulb,
 } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
@@ -30,6 +30,7 @@ interface AIItinerarySuggestionsProps {
   onClose: () => void;
   tripId: string;
   item: ItineraryItemDetail;
+  initialTab?: 'suggestions' | 'summary';
   onEditItem?: (item: ItineraryItemDetail) => void;
 }
 
@@ -38,24 +39,24 @@ const SUGGESTION_TYPE_CONFIG: Record<
   { label: string; bg: string; border: string; text: string; icon: React.ElementType }
 > = {
   MISSING_INFORMATION: {
-    label: 'Missing Information',
-    bg: 'bg-sky-50',
-    border: 'border-sky-200',
-    text: 'text-sky-800',
+    label: '⚠️ Missing Information',
+    bg: 'bg-amber-50',
+    border: 'border-amber-200',
+    text: 'text-amber-800',
     icon: HelpCircle,
   },
   REMINDER: {
-    label: "Don't Forget",
+    label: "💡 Don't Forget",
     bg: 'bg-emerald-50',
     border: 'border-emerald-200',
     text: 'text-emerald-800',
     icon: Bell,
   },
   WARNING: {
-    label: 'Possible Issue',
-    bg: 'bg-amber-50',
-    border: 'border-amber-200',
-    text: 'text-amber-800',
+    label: '⚠️ Possible Issue',
+    bg: 'bg-rose-50',
+    border: 'border-rose-200',
+    text: 'text-rose-800',
     icon: AlertTriangle,
   },
 };
@@ -65,9 +66,10 @@ export const AIItinerarySuggestionsModal: React.FC<AIItinerarySuggestionsProps> 
   onClose,
   tripId,
   item,
+  initialTab = 'suggestions',
   onEditItem,
 }) => {
-  const [activeTab, setActiveTab] = useState<'suggestions' | 'summary'>('suggestions');
+  const [activeTab, setActiveTab] = useState<'suggestions' | 'summary'>(initialTab);
 
   // Suggestions state
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
@@ -135,18 +137,23 @@ export const AIItinerarySuggestionsModal: React.FC<AIItinerarySuggestionsProps> 
   // Initial load when modal opens
   React.useEffect(() => {
     if (isOpen) {
-      if (!suggestions && !isLoadingSuggestions) {
+      setActiveTab(initialTab);
+      if (initialTab === 'suggestions' && !suggestions && !isLoadingSuggestions) {
         fetchSuggestions();
+      } else if (initialTab === 'summary' && !summary && !isLoadingSummary) {
+        fetchSummary();
       }
     }
-  }, [isOpen, suggestions, isLoadingSuggestions, fetchSuggestions]);
+  }, [isOpen, initialTab]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load summary on tab switch
   React.useEffect(() => {
     if (isOpen && activeTab === 'summary' && !summary && !isLoadingSummary) {
       fetchSummary();
+    } else if (isOpen && activeTab === 'suggestions' && !suggestions && !isLoadingSuggestions) {
+      fetchSuggestions();
     }
-  }, [isOpen, activeTab, summary, isLoadingSummary, fetchSummary]);
+  }, [isOpen, activeTab]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="" maxWidth="max-w-xl" noPadding>
@@ -159,7 +166,7 @@ export const AIItinerarySuggestionsModal: React.FC<AIItinerarySuggestionsProps> 
             </div>
             <div>
               <span className="text-[10px] font-black uppercase tracking-wider text-amber-300">
-                AI Smart Assistant
+                Smart Activity Assistant
               </span>
               <h3 className="text-base font-extrabold text-white truncate max-w-sm">
                 {item.title}
@@ -209,7 +216,7 @@ export const AIItinerarySuggestionsModal: React.FC<AIItinerarySuggestionsProps> 
                 : 'border-transparent text-slate-500 hover:text-slate-900'
             }`}
           >
-            <Sparkles className="w-3.5 h-3.5" /> AI Suggestions
+            <Lightbulb className="w-3.5 h-3.5 text-amber-500" /> 💡 AI Suggestions
           </button>
 
           <button
@@ -220,7 +227,7 @@ export const AIItinerarySuggestionsModal: React.FC<AIItinerarySuggestionsProps> 
                 : 'border-transparent text-slate-500 hover:text-slate-900'
             }`}
           >
-            <FileText className="w-3.5 h-3.5" /> AI Summary
+            <Sparkles className="w-3.5 h-3.5 text-indigo-500" /> ✨ AI Summary
           </button>
         </div>
 
@@ -233,7 +240,7 @@ export const AIItinerarySuggestionsModal: React.FC<AIItinerarySuggestionsProps> 
                 <div className="py-8 text-center space-y-3">
                   <Sparkles className="w-8 h-8 text-indigo-600 animate-spin mx-auto" />
                   <p className="text-xs font-semibold text-slate-600">
-                    Generating smart activity suggestions...
+                    Analyzing activity details for reminders & missing info...
                   </p>
                 </div>
               )}
@@ -279,7 +286,7 @@ export const AIItinerarySuggestionsModal: React.FC<AIItinerarySuggestionsProps> 
                                   <Icon className="w-4 h-4" />
                                 </div>
                                 <h4 className={`text-xs font-extrabold ${config.text}`}>
-                                  {group.title || config.label}
+                                  {config.label}
                                 </h4>
                               </div>
 
@@ -289,9 +296,9 @@ export const AIItinerarySuggestionsModal: React.FC<AIItinerarySuggestionsProps> 
                                     onClose();
                                     onEditItem(item);
                                   }}
-                                  className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 bg-white px-2 py-0.5 rounded-lg border border-indigo-200 cursor-pointer"
+                                  className="text-[11px] font-bold text-amber-900 hover:text-indigo-800 flex items-center gap-1 bg-white px-2 py-0.5 rounded-lg border border-amber-300 cursor-pointer"
                                 >
-                                  <Edit2 className="w-3 h-3" /> Edit Activity
+                                  <Edit2 className="w-3 h-3" /> Add Details
                                 </button>
                               )}
                             </div>
@@ -315,7 +322,7 @@ export const AIItinerarySuggestionsModal: React.FC<AIItinerarySuggestionsProps> 
                     <div className="p-6 bg-emerald-50 border border-emerald-200 rounded-2xl text-center space-y-2">
                       <CheckCircle2 className="w-8 h-8 text-emerald-600 mx-auto" />
                       <h4 className="text-sm font-bold text-emerald-900">
-                        Everything Looks Complete!
+                        Everything Looks Ready!
                       </h4>
                       <p className="text-xs text-emerald-700 max-w-xs mx-auto">
                         No missing parameters or warnings found for this activity item.
@@ -348,7 +355,7 @@ export const AIItinerarySuggestionsModal: React.FC<AIItinerarySuggestionsProps> 
                 <div className="py-8 text-center space-y-3">
                   <FileText className="w-8 h-8 text-indigo-600 animate-pulse mx-auto" />
                   <p className="text-xs font-semibold text-slate-600">
-                    Crafting AI summary for activity...
+                    Generating natural language summary...
                   </p>
                 </div>
               )}
@@ -371,12 +378,12 @@ export const AIItinerarySuggestionsModal: React.FC<AIItinerarySuggestionsProps> 
 
               {!isLoadingSummary && !summaryError && summary && (
                 <div className="space-y-4">
-                  <div className="bg-indigo-50/60 border border-indigo-100 p-4 rounded-2xl space-y-2">
+                  <div className="bg-indigo-50/70 border border-indigo-100 p-4 rounded-2xl space-y-2">
                     <div className="flex items-center gap-2 text-indigo-900 text-xs font-extrabold">
-                      <Sparkles className="w-4 h-4 text-indigo-600" /> Smart Summary
+                      <Sparkles className="w-4 h-4 text-indigo-600" /> ✨ AI Summary
                     </div>
-                    <p className="text-xs text-slate-700 leading-relaxed font-medium">
-                      {summary}
+                    <p className="text-xs text-slate-800 leading-relaxed font-medium italic">
+                      “{summary}”
                     </p>
                   </div>
 

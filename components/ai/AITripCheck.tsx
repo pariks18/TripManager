@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import {
+  Brain,
   Sparkles,
   AlertTriangle,
   CheckCircle2,
@@ -115,19 +116,19 @@ export const AITripCheck: React.FC<AITripCheckProps> = ({
       case 'OK':
         return (
           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black bg-emerald-100 text-emerald-800 border border-emerald-300">
-            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> All Good
+            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> ✅ Trip Check Complete
           </span>
         );
       case 'WARNING':
         return (
           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black bg-amber-100 text-amber-800 border border-amber-300">
-            <AlertCircle className="w-3.5 h-3.5 text-amber-600" /> Warnings Detected
+            <AlertCircle className="w-3.5 h-3.5 text-amber-600" /> ⚠️ Schedule Warnings
           </span>
         );
       case 'CONFLICT':
         return (
           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black bg-rose-100 text-rose-800 border border-rose-300">
-            <AlertTriangle className="w-3.5 h-3.5 text-rose-600" /> Conflicts Found
+            <AlertTriangle className="w-3.5 h-3.5 text-rose-600" /> ⚠️ Possible Timing Issue
           </span>
         );
       default:
@@ -146,14 +147,14 @@ export const AITripCheck: React.FC<AITripCheckProps> = ({
       <div className="bg-gradient-to-br from-indigo-50/80 via-purple-50/40 to-slate-50 border border-indigo-100 rounded-3xl p-5 shadow-xs">
         <div className="flex items-start gap-3.5">
           <div className="p-3 bg-gradient-to-br from-indigo-600 to-purple-600 text-white rounded-2xl shadow-sm shrink-0">
-            <Sparkles className="w-5 h-5" />
+            <Brain className="w-5 h-5" />
           </div>
           <div className="space-y-1 min-w-0 flex-1">
             <h4 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
-              AI Trip Check
+              🧠 AI Trip Check
             </h4>
             <p className="text-xs text-slate-600 leading-relaxed">
-              Add your itinerary activities below to unlock automated timing conflict detection, schedule validation, and smart travel recommendations.
+              Add your itinerary activities below to run a complete AI trip check for timing conflicts, travel gaps, and schedule validation.
             </p>
           </div>
         </div>
@@ -167,17 +168,17 @@ export const AITripCheck: React.FC<AITripCheckProps> = ({
       <div className="bg-gradient-to-r from-indigo-900 via-indigo-800 to-purple-900 p-5 text-white flex items-center justify-between gap-4">
         <div className="flex items-center gap-3.5 min-w-0">
           <div className="p-2.5 bg-white/10 backdrop-blur-md rounded-2xl text-amber-300 shrink-0 border border-white/10">
-            <Sparkles className="w-5 h-5 animate-pulse" />
+            <Brain className="w-5 h-5" />
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <h4 className="text-base font-black tracking-tight">AI Trip Check</h4>
+              <h4 className="text-base font-black tracking-tight">🧠 AI Trip Check</h4>
               {result && getStatusBadge(result.status)}
             </div>
             <p className="text-xs text-indigo-200/90 mt-0.5 truncate">
               {result
-                ? 'Intelligent itinerary analysis and schedule audit'
-                : 'Analyze your schedule for timing conflicts & missing details'}
+                ? 'Comprehensive itinerary schedule audit & time conflict detection'
+                : 'Analyze complete itinerary for timing conflicts & travel buffers'}
             </p>
           </div>
         </div>
@@ -207,7 +208,7 @@ export const AITripCheck: React.FC<AITripCheckProps> = ({
             ) : (
               <>
                 <Sparkles className="w-3.5 h-3.5 mr-1.5" />
-                Run AI Check
+                Run AI Trip Check
               </>
             )}
           </Button>
@@ -218,12 +219,12 @@ export const AITripCheck: React.FC<AITripCheckProps> = ({
       {isLoading && (
         <div className="p-6 bg-slate-50/70 border-t border-slate-100 space-y-4 text-center">
           <div className="inline-flex items-center justify-center p-3 bg-indigo-100 text-indigo-700 rounded-full animate-bounce">
-            <Sparkles className="w-6 h-6" />
+            <Brain className="w-6 h-6 text-indigo-600" />
           </div>
           <div>
-            <h5 className="text-sm font-extrabold text-slate-800">Analyzing Your Itinerary...</h5>
+            <h5 className="text-sm font-extrabold text-slate-800">Checking Full Trip Itinerary...</h5>
             <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
-              Scanning schedule for overlapping times, tight transitions, and missing activity details using AI.
+              Checking activity durations, travel buffer gaps, timing overlaps, and missing information.
             </p>
           </div>
           <div className="w-48 h-1.5 bg-indigo-100 rounded-full mx-auto overflow-hidden">
@@ -254,7 +255,7 @@ export const AITripCheck: React.FC<AITripCheckProps> = ({
           {/* Overall Summary Box */}
           <div className="bg-white p-4 rounded-2xl border border-slate-200/90 shadow-xs space-y-1.5">
             <span className="text-[10px] font-black uppercase tracking-wider text-indigo-600">
-              AI Analysis Executive Summary
+              Executive AI Summary
             </span>
             <p className="text-xs text-slate-700 leading-relaxed font-medium">
               {result.overallSummary}
@@ -355,9 +356,9 @@ export const AITripCheck: React.FC<AITripCheckProps> = ({
           ) : (
             <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 text-center space-y-1">
               <CheckCircle2 className="w-6 h-6 text-emerald-600 mx-auto" />
-              <h5 className="text-xs font-bold text-emerald-900">No Issues Detected!</h5>
+              <h5 className="text-xs font-bold text-emerald-900">✅ Trip Check Complete</h5>
               <p className="text-xs text-emerald-700 max-w-sm mx-auto">
-                Your itinerary schedule has no timing overlaps or missing critical parameters.
+                Your itinerary looks well planned. No major timing conflicts found.
               </p>
             </div>
           )}
