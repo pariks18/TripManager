@@ -66,32 +66,30 @@ export async function POST(
     }
 
     const prompt = `
-Create a short and simple summary of the itinerary item using ONLY the information provided below.
+Create a short and simple summary for this itinerary activity.
+
+Use ONLY the information provided below.
 
 Activity: ${item.title || 'Not specified'}
-
 Category: ${item.category || 'Not specified'}
-
 Start Time: ${item.startTime || 'Not specified'}
-
 End Time: ${item.endTime || 'Not specified'}
-
 Location: ${item.location || 'Not specified'}
-
 Description: ${item.description || 'Not specified'}
 
 Rules:
-- Use ONLY the information given above.
-- Do NOT add, guess, assume, or invent any information.
-- Do NOT add general travel advice.
-- Do NOT add information about tickets, platforms, security, prices, duration, weather, or facilities unless it is explicitly provided.
-- If a field is "Not specified", do not mention it.
-- If only Start Time is available, mention it as the scheduled time. Do not assume it is a departure or arrival time.
 - Use simple and easy English.
-- Keep the summary short, around 30-60 words.
-- Mention the activity, location, time, and description only if they are available.
+- Use ONLY the information provided above.
+- Do NOT add, guess, assume, or invent information.
+- Do NOT give general travel advice.
+- Do NOT create facts that are not present in the data.
+- If a field is not specified, do not mention it.
+- If only Start Time is provided, do not assume it means departure or arrival.
+- Mention the activity, location and available timing naturally.
+- Keep the summary between 30 and 60 words.
 - Return ONLY the final summary.
-- Do not include reasoning, analysis, or <think> tags.
+- Do NOT include reasoning.
+- Do NOT include <think> tags.
 `;
     const groqResponse = await fetch(
       'https://api.groq.com/openai/v1/chat/completions',
