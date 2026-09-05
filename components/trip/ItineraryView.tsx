@@ -4,10 +4,11 @@ import React, { useState } from 'react';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { useToast } from '@/components/ui/Toast';
 import { ItineraryItemDetail } from '@/types';
-import { formatDate } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
+import { AITripCheck } from '@/components/ai/AITripCheck';
+import { AIItinerarySuggestionsModal } from '@/components/ai/AIItinerarySuggestions';
 import {
   Calendar,
   Clock,
@@ -22,7 +23,6 @@ import {
   Camera,
   Plane,
   Sparkles,
-  ChevronRight,
   ExternalLink,
 } from 'lucide-react';
 
@@ -50,6 +50,9 @@ export const ItineraryView: React.FC<ItineraryViewProps> = React.memo(({
 }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<ItineraryItemDetail | null>(null);
+
+  // AI Suggestions modal state
+  const [selectedAIItem, setSelectedAIItem] = useState<ItineraryItemDetail | null>(null);
 
   // Form State
   const [dayNumber, setDayNumber] = useState('1');
@@ -182,12 +185,19 @@ export const ItineraryView: React.FC<ItineraryViewProps> = React.memo(({
           <Button
             onClick={() => handleOpenAddModal()}
             size="sm"
-            className="bg-white text-indigo-900 hover:bg-indigo-50 font-bold shrink-0 shadow-md"
+            className="bg-white text-indigo-900 hover:bg-indigo-50 font-bold shrink-0 shadow-md cursor-pointer"
           >
             <Plus className="w-4 h-4 mr-1" /> Add Activity
           </Button>
         )}
       </div>
+
+      {/* AI Trip Check Section */}
+      <AITripCheck
+        tripId={tripId}
+        itemCount={itinerary.length}
+        onRefreshItinerary={onRefresh}
+      />
 
       {/* Itinerary Schedule Body */}
       {sortedDays.length > 0 ? (
@@ -210,7 +220,7 @@ export const ItineraryView: React.FC<ItineraryViewProps> = React.memo(({
                   {isAdmin && (
                     <button
                       onClick={() => handleOpenAddModal(dayNum)}
-                      className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 flex items-center gap-1"
+                      className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 cursor-pointer"
                     >
                       <Plus className="w-3.5 h-3.5" /> Add to Day {dayNum}
                     </button>
@@ -226,7 +236,7 @@ export const ItineraryView: React.FC<ItineraryViewProps> = React.memo(({
                     return (
                       <div
                         key={item.id}
-                        className="bg-white rounded-2xl p-4 border border-slate-100 apple-shadow hover:border-slate-200 transition-all space-y-2.5"
+                        className="bg-white rounded-2xl p-4 border border-slate-100 apple-shadow hover:border-slate-200 transition-all space-y-3"
                       >
                         <div className="flex items-start justify-between gap-3">
                           <div className="flex items-start gap-3">
@@ -235,7 +245,7 @@ export const ItineraryView: React.FC<ItineraryViewProps> = React.memo(({
                             </div>
 
                             <div>
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-2 flex-wrap">
                                 <h4 className="text-sm font-bold text-slate-900">{item.title}</h4>
                                 <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ${catStyle.bg}`}>
                                   {item.category || 'Sightseeing'}
@@ -253,24 +263,35 @@ export const ItineraryView: React.FC<ItineraryViewProps> = React.memo(({
                             </div>
                           </div>
 
-                          {isAdmin && (
-                            <div className="flex items-center gap-1 shrink-0">
-                              <button
-                                onClick={() => handleOpenEditModal(item)}
-                                className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 rounded-lg transition-colors"
-                                title="Edit Item"
-                              >
-                                <Edit2 className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                onClick={() => handleDelete(item.id)}
-                                className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-                                title="Delete Item"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          )}
+                          <div className="flex items-center gap-1 shrink-0">
+                            <button
+                              onClick={() => setSelectedAIItem(item)}
+                              className="inline-flex items-center gap-1 text-[11px] font-extrabold px-2.5 py-1 rounded-xl bg-amber-50 text-amber-900 border border-amber-200/90 hover:bg-amber-100 transition-colors shadow-2xs cursor-pointer"
+                              title="Get AI Suggestions & Summary"
+                            >
+                              <Sparkles className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                              <span className="hidden xs:inline">AI Suggestions</span>
+                            </button>
+
+                            {isAdmin && (
+                              <>
+                                <button
+                                  onClick={() => handleOpenEditModal(item)}
+                                  className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+                                  title="Edit Item"
+                                >
+                                  <Edit2 className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  onClick={() => handleDelete(item.id)}
+                                  className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                                  title="Delete Item"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </>
+                            )}
+                          </div>
                         </div>
 
                         {item.location && (
@@ -311,11 +332,22 @@ export const ItineraryView: React.FC<ItineraryViewProps> = React.memo(({
               : 'The Super Host has not added itinerary details for this trip yet.'}
           </p>
           {isAdmin && (
-            <Button onClick={() => handleOpenAddModal(1)} size="sm" className="mt-2">
+            <Button onClick={() => handleOpenAddModal(1)} size="sm" className="mt-2 cursor-pointer">
               <Plus className="w-4 h-4 mr-1" /> Create Day 1 Schedule
             </Button>
           )}
         </div>
+      )}
+
+      {/* AI Suggestions Modal */}
+      {selectedAIItem && (
+        <AIItinerarySuggestionsModal
+          isOpen={!!selectedAIItem}
+          onClose={() => setSelectedAIItem(null)}
+          tripId={tripId}
+          item={selectedAIItem}
+          onEditItem={isAdmin ? handleOpenEditModal : undefined}
+        />
       )}
 
       {/* Add / Edit Itinerary Modal */}
