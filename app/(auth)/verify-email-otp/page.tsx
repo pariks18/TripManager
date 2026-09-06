@@ -277,7 +277,7 @@ export default function VerifyEmailOtpPage() {
   const router = useRouter();
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white flex flex-col justify-center p-4 sm:p-8 relative overflow-hidden selection:bg-emerald-500 selection:text-slate-950">
+    <div className="min-h-screen min-h-[100dvh] w-full bg-slate-950 text-white flex flex-col justify-center p-4 sm:p-8 relative overflow-x-hidden selection:bg-emerald-500 selection:text-slate-950">
       {/* Glow shapes */}
       <div className="absolute -top-32 -left-32 w-80 h-80 bg-emerald-500/15 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute -bottom-32 -right-32 w-80 h-80 bg-blue-500/15 rounded-full blur-3xl pointer-events-none" />

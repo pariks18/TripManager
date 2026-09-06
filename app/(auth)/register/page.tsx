@@ -73,7 +73,7 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white grid grid-cols-1 lg:grid-cols-12 relative overflow-hidden font-sans selection:bg-emerald-500 selection:text-slate-950">
+    <div className="min-h-screen min-h-[100dvh] w-full bg-slate-950 text-white grid grid-cols-1 lg:grid-cols-12 relative overflow-x-hidden font-sans selection:bg-emerald-500 selection:text-slate-950">
       {/* Background Ambient Glows */}
       <div className="absolute -top-40 -left-40 w-96 h-96 bg-emerald-500/15 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute -bottom-40 -right-40 w-96 h-96 bg-teal-500/15 rounded-full blur-3xl pointer-events-none" />
