@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getSessionUser, hashPassword } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { sendEmailOtp } from '@/lib/email';
-import { generateOtpCode } from '@/lib/sms';
+import { generateOtpCode, sendEmailOtp } from '@/lib/email';
 import { generateObjectId } from '@/lib/utils';
 
 export async function POST() {

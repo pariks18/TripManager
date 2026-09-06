@@ -41,7 +41,7 @@ model User {
   pollVotes           PollVote[]
   locations             MemberLocation[]
   otpVerifications      OtpVerification[]
-  verificationTokens    EmailVerificationToken[]
+  emailOtps             EmailOtpVerification[]
   sentMessages          Message[]            @relation("MessageSender")
   memories              TripMemory[]         @relation("MemoryAuthor")
   sentMemoryShares      MemoryShareRequest[] @relation("MemoryShareOwner")
@@ -421,15 +421,20 @@ model ChecklistItem {
   @@index([tripId, type, userId])
 }
 
-model EmailVerificationToken {
-  id        String   @id @default(auto()) @map("_id") @db.ObjectId
-  userId    String   @db.ObjectId
-  tokenHash String   @unique
-  expiresAt DateTime
-  createdAt DateTime @default(now())
+model EmailOtpVerification {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId     String   @db.ObjectId
+  email      String
+  otpHash    String
+  expiresAt  DateTime
+  attempts   Int      @default(0)
+  lastSentAt DateTime @default(now())
+  createdAt  DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+  @@index([email])
 }
+
 

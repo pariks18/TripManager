@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getSessionUser, hashPassword } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { generateOtpCode, maskPhoneNumber, sendSmsOtp } from '@/lib/sms';
+import { generateOtpCode, sendEmailOtp } from '@/lib/email';
 import { generateObjectId } from '@/lib/utils';
 
 export async function POST(request: Request) {
@@ -64,13 +64,13 @@ export async function POST(request: Request) {
       },
     });
 
-    const { maskedPhone } = await sendSmsOtp(user.mobile, rawOtp, purpose);
+    const { maskedEmail } = await sendEmailOtp(user.email, rawOtp, purpose);
 
     return NextResponse.json({
       success: true,
-      maskedPhone,
+      maskedEmail,
       purpose,
-      message: `✓ OTP sent to ${maskedPhone}`,
+      message: `✓ OTP sent to ${maskedEmail}`,
       // Pass OTP in dev mode for UI demo testing
       debugOtp: process.env.NODE_ENV !== 'production' ? rawOtp : undefined,
     });

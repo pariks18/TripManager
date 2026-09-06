@@ -2,14 +2,17 @@ import { NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { dbStore } from '@/lib/dbStore';
 import { hashPassword } from '@/lib/auth';
-import { sendVerificationEmail } from '@/lib/email';
+import { sendEmailOtp } from '@/lib/email';
 
 export async function POST(request: Request) {
   try {
-    const { name, email, password } = await request.json();
+    const { name, email, password, dob, gender } = await request.json();
 
-    if (!name || !email || !password) {
-      return NextResponse.json({ error: 'Name, email and password are required' }, { status: 400 });
+    if (!name || !email || !password || !dob || !gender) {
+      return NextResponse.json(
+        { error: 'Name, email, password, date of birth, and gender are required' },
+        { status: 400 }
+      );
     }
 
     const cleanEmail = email.trim().toLowerCase();
@@ -18,30 +21,59 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Password must be at least 4 characters long' }, { status: 400 });
     }
 
+    // Validate Date of Birth
+    const parsedDob = new Date(dob);
+    if (isNaN(parsedDob.getTime())) {
+      return NextResponse.json({ error: 'Please enter a valid Date of Birth' }, { status: 400 });
+    }
+
+    if (parsedDob > new Date()) {
+      return NextResponse.json({ error: 'Date of birth cannot be in the future' }, { status: 400 });
+    }
+
+    // Validate Gender
+    const ALLOWED_GENDERS = ['Male', 'Female', 'Other', 'Prefer not to say'];
+    const formattedGender = gender.trim();
+    if (!ALLOWED_GENDERS.includes(formattedGender)) {
+      return NextResponse.json(
+        { error: `Gender must be one of: ${ALLOWED_GENDERS.join(', ')}` },
+        { status: 400 }
+      );
+    }
+
     const existingUser = await dbStore.findUserByEmail(cleanEmail);
     if (existingUser) {
       return NextResponse.json({ error: 'An account with this email already exists' }, { status: 400 });
     }
 
     const passwordHash = await hashPassword(password);
-    // Create user with isEmailVerified = false
-    const user = await dbStore.createUser(name.trim(), cleanEmail, passwordHash, false);
+    // Create user with isEmailVerified = false, saving dob and gender immediately
+    const user = await dbStore.createUser(
+      name.trim(),
+      cleanEmail,
+      passwordHash,
+      false,
+      dob.trim(),
+      formattedGender
+    );
 
-    // Generate single-use cryptographically secure verification token (64 hex characters)
-    const rawVerificationToken = crypto.randomBytes(32).toString('hex');
-    await dbStore.createVerificationToken(user.id, rawVerificationToken, 24);
+    // Generate secure 6-digit numeric OTP (100000 - 999999)
+    const otpCode = crypto.randomInt(100000, 1000000).toString();
+    await dbStore.createEmailOtp(user.id, cleanEmail, otpCode, 10);
 
-    // Send verification email
-    await sendVerificationEmail(cleanEmail, rawVerificationToken, user.name);
+    // Send email with 6-digit OTP
+    await sendEmailOtp(cleanEmail, otpCode, 'ACCOUNT_REGISTRATION');
 
     return NextResponse.json({
       success: true,
       requiresVerification: true,
       email: cleanEmail,
-      message: "We've sent a verification email to your email address. Please verify your email before logging in.",
+      message: "We've sent a 6-digit verification code to your email. Please verify to activate your account.",
     });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Registration failed' }, { status: 500 });
   }
 }
+
+
 

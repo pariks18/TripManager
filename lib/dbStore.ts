@@ -142,12 +142,22 @@ export const dbStore = {
     name: string,
     email: string,
     passwordHash: string,
-    isEmailVerified = false
+    isEmailVerified = false,
+    dob?: string,
+    gender?: string
   ): Promise<UserSummary & { isEmailVerified: boolean }> {
     await ensureDatabaseSeeded();
     const id = generateObjectId();
     const newUser = await prisma.user.create({
-      data: { id, name, email, password: passwordHash, isEmailVerified },
+      data: {
+        id,
+        name,
+        email,
+        password: passwordHash,
+        isEmailVerified,
+        dob: dob ? dob.trim() : null,
+        gender: gender ? gender.trim() : null,
+      },
     });
     return {
       id: newUser.id,
@@ -156,6 +166,7 @@ export const dbStore = {
       isEmailVerified: newUser.isEmailVerified,
     };
   },
+
 
   async findUserByEmail(
     email: string
@@ -179,31 +190,150 @@ export const dbStore = {
     return { id: u.id, name: u.name, email: u.email, isEmailVerified: u.isEmailVerified };
   },
 
-  async createVerificationToken(userId: string, rawToken: string, expiresInHours = 24): Promise<void> {
+  async createEmailOtp(
+    userId: string,
+    email: string,
+    otpCode: string,
+    expiresInMinutes = 10
+  ): Promise<void> {
     await ensureDatabaseSeeded();
-    const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
-    const expiresAt = new Date(Date.now() + expiresInHours * 60 * 60 * 1000);
+    const cleanEmail = email.trim().toLowerCase();
+    const otpHash = crypto.createHash('sha256').update(otpCode).digest('hex');
+    const expiresAt = new Date(Date.now() + expiresInMinutes * 60 * 1000);
 
-    // Delete existing tokens for this user first
-    await prisma.emailVerificationToken.deleteMany({ where: { userId } });
+    // Delete existing email OTPs for this user / email
+    await prisma.emailOtpVerification.deleteMany({
+      where: { OR: [{ userId }, { email: cleanEmail }] },
+    });
 
-    await prisma.emailVerificationToken.create({
+    await prisma.emailOtpVerification.create({
       data: {
         id: generateObjectId(),
         userId,
-        tokenHash,
+        email: cleanEmail,
+        otpHash,
         expiresAt,
+        attempts: 0,
+        lastSentAt: new Date(),
       },
     });
   },
 
-  async findVerificationToken(rawToken: string) {
+  async canResendEmailOtp(
+    email: string,
+    cooldownSeconds = 30
+  ): Promise<{ allowed: boolean; waitSeconds?: number }> {
     await ensureDatabaseSeeded();
-    const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
-    return await prisma.emailVerificationToken.findUnique({
-      where: { tokenHash },
-      include: { user: true },
+    const cleanEmail = email.trim().toLowerCase();
+    const record = await prisma.emailOtpVerification.findFirst({
+      where: { email: cleanEmail },
+      orderBy: { createdAt: 'desc' },
     });
+
+    if (!record) return { allowed: true };
+
+    const elapsedMs = Date.now() - new Date(record.lastSentAt).getTime();
+    const cooldownMs = cooldownSeconds * 1000;
+
+    if (elapsedMs < cooldownMs) {
+      const waitSeconds = Math.ceil((cooldownMs - elapsedMs) / 1000);
+      return { allowed: false, waitSeconds };
+    }
+
+    return { allowed: true };
+  },
+
+  async verifyEmailOtp(
+    email: string,
+    otpCode: string
+  ): Promise<{
+    success: boolean;
+    reason?: 'NO_OTP' | 'EXPIRED' | 'MAX_ATTEMPTS' | 'INVALID' | 'ALREADY_VERIFIED';
+    error?: string;
+    attemptsRemaining?: number;
+  }> {
+    await ensureDatabaseSeeded();
+    const cleanEmail = email.trim().toLowerCase();
+
+    // Find active user
+    const user = await prisma.user.findUnique({ where: { email: cleanEmail } });
+    if (!user) {
+      return { success: false, reason: 'NO_OTP', error: 'User account not found.' };
+    }
+
+    if (user.isEmailVerified) {
+      return { success: false, reason: 'ALREADY_VERIFIED', error: 'Email address is already verified.' };
+    }
+
+    const record = await prisma.emailOtpVerification.findFirst({
+      where: { email: cleanEmail },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (!record) {
+      return {
+        success: false,
+        reason: 'NO_OTP',
+        error: 'No verification code found. Please request a new code.',
+      };
+    }
+
+    // Check expiration
+    if (new Date() > new Date(record.expiresAt)) {
+      return {
+        success: false,
+        reason: 'EXPIRED',
+        error: 'Verification code has expired. Please request a new code.',
+      };
+    }
+
+    // Check attempt limits
+    if (record.attempts >= 5) {
+      // Invalidate OTP
+      await prisma.emailOtpVerification.delete({ where: { id: record.id } });
+      return {
+        success: false,
+        reason: 'MAX_ATTEMPTS',
+        error: 'Maximum verification attempts exceeded. Please request a new code.',
+      };
+    }
+
+    const inputHash = crypto.createHash('sha256').update(otpCode.trim()).digest('hex');
+
+    if (inputHash !== record.otpHash) {
+      const newAttempts = record.attempts + 1;
+      await prisma.emailOtpVerification.update({
+        where: { id: record.id },
+        data: { attempts: newAttempts },
+      });
+
+      if (newAttempts >= 5) {
+        await prisma.emailOtpVerification.delete({ where: { id: record.id } });
+        return {
+          success: false,
+          reason: 'MAX_ATTEMPTS',
+          error: 'Maximum verification attempts exceeded. Please request a new code.',
+        };
+      }
+
+      const remaining = 5 - newAttempts;
+      return {
+        success: false,
+        reason: 'INVALID',
+        attemptsRemaining: remaining,
+        error: `Invalid verification code. ${remaining} attempt(s) remaining.`,
+      };
+    }
+
+    // OTP Match! Mark email verified and delete OTP
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { isEmailVerified: true },
+    });
+
+    await prisma.emailOtpVerification.deleteMany({ where: { userId: user.id } });
+
+    return { success: true };
   },
 
   async markEmailAsVerified(userId: string): Promise<void> {
@@ -212,13 +342,9 @@ export const dbStore = {
       where: { id: userId },
       data: { isEmailVerified: true },
     });
-    await prisma.emailVerificationToken.deleteMany({ where: { userId } });
+    await prisma.emailOtpVerification.deleteMany({ where: { userId } });
   },
 
-  async deleteVerificationTokensForUser(userId: string): Promise<void> {
-    await ensureDatabaseSeeded();
-    await prisma.emailVerificationToken.deleteMany({ where: { userId } });
-  },
 
 
   // async getUserTrips(userId: string): Promise<TripSummary[]> {
