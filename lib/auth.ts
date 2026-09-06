@@ -2,6 +2,7 @@ import bcrypt from 'bcryptjs';
 import { SignJWT, jwtVerify } from 'jose';
 import { cookies } from 'next/headers';
 import { UserSession } from '@/types';
+import { dbStore } from './dbStore';
 
 const SECRET_KEY = new TextEncoder().encode(
   process.env.JWT_SECRET || 'tripnizer-super-secret-key-jwt-2026'
@@ -59,5 +60,20 @@ export async function getSessionUser(): Promise<UserSession | null> {
   const cookieStore = cookies();
   const token = cookieStore.get(TOKEN_NAME)?.value;
   if (!token) return null;
-  return await verifyJWT(token);
+
+  const session = await verifyJWT(token);
+  if (!session || !session.id) {
+    await removeAuthCookie();
+    return null;
+  }
+
+  // Validate user existence in MongoDB and verification status
+  const user = await dbStore.findUserById(session.id);
+  if (!user || user.isEmailVerified === false) {
+    await removeAuthCookie();
+    return null;
+  }
+
+  return { id: user.id, name: user.name, email: user.email };
 }
+

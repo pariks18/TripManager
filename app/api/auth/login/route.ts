@@ -10,7 +10,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Email and password are required' }, { status: 400 });
     }
 
-    const user = await dbStore.findUserByEmail(email);
+    const cleanEmail = email.trim().toLowerCase();
+    const user = await dbStore.findUserByEmail(cleanEmail);
     if (!user) {
       return NextResponse.json({ error: 'Invalid email or password' }, { status: 401 });
     }
@@ -18,6 +19,18 @@ export async function POST(request: Request) {
     const isMatch = await comparePassword(password, user.passwordHash);
     if (!isMatch) {
       return NextResponse.json({ error: 'Invalid email or password' }, { status: 401 });
+    }
+
+    // Check mandatory email verification status
+    if (user.isEmailVerified === false) {
+      return NextResponse.json(
+        {
+          error: 'Please verify your email before logging in.',
+          requiresVerification: true,
+          email: cleanEmail,
+        },
+        { status: 403 }
+      );
     }
 
     const sessionUser = { id: user.id, name: user.name, email: user.email };
@@ -29,3 +42,4 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: error.message || 'Login failed' }, { status: 500 });
   }
 }
+

@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { prisma } from './prisma';
 import { hashPassword, comparePassword } from './auth';
 import { generateTripCode, generateObjectId } from './utils';
@@ -105,119 +106,9 @@ let isSeedingCompleted = false;
 
 async function ensureDatabaseSeeded() {
   if (isSeedingCompleted) return;
-
-  const totalStart = performance.now();
-
-  try {
-    const countStart = performance.now();
-
-    const userCount = await prisma.user.count();
-
-    console.log(
-      `[PERF] seed user.count: ${(performance.now() - countStart).toFixed(2)}ms`
-    );
-
-    if (userCount === 0) {
-
-      const usersStart = performance.now();
-
-      for (const u of SEED_USERS) {
-        await prisma.user.upsert({
-          where: { email: u.email },
-          update: {},
-          create: u,
-        });
-      }
-
-      console.log(
-        `[PERF] seed users: ${(performance.now() - usersStart).toFixed(2)}ms`
-      );
-
-
-      const tripsStart = performance.now();
-
-      for (const t of SEED_TRIPS) {
-        await prisma.trip.create({ data: t });
-      }
-
-      console.log(
-        `[PERF] seed trips: ${(performance.now() - tripsStart).toFixed(2)}ms`
-      );
-
-
-      const membersStart = performance.now();
-
-      for (const m of SEED_MEMBERS) {
-        await prisma.tripMember.create({ data: m });
-      }
-
-      console.log(
-        `[PERF] seed members: ${(performance.now() - membersStart).toFixed(2)}ms`
-      );
-
-
-      const expensesStart = performance.now();
-
-      for (const e of SEED_EXPENSES) {
-        const shareAmount =
-          e.amount / e.participantUserIds.length;
-
-        await prisma.expense.create({
-          data: {
-            id: e.id,
-            tripId: e.tripId,
-            title: e.title,
-            amount: e.amount,
-            category: e.category,
-            paidById: e.paidById,
-            createdById: e.createdById,
-            date: e.date,
-            participants: {
-              create: e.participantUserIds.map((uid) => ({
-                id: generateObjectId(),
-                userId: uid,
-                shareAmount,
-              })),
-            },
-          },
-        });
-      }
-
-      console.log(
-        `[PERF] seed expenses: ${(performance.now() - expensesStart).toFixed(2)}ms`
-      );
-
-
-      const activityStart = performance.now();
-
-      await prisma.activity.create({
-        data: {
-          id: generateObjectId(),
-          tripId: SEED_TRIPS[0].id,
-          userId: SEED_USERS[0].id,
-          actionType: 'TRIP_CREATED',
-          details: 'Parikshit created Goa Trip 2026',
-        },
-      });
-
-      console.log(
-        `[PERF] seed activity: ${(performance.now() - activityStart).toFixed(2)}ms`
-      );
-    }
-
-    isSeedingCompleted = true;
-
-    console.log(
-      `[PERF] seed TOTAL: ${(performance.now() - totalStart).toFixed(2)}ms`
-    );
-
-  } catch (err) {
-    console.error(
-      '[Database Seeder] Failed to seed initial database:',
-      err
-    );
-  }
+  isSeedingCompleted = true;
 }
+
 
 async function logActivity(
   tripId: string,
@@ -247,28 +138,88 @@ async function logActivity(
 
 
 export const dbStore = {
-  async createUser(name: string, email: string, passwordHash: string): Promise<UserSummary> {
+  async createUser(
+    name: string,
+    email: string,
+    passwordHash: string,
+    isEmailVerified = false
+  ): Promise<UserSummary & { isEmailVerified: boolean }> {
     await ensureDatabaseSeeded();
     const id = generateObjectId();
     const newUser = await prisma.user.create({
-      data: { id, name, email, password: passwordHash },
+      data: { id, name, email, password: passwordHash, isEmailVerified },
     });
-    return { id: newUser.id, name: newUser.name, email: newUser.email };
+    return {
+      id: newUser.id,
+      name: newUser.name,
+      email: newUser.email,
+      isEmailVerified: newUser.isEmailVerified,
+    };
   },
 
-  async findUserByEmail(email: string): Promise<(UserSummary & { passwordHash: string }) | null> {
+  async findUserByEmail(
+    email: string
+  ): Promise<(UserSummary & { passwordHash: string; isEmailVerified: boolean }) | null> {
     await ensureDatabaseSeeded();
     const u = await prisma.user.findUnique({ where: { email } });
     if (!u) return null;
-    return { id: u.id, name: u.name, email: u.email, passwordHash: u.password };
+    return {
+      id: u.id,
+      name: u.name,
+      email: u.email,
+      passwordHash: u.password,
+      isEmailVerified: u.isEmailVerified,
+    };
   },
 
-  async findUserById(id: string): Promise<UserSummary | null> {
+  async findUserById(id: string): Promise<(UserSummary & { isEmailVerified: boolean }) | null> {
     await ensureDatabaseSeeded();
     const u = await prisma.user.findUnique({ where: { id } });
     if (!u) return null;
-    return { id: u.id, name: u.name, email: u.email };
+    return { id: u.id, name: u.name, email: u.email, isEmailVerified: u.isEmailVerified };
   },
+
+  async createVerificationToken(userId: string, rawToken: string, expiresInHours = 24): Promise<void> {
+    await ensureDatabaseSeeded();
+    const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+    const expiresAt = new Date(Date.now() + expiresInHours * 60 * 60 * 1000);
+
+    // Delete existing tokens for this user first
+    await prisma.emailVerificationToken.deleteMany({ where: { userId } });
+
+    await prisma.emailVerificationToken.create({
+      data: {
+        id: generateObjectId(),
+        userId,
+        tokenHash,
+        expiresAt,
+      },
+    });
+  },
+
+  async findVerificationToken(rawToken: string) {
+    await ensureDatabaseSeeded();
+    const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+    return await prisma.emailVerificationToken.findUnique({
+      where: { tokenHash },
+      include: { user: true },
+    });
+  },
+
+  async markEmailAsVerified(userId: string): Promise<void> {
+    await ensureDatabaseSeeded();
+    await prisma.user.update({
+      where: { id: userId },
+      data: { isEmailVerified: true },
+    });
+    await prisma.emailVerificationToken.deleteMany({ where: { userId } });
+  },
+
+  async deleteVerificationTokensForUser(userId: string): Promise<void> {
+    await ensureDatabaseSeeded();
+    await prisma.emailVerificationToken.deleteMany({ where: { userId } });
+  },
+
 
   // async getUserTrips(userId: string): Promise<TripSummary[]> {
   //   await ensureDatabaseSeeded();
