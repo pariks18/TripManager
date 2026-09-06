@@ -30,6 +30,7 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { BottomNav } from '@/components/ui/BottomNav';
 import { TripBudgetCard } from '@/components/trip/TripBudgetCard';
 import { TripSettingsModal } from '@/components/trip/TripSettingsModal';
+import { InviteMembersModal } from '@/components/trip/InviteMembersModal';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { useToast } from '@/components/ui/Toast';
 
@@ -144,6 +145,7 @@ export default function TripDashboardPage() {
   const [isAddExpenseOpen, setIsAddExpenseOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState<ExpenseDetail | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [isAdvanceCreditOpen, setIsAdvanceCreditOpen] = useState(false);
 
   // Search & Filters
@@ -425,11 +427,12 @@ export default function TripDashboardPage() {
               <span className="hidden sm:inline">Profile</span>
             </button>
             <button
-              onClick={handleCopyCode}
-              className="flex items-center gap-1 text-[11px] font-mono font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-1 rounded-xl hover:bg-emerald-100 transition-colors"
+              onClick={() => setIsInviteModalOpen(true)}
+              className="flex items-center gap-1 text-[11px] font-mono font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-1 rounded-xl hover:bg-emerald-100 transition-colors shadow-2xs"
+              title="Invite Members & Settings"
             >
-              {copiedCode ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-              {copiedCode ? 'Copied!' : trip.code}
+              <Copy className="w-3.5 h-3.5 text-emerald-600" />
+              <span>{trip.code}</span>
             </button>
           </div>
         </div>
@@ -975,6 +978,16 @@ export default function TripDashboardPage() {
           expenses={trip.expenses}
         />
       )}
+
+      {/* Invite Members Modal */}
+      <InviteMembersModal
+        isOpen={isInviteModalOpen}
+        onClose={() => setIsInviteModalOpen(false)}
+        tripId={trip.id}
+        tripName={trip.name}
+        tripCode={trip.code}
+        onTripUpdated={fetchTripDetails}
+      />
 
       <BottomNav activeTab={activeTab} onTabChange={(tab) => setActiveTab(tab as any)} />
     </div>

@@ -905,6 +905,30 @@ export const dbStore = {
     });
 
     if (!existingMember) {
+      if (existingTrip.approvalMode) {
+        const pendingReq = await prisma.tripJoinRequest.findFirst({
+          where: { tripId: existingTrip.id, userId, status: 'PENDING' },
+        });
+        if (pendingReq) {
+          throw new Error('Your join request is already pending host approval.');
+        }
+
+        await prisma.tripJoinRequest.upsert({
+          where: { tripId_userId: { tripId: existingTrip.id, userId } },
+          create: {
+            id: generateObjectId(),
+            tripId: existingTrip.id,
+            userId,
+            status: 'PENDING',
+          },
+          update: {
+            status: 'PENDING',
+          },
+        });
+
+        throw new Error('Join request sent. Waiting for host approval.');
+      }
+
       await prisma.tripMember.create({
         data: {
           id: generateObjectId(),
@@ -925,6 +949,341 @@ export const dbStore = {
     const fetchedTrip = await this.getTripById(existingTrip.id, userId);
     if (!fetchedTrip) throw new Error('Failed to retrieve trip after joining.');
     return fetchedTrip;
+  },
+
+  async getOrCreateTripInviteToken(tripId: string): Promise<string> {
+    const trip = await prisma.trip.findUnique({ where: { id: tripId } });
+    if (!trip) throw new Error('Trip not found');
+
+    if (trip.inviteToken) {
+      return trip.inviteToken;
+    }
+
+    const newToken = crypto.randomBytes(8).toString('hex');
+    await prisma.trip.update({
+      where: { id: tripId },
+      data: { inviteToken: newToken },
+    });
+    return newToken;
+  },
+
+  async getTripInviteInfo(tripId: string, userId: string) {
+    const trip = await prisma.trip.findUnique({
+      where: { id: tripId },
+      include: {
+        createdBy: { select: { id: true, name: true } },
+        members: { select: { userId: true, role: true } },
+      },
+    });
+
+    if (!trip) throw new Error('Trip not found');
+
+    const member = trip.members.find((m) => m.userId === userId);
+    if (!member) throw new Error('You must be a member of this trip to view invite settings');
+
+    const isHost = trip.createdById === userId || member.role === 'ADMIN';
+
+    let inviteToken = trip.inviteToken;
+    if (!inviteToken && isHost) {
+      inviteToken = await this.getOrCreateTripInviteToken(tripId);
+    }
+
+    const pendingRequestsCount = isHost
+      ? await prisma.tripJoinRequest.count({
+          where: { tripId, status: 'PENDING' },
+        })
+      : 0;
+
+    return {
+      tripId: trip.id,
+      name: trip.name,
+      code: trip.code,
+      inviteToken: inviteToken || '',
+      inviteEnabled: trip.inviteEnabled ?? true,
+      approvalMode: trip.approvalMode ?? false,
+      isHost,
+      pendingRequestsCount,
+    };
+  },
+
+  async regenerateTripInviteToken(tripId: string, userId: string): Promise<string> {
+    const trip = await prisma.trip.findUnique({
+      where: { id: tripId },
+      include: { members: { select: { userId: true, role: true } } },
+    });
+    if (!trip) throw new Error('Trip not found');
+
+    const member = trip.members.find((m) => m.userId === userId);
+    const isHost = trip.createdById === userId || member?.role === 'ADMIN';
+    if (!isHost) throw new Error('Only the trip host can regenerate invite links');
+
+    const newToken = crypto.randomBytes(8).toString('hex');
+    await prisma.trip.update({
+      where: { id: tripId },
+      data: { inviteToken: newToken, inviteEnabled: true },
+    });
+
+    return newToken;
+  },
+
+  async updateTripInviteSettings(
+    tripId: string,
+    userId: string,
+    settings: { approvalMode?: boolean; inviteEnabled?: boolean }
+  ) {
+    const trip = await prisma.trip.findUnique({
+      where: { id: tripId },
+      include: { members: { select: { userId: true, role: true } } },
+    });
+    if (!trip) throw new Error('Trip not found');
+
+    const member = trip.members.find((m) => m.userId === userId);
+    const isHost = trip.createdById === userId || member?.role === 'ADMIN';
+    if (!isHost) throw new Error('Only the trip host can change invite settings');
+
+    const updated = await prisma.trip.update({
+      where: { id: tripId },
+      data: {
+        ...(settings.approvalMode !== undefined ? { approvalMode: settings.approvalMode } : {}),
+        ...(settings.inviteEnabled !== undefined ? { inviteEnabled: settings.inviteEnabled } : {}),
+      },
+    });
+
+    return {
+      approvalMode: updated.approvalMode,
+      inviteEnabled: updated.inviteEnabled,
+    };
+  },
+
+  async getPublicTripByInviteToken(token: string, currentUserId?: string) {
+    const trip = await prisma.trip.findUnique({
+      where: { inviteToken: token },
+      include: {
+        createdBy: { select: { id: true, name: true } },
+        members: { select: { userId: true, role: true } },
+      },
+    });
+
+    if (!trip) {
+      return { status: 'INVALID_TOKEN', message: 'Invalid invite link.' };
+    }
+
+    if (trip.inviteEnabled === false) {
+      return { status: 'INVITE_DISABLED', message: 'This invite link is no longer active.', tripName: trip.name };
+    }
+
+    let isMember = false;
+    let isPending = false;
+    let isHost = false;
+
+    if (currentUserId) {
+      const member = trip.members.find((m) => m.userId === currentUserId);
+      if (member) {
+        isMember = true;
+        isHost = trip.createdById === currentUserId || member.role === 'ADMIN';
+      } else {
+        const pendingReq = await prisma.tripJoinRequest.findFirst({
+          where: { tripId: trip.id, userId: currentUserId, status: 'PENDING' },
+        });
+        if (pendingReq) {
+          isPending = true;
+        }
+      }
+    }
+
+    return {
+      status: 'OK',
+      trip: {
+        id: trip.id,
+        name: trip.name,
+        code: trip.code,
+        startDate: trip.startDate,
+        endDate: trip.endDate,
+        currency: trip.currency,
+        memberCount: trip.members.length,
+        hostName: trip.createdBy?.name || 'Trip Host',
+      },
+      approvalMode: trip.approvalMode,
+      isMember,
+      isPending,
+      isHost,
+    };
+  },
+
+  async joinTripViaInviteToken(userId: string, token: string) {
+    const trip = await prisma.trip.findUnique({ where: { inviteToken: token } });
+    if (!trip) {
+      throw new Error('Invalid invite link.');
+    }
+
+    if (trip.inviteEnabled === false) {
+      throw new Error('This invite link is no longer active.');
+    }
+
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new Error('User not found');
+
+    const existingMember = await prisma.tripMember.findFirst({
+      where: { tripId: trip.id, userId },
+    });
+
+    if (existingMember) {
+      return {
+        status: 'ALREADY_MEMBER',
+        message: "You're already a member of this trip.",
+        tripId: trip.id,
+      };
+    }
+
+    const existingPending = await prisma.tripJoinRequest.findFirst({
+      where: { tripId: trip.id, userId, status: 'PENDING' },
+    });
+
+    if (existingPending) {
+      return {
+        status: 'ALREADY_PENDING',
+        message: 'Your join request is already pending.',
+        tripId: trip.id,
+      };
+    }
+
+    if (trip.approvalMode) {
+      await prisma.tripJoinRequest.upsert({
+        where: { tripId_userId: { tripId: trip.id, userId } },
+        create: {
+          id: generateObjectId(),
+          tripId: trip.id,
+          userId,
+          status: 'PENDING',
+        },
+        update: {
+          status: 'PENDING',
+        },
+      });
+
+      return {
+        status: 'REQUEST_SENT',
+        message: 'Join request sent. Waiting for host approval.',
+        tripId: trip.id,
+      };
+    }
+
+    // Direct Join (Host Approval = OFF)
+    await prisma.tripMember.create({
+      data: {
+        id: generateObjectId(),
+        tripId: trip.id,
+        userId,
+        role: 'MEMBER',
+      },
+    });
+
+    await logActivity(
+      trip.id,
+      userId,
+      'MEMBER_JOINED',
+      `${user.name} joined the trip via invite link`
+    );
+
+    return {
+      status: 'JOINED',
+      message: `Successfully joined ${trip.name}`,
+      tripId: trip.id,
+    };
+  },
+
+  async getPendingJoinRequests(tripId: string, hostUserId: string) {
+    const trip = await prisma.trip.findUnique({
+      where: { id: tripId },
+      include: { members: { select: { userId: true, role: true } } },
+    });
+    if (!trip) throw new Error('Trip not found');
+
+    const member = trip.members.find((m) => m.userId === hostUserId);
+    const isHost = trip.createdById === hostUserId || member?.role === 'ADMIN';
+    if (!isHost) throw new Error('Only the trip host can view join requests');
+
+    const requests = await prisma.tripJoinRequest.findMany({
+      where: { tripId, status: 'PENDING' },
+      include: {
+        user: {
+          select: { id: true, name: true, email: true },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return requests.map((r) => ({
+      id: r.id,
+      userId: r.userId,
+      userName: r.user.name,
+      userEmail: r.user.email,
+      createdAt: r.createdAt,
+    }));
+  },
+
+  async handleJoinRequest(
+    tripId: string,
+    requestId: string,
+    hostUserId: string,
+    action: 'approve' | 'reject'
+  ) {
+    const trip = await prisma.trip.findUnique({
+      where: { id: tripId },
+      include: { members: { select: { userId: true, role: true } } },
+    });
+    if (!trip) throw new Error('Trip not found');
+
+    const member = trip.members.find((m) => m.userId === hostUserId);
+    const isHost = trip.createdById === hostUserId || member?.role === 'ADMIN';
+    if (!isHost) throw new Error('Only the trip host can approve or reject join requests');
+
+    const request = await prisma.tripJoinRequest.findUnique({
+      where: { id: requestId },
+      include: { user: true },
+    });
+
+    if (!request || request.tripId !== tripId) {
+      throw new Error('Join request not found');
+    }
+
+    if (action === 'approve') {
+      await prisma.tripJoinRequest.update({
+        where: { id: requestId },
+        data: { status: 'APPROVED' },
+      });
+
+      const existingMember = await prisma.tripMember.findFirst({
+        where: { tripId, userId: request.userId },
+      });
+
+      if (!existingMember) {
+        await prisma.tripMember.create({
+          data: {
+            id: generateObjectId(),
+            tripId,
+            userId: request.userId,
+            role: 'MEMBER',
+          },
+        });
+
+        await logActivity(
+          tripId,
+          request.userId,
+          'MEMBER_JOINED',
+          `${request.user.name} joined the trip (Approved by host)`
+        );
+      }
+
+      return { success: true, message: `Approved ${request.user.name}'s join request.` };
+    } else {
+      await prisma.tripJoinRequest.update({
+        where: { id: requestId },
+        data: { status: 'REJECTED' },
+      });
+
+      return { success: true, message: `Rejected ${request.user.name}'s join request.` };
+    }
   },
 
   async addExpense(

@@ -50,22 +50,25 @@ model User {
   personalChecklists    ChecklistItem[]      @relation("PersonalChecklistOwner")
   checklistAssignments  ChecklistItem[]      @relation("ChecklistAssignedTo")
   checklistCompletions  ChecklistItem[]      @relation("ChecklistCompletedBy")
+  joinRequests          TripJoinRequest[]
 }
 
 model Trip {
-  id           String    @id @default(auto()) @map("_id") @db.ObjectId
-  name         String
-  description  String?
-  code         String    @unique
-  currency     String    @default("₹")
-  budget       Float?
-  startDate    DateTime?
-  endDate      DateTime?
-  createdById  String?   @db.ObjectId
-  isLocked     Boolean   @default(false)
-  approvalMode Boolean   @default(false)
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  name          String
+  description   String?
+  code          String    @unique
+  inviteToken   String?   @unique
+  inviteEnabled Boolean   @default(true)
+  currency      String    @default("₹")
+  budget        Float?
+  startDate     DateTime?
+  endDate       DateTime?
+  createdById   String?   @db.ObjectId
+  isLocked      Boolean   @default(false)
+  approvalMode  Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   createdBy User?        @relation("TripCreatedBy", fields: [createdById], references: [id])
   members   TripMember[]
@@ -79,6 +82,7 @@ model Trip {
   messages       Message[]
   memories       TripMemory[]
   checklistItems ChecklistItem[]
+  joinRequests   TripJoinRequest[]
 }
 
 model TripMember {
@@ -93,6 +97,22 @@ model TripMember {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([tripId, userId])
+}
+
+model TripJoinRequest {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  tripId    String   @db.ObjectId
+  userId    String   @db.ObjectId
+  status    String   @default("PENDING") // PENDING, APPROVED, REJECTED
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  trip Trip @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([tripId, userId])
+  @@index([tripId])
+  @@index([userId])
 }
 
 model Expense {

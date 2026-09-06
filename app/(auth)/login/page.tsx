@@ -69,7 +69,8 @@ function LoginFormContent() {
         throw new Error(data.error || 'Invalid email or password');
       }
 
-      router.push('/dashboard');
+      const returnUrl = searchParams ? searchParams.get('returnUrl') : null;
+      router.push(returnUrl || '/dashboard');
     } catch (err: any) {
       setError(err.message);
     } finally {
