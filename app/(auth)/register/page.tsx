@@ -13,6 +13,7 @@ import {
   EyeOff,
   Calendar,
   Users,
+  ChevronDown,
   AlertTriangle,
   Sparkles,
   ShieldCheck,
@@ -170,86 +171,67 @@ export default function RegisterPage() {
             )}
 
             <form onSubmit={handleRegister} className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
-                  Full Name
-                </label>
-                <Input
-                  placeholder="Rahul Sharma"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  icon={<User className="w-4 h-4 text-slate-400" />}
-                  className="bg-slate-950 border-slate-800 text-white placeholder:text-slate-500 focus:border-emerald-500 focus:ring-emerald-500/20 py-3.5"
-                  required
-                />
-              </div>
+              <Input
+                label="Full Name"
+                placeholder="Rahul Sharma"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                icon={<User className="w-4 h-4 text-slate-400" />}
+                required
+              />
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
-                  Email Address
-                </label>
-                <Input
-                  type="email"
-                  placeholder="you@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  icon={<Mail className="w-4 h-4 text-slate-400" />}
-                  className="bg-slate-950 border-slate-800 text-white placeholder:text-slate-500 focus:border-emerald-500 focus:ring-emerald-500/20 py-3.5"
-                  required
-                />
-              </div>
+              <Input
+                label="Email Address"
+                type="email"
+                placeholder="you@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                icon={<Mail className="w-4 h-4 text-slate-400" />}
+                required
+              />
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
-                  Password
-                </label>
-                <Input
-                  type={showPassword ? 'text' : 'password'}
-                  placeholder="At least 6 characters"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  icon={<Lock className="w-4 h-4 text-slate-400" />}
-                  rightIcon={
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="text-slate-400 hover:text-slate-200 transition-colors focus:outline-none"
-                      aria-label={showPassword ? 'Hide password' : 'Show password'}
-                    >
-                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </button>
-                  }
-                  className="bg-slate-950 border-slate-800 text-white placeholder:text-slate-500 focus:border-emerald-500 focus:ring-emerald-500/20 py-3.5"
-                  required
-                />
-              </div>
+              <Input
+                label="Password"
+                type={showPassword ? 'text' : 'password'}
+                placeholder="At least 6 characters"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                icon={<Lock className="w-4 h-4 text-slate-400" />}
+                rightIcon={
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="text-slate-400 hover:text-slate-200 transition-colors focus:outline-none p-1 rounded-lg hover:bg-slate-800"
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                }
+                required
+              />
 
               {/* Grouped DOB & Gender Fields (2 Columns on Desktop) */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
-                    Date of Birth
-                  </label>
-                  <Input
-                    type="date"
-                    value={dob}
-                    onChange={(e) => setDob(e.target.value)}
-                    icon={<Calendar className="w-4 h-4 text-slate-400" />}
-                    className="bg-slate-950 border-slate-800 text-white placeholder:text-slate-500 focus:border-emerald-500 focus:ring-emerald-500/20 py-3.5 [color-scheme:dark]"
-                    required
-                  />
-                </div>
+                <Input
+                  label="Date of Birth"
+                  type="date"
+                  value={dob}
+                  onChange={(e) => setDob(e.target.value)}
+                  icon={<Calendar className="w-4 h-4 text-slate-400" />}
+                  className="[color-scheme:dark]"
+                  required
+                />
 
-                <div>
-                  <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
+                <div className="w-full space-y-1.5">
+                  <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
                     Gender
                   </label>
                   <div className="relative flex items-center">
-                    <Users className="absolute left-3.5 text-slate-400 w-4 h-4 pointer-events-none" />
+                    <Users className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4 pointer-events-none z-10" />
                     <select
                       value={gender}
                       onChange={(e) => setGender(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-800 text-white text-base rounded-2xl py-3.5 pl-11 pr-4 transition-all duration-200 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 appearance-none"
+                      className="w-full h-12 bg-slate-950 border border-slate-800 text-white text-sm sm:text-base rounded-2xl pl-11 pr-10 transition-all duration-200 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 appearance-none truncate"
                       required
                     >
                       <option value="" disabled className="bg-slate-900 text-slate-500">
@@ -268,6 +250,7 @@ export default function RegisterPage() {
                         Prefer not to say
                       </option>
                     </select>
+                    <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4 pointer-events-none z-10" />
                   </div>
                 </div>
               </div>

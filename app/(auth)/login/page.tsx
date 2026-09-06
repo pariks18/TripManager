@@ -238,23 +238,18 @@ function LoginFormContent() {
             )}
 
             <form onSubmit={handleLogin} className="space-y-5">
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">
-                  Email Address
-                </label>
-                <Input
-                  type="email"
-                  placeholder="you@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  icon={<Mail className="w-4 h-4 text-slate-400" />}
-                  className="bg-slate-950 border-slate-800 text-white placeholder:text-slate-500 focus:border-emerald-500 focus:ring-emerald-500/20 py-3.5"
-                  required
-                />
-              </div>
+              <Input
+                label="Email Address"
+                type="email"
+                placeholder="you@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                icon={<Mail className="w-4 h-4 text-slate-400" />}
+                required
+              />
 
               <div>
-                <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center justify-between mb-1.5">
                   <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
                     Password
                   </label>
@@ -276,13 +271,12 @@ function LoginFormContent() {
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="text-slate-400 hover:text-slate-200 transition-colors focus:outline-none"
+                      className="text-slate-400 hover:text-slate-200 transition-colors focus:outline-none p-1 rounded-lg hover:bg-slate-800"
                       aria-label={showPassword ? 'Hide password' : 'Show password'}
                     >
                       {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   }
-                  className="bg-slate-950 border-slate-800 text-white placeholder:text-slate-500 focus:border-emerald-500 focus:ring-emerald-500/20 py-3.5"
                   required
                 />
               </div>

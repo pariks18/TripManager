@@ -215,7 +215,7 @@ function VerifyEmailOtpContent() {
 
           <form onSubmit={handleVerify} className="space-y-6">
             {/* 6-Digit Box Inputs */}
-            <div className="flex items-center justify-center gap-2 sm:gap-3" onPaste={handlePaste}>
+            <div className="flex items-center justify-center gap-1.5 sm:gap-3" onPaste={handlePaste}>
               {otp.map((digit, index) => (
                 <input
                   key={index}
@@ -226,7 +226,7 @@ function VerifyEmailOtpContent() {
                   value={digit}
                   onChange={(e) => handleDigitChange(index, e.target.value)}
                   onKeyDown={(e) => handleKeyDown(index, e)}
-                  className="w-11 h-14 sm:w-12 sm:h-14 bg-slate-950 border border-slate-800 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 text-center font-mono text-xl sm:text-2xl font-extrabold text-emerald-400 rounded-2xl transition-all outline-none"
+                  className="w-9 sm:w-12 h-12 sm:h-14 bg-slate-950 border border-slate-800 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 text-center font-mono text-lg sm:text-2xl font-extrabold text-emerald-400 rounded-xl sm:rounded-2xl transition-all outline-none"
                   autoFocus={index === 0}
                 />
               ))}
