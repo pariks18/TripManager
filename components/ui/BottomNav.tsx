@@ -14,6 +14,18 @@ export const BottomNav: React.FC<BottomNavProps> = ({ activeTab, onTabChange }) 
   const pathname = usePathname();
   const router = useRouter();
 
+  // Guard: BottomNav is exclusively for active Trip contexts (/dashboard/trip/[tripId]) and Profile screen.
+  // It must never render on the main Dashboard (/dashboard), root landing, or auth routes.
+  if (
+    !pathname ||
+    pathname === '/dashboard' ||
+    pathname === '/' ||
+    pathname.startsWith('/login') ||
+    pathname.startsWith('/register')
+  ) {
+    return null;
+  }
+
   const isTripPage = pathname?.startsWith('/dashboard/trip/');
   const isProfilePage = pathname === '/dashboard/profile';
 

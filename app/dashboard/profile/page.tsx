@@ -7,7 +7,6 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
-import { BottomNav } from '@/components/ui/BottomNav';
 
 // Sub-screen components
 import { PersonalInformationView } from '@/components/profile/PersonalInformationView';
