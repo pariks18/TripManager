@@ -390,7 +390,7 @@ export default function TripDashboardPage() {
   const categories: string[] = ['ALL', 'Food', 'Travel', 'Fuel', 'Stay', 'Entertainment', 'Shopping', 'Miscellaneous'];
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 pb-24">
+    <div className="min-h-screen bg-slate-50 text-slate-900 pb-[calc(6rem+env(safe-area-inset-bottom,0px))] max-w-full overflow-x-hidden">
       {/* Fixed Sticky Header */}
       <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200/80 px-3 py-3 sm:px-6">
         <div className="w-full max-w-4xl mx-auto flex items-center justify-between gap-2">
@@ -884,7 +884,7 @@ export default function TripDashboardPage() {
           setHasUnreadChat(false);
           fetch(`/api/trips/${trip.id}/messages/read`, { method: 'POST' }).catch(() => {});
         }}
-        className="fixed bottom-20 right-4 sm:right-6 z-40 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white p-3.5 rounded-full shadow-xl transition-all flex items-center justify-center cursor-pointer group"
+        className="fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom,0px))] right-4 sm:right-6 z-40 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white p-3.5 rounded-full shadow-xl transition-all flex items-center justify-center cursor-pointer group"
         title="Open Group Chat & Live Polls"
       >
         <MessageSquare className="w-6 h-6" />

@@ -110,7 +110,7 @@ export const ExpenseCard: React.FC<ExpenseCardProps> = React.memo(({
 
           <div className="min-w-0">
             <div className="flex items-center gap-1.5 flex-wrap sm:flex-nowrap">
-              <h4 className="text-xs sm:text-sm font-bold text-slate-900 truncate max-w-[120px] sm:max-w-none">{expense.title}</h4>
+              <h4 className="text-xs sm:text-sm font-bold text-slate-900 truncate max-w-[130px] xs:max-w-[160px] sm:max-w-none">{expense.title}</h4>
 
               {isPending && (
                 <span className="bg-amber-100 text-amber-800 text-[9px] font-extrabold px-1.5 sm:px-2 py-0.5 rounded-full shrink-0">

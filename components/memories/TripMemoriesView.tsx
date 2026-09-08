@@ -497,41 +497,41 @@ export const TripMemoriesView: React.FC<TripMemoriesViewProps> = ({ trip, curren
       </div>
 
       {/* 3. Sub-Navigation Tabs */}
-      <div className="flex items-center justify-between gap-2 overflow-x-auto border-b border-slate-200 pb-1">
-        <div className="flex items-center gap-2">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-2">
+        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar w-full sm:w-auto pb-1 sm:pb-0">
           <button
             onClick={() => setActiveSubTab('MY_JOURNEY')}
-            className={`px-4 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center gap-1.5 ${
+            className={`px-3 sm:px-4 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shrink-0 ${
               activeSubTab === 'MY_JOURNEY'
                 ? 'bg-slate-900 text-white shadow-sm'
                 : 'text-slate-600 hover:bg-slate-100'
             }`}
           >
-            <Lock className="w-3.5 h-3.5 text-amber-400" />
+            <Lock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
             <span>My Journey</span>
           </button>
 
           <button
             onClick={() => setActiveSubTab('OUR_JOURNEY')}
-            className={`px-4 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center gap-1.5 ${
+            className={`px-3 sm:px-4 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shrink-0 ${
               activeSubTab === 'OUR_JOURNEY'
                 ? 'bg-slate-900 text-white shadow-sm'
                 : 'text-slate-600 hover:bg-slate-100'
             }`}
           >
-            <Users className="w-3.5 h-3.5 text-blue-400" />
+            <Users className="w-3.5 h-3.5 text-blue-400 shrink-0" />
             <span>Our Journey</span>
           </button>
 
           <button
             onClick={() => setActiveSubTab('SHARED_WITH_ME')}
-            className={`px-4 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center gap-1.5 relative ${
+            className={`px-3 sm:px-4 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shrink-0 relative ${
               activeSubTab === 'SHARED_WITH_ME'
                 ? 'bg-slate-900 text-white shadow-sm'
                 : 'text-slate-600 hover:bg-slate-100'
             }`}
           >
-            <UserCheck className="w-3.5 h-3.5 text-emerald-400" />
+            <UserCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
             <span>Shared With Me</span>
             {shareRequests.filter((sr) => sr.status === 'PENDING').length > 0 && (
               <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
@@ -540,13 +540,13 @@ export const TripMemoriesView: React.FC<TripMemoriesViewProps> = ({ trip, curren
 
           <button
             onClick={() => setActiveSubTab('PHOTOS')}
-            className={`px-4 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center gap-1.5 ${
+            className={`px-3 sm:px-4 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shrink-0 ${
               activeSubTab === 'PHOTOS'
                 ? 'bg-slate-900 text-white shadow-sm'
                 : 'text-slate-600 hover:bg-slate-100'
             }`}
           >
-            <ImageIcon className="w-3.5 h-3.5 text-pink-400" />
+            <ImageIcon className="w-3.5 h-3.5 text-pink-400 shrink-0" />
             <span>Photos ({dayPhotos.length})</span>
           </button>
         </div>
@@ -555,7 +555,7 @@ export const TripMemoriesView: React.FC<TripMemoriesViewProps> = ({ trip, curren
         <Button
           onClick={openNewMemoryModal}
           size="sm"
-          className="bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-sm gap-1.5 shrink-0"
+          className="bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-sm gap-1.5 shrink-0 w-full sm:w-auto justify-center"
         >
           <Plus className="w-4 h-4" />
           <span>Record Day {selectedDay} Memory</span>

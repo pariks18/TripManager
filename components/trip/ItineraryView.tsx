@@ -278,7 +278,7 @@ export const ItineraryView: React.FC<ItineraryViewProps> = React.memo(({
                         key={item.id}
                         className="bg-white rounded-2xl p-4 border border-slate-100 apple-shadow hover:border-slate-200 transition-all space-y-3"
                       >
-                        <div className="flex items-start justify-between gap-3">
+                        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
                           <div className="flex items-start gap-3">
                             <div className={`p-2.5 rounded-xl ${catStyle.bg} shrink-0 mt-0.5`}>
                               <CatIcon className="w-4 h-4" />
@@ -303,7 +303,7 @@ export const ItineraryView: React.FC<ItineraryViewProps> = React.memo(({
                             </div>
                           </div>
 
-                          <div className="flex items-center gap-1 shrink-0 flex-wrap justify-end">
+                          <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-start sm:justify-end pt-1 sm:pt-0">
                             {/* Level 1: ✨ AI Summary */}
                             <button
                               onClick={() => handleToggleInlineSummary(item)}

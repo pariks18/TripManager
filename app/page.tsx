@@ -39,7 +39,7 @@ export default function SplashPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-900 via-slate-900 to-emerald-950 text-white flex flex-col justify-between p-6 sm:p-12 relative overflow-hidden">
+    <div className="min-h-screen bg-gradient-to-b from-slate-900 via-slate-900 to-emerald-950 text-white flex flex-col justify-between p-6 sm:p-12 relative overflow-x-hidden max-w-full">
       {/* Background glow effects */}
       <div className="absolute -top-40 -left-40 w-96 h-96 bg-emerald-500/20 rounded-full blur-3xl" />
       <div className="absolute top-1/2 -right-40 w-96 h-96 bg-blue-500/20 rounded-full blur-3xl" />

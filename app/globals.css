@@ -6,13 +6,38 @@
 
 @layer base {
   html {
-    @apply h-full bg-slate-50 text-slate-900 font-sans antialiased selection:bg-emerald-500 selection:text-slate-950;
+    @apply h-full bg-slate-50 text-slate-900 font-sans antialiased selection:bg-emerald-500 selection:text-slate-950 overflow-x-hidden max-w-full;
     color-scheme: light;
+    -webkit-tap-highlight-color: transparent;
   }
   body {
-    @apply min-h-screen min-h-[100dvh] w-full bg-slate-50 text-slate-900 font-sans antialiased selection:bg-emerald-500 selection:text-slate-950;
+    @apply min-h-screen min-h-[100dvh] w-full bg-slate-50 text-slate-900 font-sans antialiased selection:bg-emerald-500 selection:text-slate-950 overflow-x-hidden max-w-full;
+    -webkit-tap-highlight-color: transparent;
   }
 }
+
+/* Prevent iOS Safari layout jump on form input focus by ensuring 16px min font on mobile screens */
+@media (max-width: 640px) {
+  input[type="text"],
+  input[type="number"],
+  input[type="email"],
+  input[type="password"],
+  input[type="date"],
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* Utility to hide scrollbars while allowing scroll */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
 .glass-card {
   background: rgba(255, 255, 255, 0.85);
   backdrop-filter: blur(12px);

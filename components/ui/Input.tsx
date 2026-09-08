@@ -66,7 +66,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
             ref={ref}
             className={cn(
               // Base input styles
-              'w-full h-11 sm:h-12 border text-sm rounded-2xl transition-all duration-200 font-medium',
+              'w-full h-11 sm:h-12 border text-base sm:text-sm rounded-2xl transition-all duration-200 font-medium',
               'placeholder:font-normal',
               'focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20',
               'disabled:opacity-50 disabled:cursor-not-allowed',

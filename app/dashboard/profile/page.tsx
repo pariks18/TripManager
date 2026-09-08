@@ -195,7 +195,7 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 pb-28 md:pb-12">
+    <div className="min-h-screen bg-slate-50 text-slate-900 pb-[calc(6rem+env(safe-area-inset-bottom,0px))] md:pb-12 max-w-full overflow-x-hidden">
       {/* Top Bar Header */}
       <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-slate-100 px-3 py-3.5 sm:px-6">
         <div className="w-full max-w-4xl mx-auto flex items-center justify-between">

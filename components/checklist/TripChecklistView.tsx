@@ -298,26 +298,26 @@ export const TripChecklistView: React.FC<TripChecklistViewProps> = React.memo(({
           </div>
 
           {/* Section Toggle: Group vs Personal */}
-          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-2xl border border-slate-200/80 text-xs font-bold w-full sm:w-auto">
+          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-2xl border border-slate-200/80 text-[11px] sm:text-xs font-bold w-full sm:w-auto">
             <button
               onClick={() => setSection('GROUP')}
-              className={`flex-1 sm:flex-initial px-4 py-2 rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer ${
+              className={`flex-1 sm:flex-initial px-2.5 sm:px-4 py-2 rounded-xl transition-all flex items-center justify-center gap-1.5 sm:gap-2 cursor-pointer ${
                 section === 'GROUP'
                   ? 'bg-emerald-600 text-white shadow-xs'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              <Users className="w-4 h-4" /> Group Checklist
+              <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> Group Checklist
             </button>
             <button
               onClick={() => setSection('PERSONAL')}
-              className={`flex-1 sm:flex-initial px-4 py-2 rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer ${
+              className={`flex-1 sm:flex-initial px-2.5 sm:px-4 py-2 rounded-xl transition-all flex items-center justify-center gap-1.5 sm:gap-2 cursor-pointer ${
                 section === 'PERSONAL'
                   ? 'bg-emerald-600 text-white shadow-xs'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              <User className="w-4 h-4" /> Personal Checklist
+              <User className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> Personal Checklist
             </button>
           </div>
         </div>
