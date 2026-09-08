@@ -329,7 +329,7 @@ export default function ProfilePage() {
                     <p className="text-[11px] text-slate-400">Name, Email, Mobile, DOB, Gender</p>
                   </div>
                 </div>
-                <ChevronRight className="w-4 h-4 text-slate-400" />
+                <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />
               </div>
 
               {/* 2. Account & Security */}
@@ -346,7 +346,7 @@ export default function ProfilePage() {
                     <p className="text-[11px] text-slate-400">Verification status, Change password</p>
                   </div>
                 </div>
-                <ChevronRight className="w-4 h-4 text-slate-400" />
+                <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />
               </div>
 
               {/* 3. Travel Information */}
@@ -363,7 +363,7 @@ export default function ProfilePage() {
                     <p className="text-[11px] text-slate-400">Emergency contact, Nationality, Currency</p>
                   </div>
                 </div>
-                <ChevronRight className="w-4 h-4 text-slate-400" />
+                <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />
               </div>
 
               {/* 4. Documents & ID Proofs */}
@@ -385,7 +385,7 @@ export default function ProfilePage() {
                     <p className="text-[11px] text-slate-400">Aadhaar, PAN, Passport, Driving Licence</p>
                   </div>
                 </div>
-                <ChevronRight className="w-4 h-4 text-slate-400" />
+                <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />
               </div>
 
               {/* 5. Privacy & Permissions */}
@@ -402,7 +402,7 @@ export default function ProfilePage() {
                     <p className="text-[11px] text-slate-400">Document access policy & host permissions</p>
                   </div>
                 </div>
-                <ChevronRight className="w-4 h-4 text-slate-400" />
+                <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />
               </div>
 
               {/* 6. Application Information */}
@@ -419,7 +419,7 @@ export default function ProfilePage() {
                     <p className="text-[11px] text-slate-400">Version 2.6, Terms, Privacy Policy, FAQs</p>
                   </div>
                 </div>
-                <ChevronRight className="w-4 h-4 text-slate-400" />
+                <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />
               </div>
             </div>
 

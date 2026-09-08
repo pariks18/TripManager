@@ -12,6 +12,7 @@ import { RenameTripModal } from '@/components/trip/RenameTripModal';
 import { TripSettingsModal } from '@/components/trip/TripSettingsModal';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { Button } from '@/components/ui/Button';
+import { BottomNav } from '@/components/ui/BottomNav';
 import { formatCurrency } from '@/lib/utils';
 import { Plus, KeyRound, Compass, Search, User, LogOut, ShieldCheck, AlertTriangle, Loader2 } from 'lucide-react';
 import { fetchClientSession, clearClientSession } from '@/lib/clientSession';
@@ -324,11 +325,13 @@ export default function DashboardPage() {
       {/* Floating Action Button (FAB) on Mobile */}
       <button
         onClick={() => setIsCreateOpen(true)}
-        className="fixed right-5 bottom-8 z-40 w-14 h-14 bg-emerald-600 hover:bg-emerald-700 text-white rounded-full flex items-center justify-center shadow-lg active:scale-95 transition-all sm:hidden cursor-pointer"
+        className="fixed right-4 bottom-20 z-40 w-12 h-12 bg-emerald-600 hover:bg-emerald-700 text-white rounded-full flex items-center justify-center shadow-lg active:scale-95 transition-all sm:hidden cursor-pointer"
         aria-label="Create Trip"
       >
-        <Plus className="w-7 h-7" />
+        <Plus className="w-6 h-6" />
       </button>
+
+      <BottomNav />
 
       {/* Modals */}
       <CreateTripModal

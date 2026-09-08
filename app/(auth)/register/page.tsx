@@ -172,6 +172,7 @@ export default function RegisterPage() {
 
             <form onSubmit={handleRegister} className="space-y-4">
               <Input
+                variant="dark"
                 label="Full Name"
                 placeholder="Rahul Sharma"
                 value={name}
@@ -181,6 +182,7 @@ export default function RegisterPage() {
               />
 
               <Input
+                variant="dark"
                 label="Email Address"
                 type="email"
                 placeholder="you@example.com"
@@ -191,6 +193,7 @@ export default function RegisterPage() {
               />
 
               <Input
+                variant="dark"
                 label="Password"
                 type={showPassword ? 'text' : 'password'}
                 placeholder="At least 6 characters"
@@ -201,7 +204,7 @@ export default function RegisterPage() {
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="text-slate-400 hover:text-slate-200 transition-colors focus:outline-none p-1 rounded-lg hover:bg-slate-800"
+                    className="text-slate-400 hover:text-slate-200 transition-colors focus:outline-none p-1 rounded-lg hover:bg-slate-800 flex items-center justify-center shrink-0"
                     aria-label={showPassword ? 'Hide password' : 'Show password'}
                   >
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -213,6 +216,7 @@ export default function RegisterPage() {
               {/* Grouped DOB & Gender Fields (2 Columns on Desktop) */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                 <Input
+                  variant="dark"
                   label="Date of Birth"
                   type="date"
                   value={dob}

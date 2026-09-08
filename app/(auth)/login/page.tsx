@@ -240,6 +240,7 @@ function LoginFormContent() {
 
             <form onSubmit={handleLogin} className="space-y-5">
               <Input
+                variant="dark"
                 label="Email Address"
                 type="email"
                 placeholder="you@example.com"
@@ -263,6 +264,7 @@ function LoginFormContent() {
                   </button>
                 </div>
                 <Input
+                  variant="dark"
                   type={showPassword ? 'text' : 'password'}
                   placeholder="••••••••"
                   value={password}
@@ -272,7 +274,7 @@ function LoginFormContent() {
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="text-slate-400 hover:text-slate-200 transition-colors focus:outline-none p-1 rounded-lg hover:bg-slate-800"
+                      className="text-slate-400 hover:text-slate-200 transition-colors focus:outline-none p-1 rounded-lg hover:bg-slate-800 flex items-center justify-center shrink-0"
                       aria-label={showPassword ? 'Hide password' : 'Show password'}
                     >
                       {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}

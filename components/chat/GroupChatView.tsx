@@ -625,7 +625,7 @@ export const GroupChatView: React.FC<GroupChatViewProps> = React.memo(({ tripId,
           </div>
 
           {/* 3. Input Footer (Fixed Bottom) */}
-          <div className="shrink-0 bg-white border-t border-slate-200/80 z-10">
+          <div className="shrink-0 bg-white border-t border-slate-200/80 z-10 pb-[calc(0.5rem+env(safe-area-inset-bottom,0px))]">
             {/* Editing Message Banner */}
             {editingMessage && (
               <div className="px-4 py-2 bg-emerald-50 border-b border-emerald-100 flex items-center justify-between text-xs">

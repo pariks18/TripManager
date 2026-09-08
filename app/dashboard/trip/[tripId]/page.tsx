@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { useRouter, useParams } from 'next/navigation';
+import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { fetchClientSession } from '@/lib/clientSession';
 import { ExpenseDetail, TripSummary, UserSession, CategoryType, MemberBalance, SettlementTransaction } from '@/types';
@@ -72,6 +72,7 @@ import {
 export default function TripDashboardPage() {
   const router = useRouter();
   const params = useParams();
+  const searchParams = useSearchParams();
   const tripId = (params?.tripId as string) || '';
 
   const [user, setUser] = useState<UserSession | null>(null);
@@ -82,6 +83,18 @@ export default function TripDashboardPage() {
   const [isChatModalOpen, setIsChatModalOpen] = useState(false);
   const [hasUnreadChat, setHasUnreadChat] = useState(false);
   const [copiedCode, setCopiedCode] = useState(false);
+
+  // Sync tab from URL query params and persist last visited tripId
+  useEffect(() => {
+    if (!tripId) return;
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('lastTripId', tripId);
+    }
+    const t = searchParams?.get('tab');
+    if (t && ['overview', 'trip', 'polls', 'location', 'expenses', 'itinerary', 'stay', 'approvals', 'settlement', 'timeline', 'analytics', 'memories', 'tripplan', 'checklist'].includes(t)) {
+      setActiveTab(t as any);
+    }
+  }, [tripId, searchParams]);
 
   // Listen for real-time incoming chat messages when modal is closed
   useEffect(() => {
@@ -608,23 +621,6 @@ export default function TripDashboardPage() {
                   </div>
                   <span className="text-slate-400 group-hover:text-slate-900 text-lg font-bold">›</span>
                 </div>
-
-                {/* 4. Trip Checklist */}
-                <div
-                  onClick={() => setActiveTab('checklist')}
-                  className="bg-white rounded-3xl p-5 border border-slate-200/90 shadow-sm hover:shadow-md cursor-pointer transition-all flex items-center justify-between group active:scale-[0.98]"
-                >
-                  <div className="flex items-center gap-3.5">
-                    <div className="p-3 bg-emerald-50 text-emerald-600 rounded-2xl group-hover:scale-105 transition-transform">
-                      <CheckSquare className="w-6 h-6" />
-                    </div>
-                    <div>
-                      <h5 className="text-sm font-extrabold text-slate-900">Trip Checklist</h5>
-                      <p className="text-xs text-slate-500 mt-0.5">Group & Personal packing list</p>
-                    </div>
-                  </div>
-                  <span className="text-slate-400 group-hover:text-slate-900 text-lg font-bold">›</span>
-                </div>
               </div>
             </div>
           </div>
@@ -682,14 +678,14 @@ export default function TripDashboardPage() {
         )}
 
         {/* TAB: TRIP CHECKLIST */}
-        {activeTab === 'checklist' && (
+        <div className={activeTab === 'checklist' ? 'block' : 'hidden'}>
           <TripChecklistView
             tripId={trip.id}
             currentUser={user}
             members={trip.members}
             isAdmin={isAdmin}
           />
-        )}
+        </div>
 
         {/* TAB 2: EXPENSES TIMELINE */}
         {activeTab === 'expenses' && (

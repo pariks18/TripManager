@@ -55,27 +55,30 @@ export const Modal: React.FC<ModalProps> = ({
             exit={{ y: '100%', opacity: 0 }}
             transition={{ type: 'spring', damping: 25, stiffness: 300 }}
             className={cn(
-              'relative w-full bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden border border-slate-100 max-h-[85vh] sm:max-h-[90vh] flex flex-col z-10',
+              'relative w-full bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden border border-slate-100 max-h-[90dvh] sm:max-h-[90vh] flex flex-col z-10 pb-[calc(0.5rem+env(safe-area-inset-bottom,0px))] sm:pb-0',
               maxWidth
             )}
           >
             {/* Header */}
-            <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 sm:py-4 border-b border-slate-100 bg-slate-50/50">
-              <h3 className="text-base sm:text-lg font-bold text-slate-900 line-clamp-1">{title}</h3>
-              <button
-                onClick={onClose}
-                className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-200/50 rounded-full transition-colors shrink-0"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+            {title && (
+              <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 sm:py-4 border-b border-slate-100 bg-slate-50/50 shrink-0">
+                <h3 className="text-base sm:text-lg font-extrabold text-slate-900 line-clamp-1">{title}</h3>
+                <button
+                  onClick={onClose}
+                  className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-200/60 rounded-full transition-colors shrink-0 flex items-center justify-center"
+                  aria-label="Close modal"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            )}
 
             {/* Modal Body Content */}
             <div
               className={cn(
                 noPadding
                   ? 'flex-1 min-h-0 flex flex-col overflow-hidden'
-                  : 'p-4 sm:p-6 overflow-y-auto space-y-4',
+                  : 'p-4 sm:p-6 overflow-y-auto space-y-4 min-h-0',
                 contentClassName
               )}
             >

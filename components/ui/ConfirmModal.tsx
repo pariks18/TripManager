@@ -33,13 +33,13 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
   const getIcon = () => {
     switch (variant) {
       case 'danger':
-        return <Trash2 className="w-7 h-7 text-rose-600" />;
+        return <Trash2 className="w-7 h-7 text-rose-600 shrink-0" />;
       case 'warning':
-        return <AlertTriangle className="w-7 h-7 text-amber-600" />;
+        return <AlertTriangle className="w-7 h-7 text-amber-600 shrink-0" />;
       case 'success':
-        return <CheckCircle2 className="w-7 h-7 text-emerald-600" />;
+        return <CheckCircle2 className="w-7 h-7 text-emerald-600 shrink-0" />;
       default:
-        return <Info className="w-7 h-7 text-blue-600" />;
+        return <Info className="w-7 h-7 text-blue-600 shrink-0" />;
     }
   };
 
