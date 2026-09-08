@@ -521,6 +521,7 @@ export default function TripDashboardPage() {
             members={trip.members}
             expenses={trip.expenses}
             tripId={trip.id}
+            tripCreatedById={trip.createdById || undefined}
             isAdmin={isAdmin}
             onMemberRemoved={fetchTripDetails}
             onNavigateTab={(tab) => setActiveTab(tab as any)}

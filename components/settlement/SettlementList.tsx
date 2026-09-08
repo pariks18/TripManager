@@ -8,6 +8,8 @@ import { Button } from '@/components/ui/Button';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { SettleUpModal } from './SettleUpModal';
 import { ExpenseBreakdownModal } from '@/components/expense/ExpenseBreakdownModal';
+import { OrganizerSettlementView } from './OrganizerSettlementView';
+import { calculateMemberBalances } from '@/lib/settlement';
 import {
   ArrowDownLeft,
   ArrowUpRight,
@@ -59,6 +61,14 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
   // Settle Up Modal State
   const [isSettleModalOpen, setIsSettleModalOpen] = useState(false);
   const [settleModalTx, setSettleModalTx] = useState<SettlementTransaction | null>(null);
+
+  // Organizer View Switcher State
+  const [showOrganizerView, setShowOrganizerView] = useState(false);
+
+  const memberBalances = React.useMemo(() => {
+    if (!members.length) return [];
+    return calculateMemberBalances(members, expenses, settlementRecords);
+  }, [members, expenses, settlementRecords]);
 
   // Expense Breakdown Modal State
   const [breakdownMember, setBreakdownMember] = useState<UserSummary | null>(null);
@@ -421,7 +431,46 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
 
   return (
     <div className="space-y-6">
-      {/* 1. Position Banner */}
+      {/* Organizer Mode Switcher Header (Host View vs Personal View) */}
+      {isAdmin && (
+        <div className="flex items-center gap-2 bg-slate-200/80 p-1 rounded-2xl text-xs font-bold w-full sm:w-auto max-w-md mx-auto shadow-inner border border-slate-200/60 select-none">
+          <button
+            onClick={() => setShowOrganizerView(false)}
+            className={`flex-1 py-2 px-3 rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+              !showOrganizerView
+                ? 'bg-white text-slate-900 shadow-sm font-extrabold'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <span>My Debt Transfers</span>
+          </button>
+
+          <button
+            onClick={() => setShowOrganizerView(true)}
+            className={`flex-1 py-2 px-3 rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+              showOrganizerView
+                ? 'bg-white text-slate-900 shadow-sm font-extrabold'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <ShieldCheck className="w-4 h-4 text-emerald-600" />
+            <span>Host Settlement Matrix</span>
+          </button>
+        </div>
+      )}
+
+      {showOrganizerView && isAdmin ? (
+        <OrganizerSettlementView
+          memberBalances={memberBalances}
+          settlements={settlements}
+          expenses={expenses}
+          currency={currency}
+          settlementRecords={settlementRecords}
+          currentUserId={currentUserId}
+        />
+      ) : (
+        <>
+          {/* 1. Position Banner */}
       <div
         className={`rounded-3xl p-6 border transition-all shadow-sm ${
           isAllSettled
@@ -970,6 +1019,8 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
             })}
           </div>
         </div>
+      )}
+        </>
       )}
 
       {/* Settle Up Modal */}

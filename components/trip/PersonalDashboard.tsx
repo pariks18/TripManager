@@ -10,6 +10,7 @@ import { SettleUpModal } from '@/components/settlement/SettleUpModal';
 import { ExpenseBreakdownModal } from '@/components/expense/ExpenseBreakdownModal';
 import { AdvanceCreditModal } from '@/components/wallet/AdvanceCreditModal';
 import { ExpenseCard } from '@/components/expense/ExpenseCard';
+import { PersonalBalanceBreakdown } from '@/components/expense/PersonalBalanceBreakdown';
 import {
   ArrowUpRight,
   ArrowDownLeft,
@@ -35,6 +36,7 @@ interface PersonalDashboardProps {
   members?: TripMemberDetail[];
   expenses?: ExpenseDetail[];
   tripId?: string;
+  tripCreatedById?: string;
   isAdmin?: boolean;
   onMemberRemoved?: () => void;
   onNavigateTab?: (tab: string) => void;
@@ -58,6 +60,7 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = React.memo(({
   members = [],
   expenses = [],
   tripId,
+  tripCreatedById,
   isAdmin = false,
   onMemberRemoved,
   onNavigateTab,
@@ -108,121 +111,55 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = React.memo(({
     setIsBreakdownOpen(true);
   };
 
+  const currentUserSummary: UserSummary = {
+    id: currentUserId,
+    name: members.find((m) => m.userId === currentUserId)?.user.name || 'You',
+    email: members.find((m) => m.userId === currentUserId)?.user.email || '',
+  };
+
   return (
     <div className="space-y-6">
-      {/* 1. Top Hero Card: "What do I need to know?" */}
-      <div
-        className={`rounded-3xl p-6 border shadow-sm transition-all ${
-          isSettled
-            ? 'bg-white border-slate-200/90'
-            : isNetNegative
-            ? 'bg-rose-50/60 border-rose-200/80'
-            : 'bg-emerald-50/60 border-emerald-200/80'
-        }`}
-      >
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <span
-              className={`text-[10px] font-extrabold uppercase tracking-wider px-2.5 py-0.5 rounded-full ${
-                isSettled
-                  ? 'bg-slate-100 text-slate-700'
-                  : isNetNegative
-                  ? 'bg-rose-100 text-rose-800'
-                  : 'bg-emerald-100 text-emerald-800'
-              }`}
-            >
-              {isSettled ? 'All Settled Up' : isNetNegative ? 'Payment Required' : 'You Are Owed'}
-            </span>
-          </div>
+      {/* 1. Transparent Personal Balance Breakdown */}
+      <PersonalBalanceBreakdown
+        user={currentUserSummary}
+        currency={currency}
+        paid={totalPaid}
+        share={totalShare}
+        netBalance={netBalance}
+        expenses={expenses}
+        settlementRecords={settlementRecords}
+        isCurrentUser={true}
+      />
 
-          <div>
-            <h2 className="text-3xl font-black text-slate-900 tracking-tight">
-              {isSettled ? (
-                <span className="flex items-center gap-2">
-                  You're all settled up 🎉
-                </span>
-              ) : isNetNegative ? (
-                <>
-                  You owe{' '}
-                  <span className="text-rose-600">
-                    {formatCurrency(Math.abs(netBalance), currency)}
-                  </span>
-                </>
-              ) : (
-                <>
-                  You are owed{' '}
-                  <span className="text-emerald-600">
-                    {formatCurrency(netBalance, currency)}
-                  </span>
-                </>
-              )}
-            </h2>
-            <p className="text-xs text-slate-500 font-medium mt-1">
-              {isSettled
-                ? 'No pending payments or receivables for this trip.'
-                : isNetNegative
-                ? 'Settle up with members to balance your share.'
-                : 'Members need to pay you for your trip spending.'}
-            </p>
-          </div>
+      {/* Quick Action Buttons Row */}
+      <div className="flex items-center gap-3">
+        {onAddExpense && (
+          <button
+            onClick={onAddExpense}
+            className="flex-1 py-3 px-4 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white font-bold text-xs rounded-2xl shadow-sm transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+          >
+            <Plus className="w-4 h-4" /> Add Expense
+          </button>
+        )}
 
-          {/* Quick Action Buttons */}
-          <div className="pt-2 flex items-center gap-3">
-            {onAddExpense && (
-              <button
-                onClick={onAddExpense}
-                className="flex-1 py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white font-bold text-xs rounded-2xl shadow-sm transition-all flex items-center justify-center gap-1.5"
-              >
-                <Plus className="w-4 h-4" /> Add Expense
-              </button>
-            )}
+        {outgoingSettlements.length > 0 && (
+          <button
+            onClick={() => {
+              if (onNavigateTab) onNavigateTab('settlement');
+              else handleSettleClick(outgoingSettlements[0]);
+            }}
+            className="flex-1 py-3 px-4 bg-white hover:bg-slate-50 border border-slate-200 active:scale-[0.98] text-slate-800 font-bold text-xs rounded-2xl shadow-sm transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+          >
+            <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Settle Up
+          </button>
+        )}
 
-            {outgoingSettlements.length > 0 && (
-              <button
-                onClick={() => {
-                  if (onNavigateTab) onNavigateTab('settlement');
-                  else handleSettleClick(outgoingSettlements[0]);
-                }}
-                className="flex-1 py-2.5 px-4 bg-white hover:bg-slate-50 border border-slate-200 active:scale-[0.98] text-slate-800 font-bold text-xs rounded-2xl shadow-sm transition-all flex items-center justify-center gap-1.5"
-              >
-                <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Settle Up
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* 2. Three Metric Summary Cards */}
-      <div className="grid grid-cols-3 gap-1.5 sm:gap-3">
-        <div className="bg-white rounded-2xl p-2 sm:p-3.5 border border-slate-100/90 shadow-sm text-center min-w-0">
-          <span className="text-[9px] xs:text-[10px] font-bold text-slate-400 uppercase tracking-wider block truncate">
-            You Paid
-          </span>
-          <span className="text-[11px] xs:text-xs sm:text-base font-black text-slate-900 mt-0.5 block truncate">
-            {formatCurrency(totalPaid, currency)}
-          </span>
-        </div>
-
-        <div className="bg-white rounded-2xl p-2 sm:p-3.5 border border-slate-100/90 shadow-sm text-center min-w-0">
-          <span className="text-[9px] xs:text-[10px] font-bold text-slate-400 uppercase tracking-wider block truncate">
-            Your Share
-          </span>
-          <span className="text-[11px] xs:text-xs sm:text-base font-black text-slate-900 mt-0.5 block truncate">
-            {formatCurrency(totalShare, currency)}
-          </span>
-        </div>
-
-        <div
+        <button
           onClick={() => setIsAdvanceCreditOpen(true)}
-          className="bg-white rounded-2xl p-2 sm:p-3.5 border border-slate-100/90 shadow-sm text-center cursor-pointer hover:border-emerald-300 transition-all active:scale-[0.98] min-w-0"
+          className="flex-1 py-3 px-4 bg-slate-50 hover:bg-slate-100 border border-slate-200 active:scale-[0.98] text-slate-700 font-bold text-xs rounded-2xl transition-all flex items-center justify-center gap-1.5 cursor-pointer"
         >
-          <span className="text-[9px] xs:text-[10px] font-bold text-slate-400 uppercase tracking-wider block truncate">
-            Advance Credit
-          </span>
-          <span className="text-[11px] xs:text-xs sm:text-base font-black text-emerald-600 mt-0.5 block truncate">
-            💰 {formatCurrency(myBalanceRecord?.advanceCredit || 0, currency)}
-          </span>
-        </div>
+          💰 Credit: {formatCurrency(myBalanceRecord?.advanceCredit || 0, currency)}
+        </button>
       </div>
 
       {/* 3. Action Items: "Whom Do I Owe?" */}
@@ -379,19 +316,27 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = React.memo(({
           </div>
 
           <div className="space-y-2.5">
-            {memberBalances.map((mb) => (
-              <MemberCard
-                key={mb.user.id}
-                memberBalance={mb}
-                currency={currency}
-                isCurrentUser={mb.user.id === currentUserId}
-                isAdmin={mb.user.id === (memberBalances[0]?.user.id || '')}
-                isCurrentAdmin={isAdmin}
-                tripId={tripId}
-                onMemberRemoved={onMemberRemoved}
-                onViewBreakdown={handleOpenBreakdown}
-              />
-            ))}
+            {memberBalances.map((mb) => {
+              const memDetail = members.find((m) => m.userId === mb.user.id);
+              const isMemAdmin = Boolean(memDetail?.role === 'ADMIN' || (tripCreatedById && mb.user.id === tripCreatedById));
+              const isCreator = Boolean(tripCreatedById && mb.user.id === tripCreatedById);
+
+              return (
+                <MemberCard
+                  key={mb.user.id}
+                  memberBalance={mb}
+                  currency={currency}
+                  isCurrentUser={mb.user.id === currentUserId}
+                  isAdmin={isMemAdmin}
+                  isCurrentAdmin={isAdmin}
+                  isPrimaryCreator={isCreator}
+                  tripId={tripId}
+                  onMemberRemoved={onMemberRemoved}
+                  onRoleUpdated={onMemberRemoved}
+                  onViewBreakdown={handleOpenBreakdown}
+                />
+              );
+            })}
           </div>
         </div>
       )}

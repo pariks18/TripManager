@@ -2338,6 +2338,60 @@ export const dbStore = {
     };
   },
 
+  async updateMemberRole(
+    tripId: string,
+    adminUserId: string,
+    targetUserId: string,
+    newRole: 'ADMIN' | 'MEMBER'
+  ) {
+    await ensureDatabaseSeeded();
+    const trip = await prisma.trip.findUnique({
+      where: { id: tripId },
+      include: { members: { include: { user: true } } },
+    });
+    if (!trip) throw new Error('Trip not found');
+
+    const adminMember = trip.members.find((m) => m.userId === adminUserId);
+    const isAdmin = adminMember?.role === 'ADMIN' || trip.createdById === adminUserId;
+    if (!isAdmin) throw new Error('Forbidden: Only trip organizers can change member roles.');
+
+    const targetMember = trip.members.find((m) => m.userId === targetUserId);
+    if (!targetMember) throw new Error('Target user is not a member of this trip.');
+
+    if (newRole === 'MEMBER') {
+      if (targetUserId === trip.createdById) {
+        throw new Error('Forbidden: Primary Trip Creator cannot lose organizer status.');
+      }
+
+      const activeOrganizers = trip.members.filter(
+        (m) => m.role === 'ADMIN' || m.userId === trip.createdById
+      );
+      const isTargetOrganizer = targetMember.role === 'ADMIN' || targetUserId === trip.createdById;
+      if (isTargetOrganizer && activeOrganizers.length <= 1) {
+        throw new Error('Forbidden: A trip must always have at least one organizer.');
+      }
+    }
+
+    const updatedMember = await prisma.tripMember.update({
+      where: { id: targetMember.id },
+      data: { role: newRole },
+      include: { user: true },
+    });
+
+    const adminUser = await prisma.user.findUnique({ where: { id: adminUserId } });
+    await prisma.activity.create({
+      data: {
+        id: generateObjectId(),
+        tripId,
+        userId: adminUserId,
+        actionType: 'TRIP_UPDATED',
+        details: `${adminUser?.name || 'An organizer'} updated ${targetMember.user.name}'s role to ${newRole === 'ADMIN' ? 'Organizer' : 'Member'}.`,
+      },
+    });
+
+    return updatedMember;
+  },
+
   async removeTripMember(
     tripId: string,
     adminUserId: string,
@@ -2365,6 +2419,14 @@ export const dbStore = {
 
     const targetMember = trip.members.find((m) => m.userId === targetUserId);
     if (!targetMember) throw new Error('Target user is not a member of this trip.');
+
+    const activeOrganizers = trip.members.filter(
+      (m) => m.role === 'ADMIN' || m.userId === trip.createdById
+    );
+    const isTargetOrganizer = targetMember.role === 'ADMIN' || targetUserId === trip.createdById;
+    if (isTargetOrganizer && activeOrganizers.length <= 1) {
+      throw new Error('Forbidden: Cannot remove the last remaining organizer of the trip.');
+    }
 
     const adminUser = await prisma.user.findUnique({ where: { id: adminUserId } });
     const targetUser = targetMember.user;

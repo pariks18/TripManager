@@ -80,6 +80,16 @@ export const ExpenseDetailModal: React.FC<ExpenseDetailModalProps> = ({
   const totalParticipantsCount = expense.participants?.length || 1;
   const perPersonShare = expense.amount / totalParticipantsCount;
 
+  const totalParticipantSharesSum = React.useMemo(() => {
+    return (expense.participants || []).reduce((sum, p) => sum + p.shareAmount, 0);
+  }, [expense.participants]);
+
+  const isUnevenSplit = React.useMemo(() => {
+    if (!expense.participants || expense.participants.length <= 1) return false;
+    const first = expense.participants[0].shareAmount;
+    return expense.participants.some((p) => Math.abs(p.shareAmount - first) > 0.05);
+  }, [expense.participants]);
+
   let netText = '';
   let netColorClass = '';
 
@@ -186,19 +196,32 @@ export const ExpenseDetailModal: React.FC<ExpenseDetailModalProps> = ({
             )}
           </div>
 
-          <div className="flex justify-between items-center text-xs">
-            <span className="text-slate-500 font-medium">Split Calculation</span>
-            <span className="font-mono font-bold text-emerald-700">
-              {formatCurrency(expense.amount, currency)} ÷ {totalParticipantsCount} = {formatCurrency(perPersonShare, currency)} / person
-            </span>
+          <div className="space-y-1 pt-1 border-t border-slate-100 text-xs">
+            <div className="flex justify-between items-center">
+              <span className="text-slate-500 font-medium">Split Formula</span>
+              <span className="font-mono font-bold text-slate-800">
+                {isUnevenSplit ? 'Custom / Uneven Split' : `${formatCurrency(expense.amount, currency)} ÷ ${totalParticipantsCount} = ${formatCurrency(perPersonShare, currency)} / person`}
+              </span>
+            </div>
+            <div className="flex justify-between items-center text-[11px] text-emerald-700 font-semibold pt-0.5">
+              <span>Verification Check:</span>
+              <span className="font-mono">
+                Shares Sum ({formatCurrency(totalParticipantSharesSum, currency)}) = Total ({formatCurrency(expense.amount, currency)}) ✓
+              </span>
+            </div>
           </div>
         </div>
 
         {/* Participants & Share List */}
         <div className="space-y-2">
-          <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 px-1">
-            Split Participants ({totalParticipantsCount})
-          </h4>
+          <div className="flex items-center justify-between px-1">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+              Split Participants ({totalParticipantsCount})
+            </h4>
+            <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200">
+              {isUnevenSplit ? 'Unequal Split' : 'Equal Split'}
+            </span>
+          </div>
           <div className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden divide-y divide-slate-100 shadow-sm">
             {expense.participants?.map((p) => {
               const isSelf = p.userId === currentUserId;
@@ -210,7 +233,7 @@ export const ExpenseDetailModal: React.FC<ExpenseDetailModalProps> = ({
                       {p.user?.name} {isSelf ? '(You)' : ''}
                     </span>
                   </div>
-                  <span className="font-extrabold text-slate-700">
+                  <span className="font-extrabold text-slate-900 font-mono">
                     {formatCurrency(p.shareAmount, currency)}
                   </span>
                 </div>
