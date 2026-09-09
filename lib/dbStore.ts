@@ -4884,6 +4884,17 @@ async getTripItinerary(
       throw new Error('Forbidden: You are not a member of this trip.');
     }
 
+    if (data.assignedToId) {
+      const trip = await prisma.trip.findUnique({
+        where: { id: tripId },
+        select: { createdById: true },
+      });
+      const isHost = trip?.createdById === currentUserId || member.role === 'ADMIN';
+      if (!isHost) {
+        throw new Error('Forbidden: Only the trip host can assign checklist items to other users.');
+      }
+    }
+
     const trimmedTitle = data.title.trim();
     if (!trimmedTitle) throw new Error('Item name cannot be empty.');
 
@@ -4951,6 +4962,17 @@ async getTripItinerary(
 
     if (item.type === 'PERSONAL' && item.userId !== currentUserId) {
       throw new Error('Forbidden: You cannot modify another member’s personal checklist.');
+    }
+
+    if (data.assignedToId !== undefined && (data.assignedToId || null) !== item.assignedToId) {
+      const trip = await prisma.trip.findUnique({
+        where: { id: item.tripId },
+        select: { createdById: true },
+      });
+      const isHost = trip?.createdById === currentUserId || member.role === 'ADMIN';
+      if (!isHost) {
+        throw new Error('Forbidden: Only the trip host can assign checklist items to other users.');
+      }
     }
 
     const updateData: any = {};

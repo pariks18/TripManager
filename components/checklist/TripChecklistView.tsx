@@ -519,18 +519,26 @@ export const TripChecklistView: React.FC<TripChecklistViewProps> = React.memo(({
                                 {section === 'GROUP' && (
                                   <div className="flex items-center gap-1">
                                     <span className="text-slate-400 font-medium">Assigned:</span>
-                                    <select
-                                      value={item.assignedToId || ''}
-                                      onChange={(e) => handleAssignItem(item.id, e.target.value || null)}
-                                      className="bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-800 text-[10px] font-bold rounded-lg px-1.5 py-0.5 focus:outline-none"
-                                    >
-                                      <option value="">Unassigned</option>
-                                      {members.map((m) => (
-                                        <option key={m.user.id} value={m.user.id}>
-                                          {m.user.name} {m.user.id === currentUser.id ? '(You)' : ''}
-                                        </option>
-                                      ))}
-                                    </select>
+                                    {isAdmin ? (
+                                      <select
+                                        value={item.assignedToId || ''}
+                                        onChange={(e) => handleAssignItem(item.id, e.target.value || null)}
+                                        className="bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-800 text-[10px] font-bold rounded-lg px-1.5 py-0.5 focus:outline-none cursor-pointer"
+                                      >
+                                        <option value="">Unassigned</option>
+                                        {members.map((m) => (
+                                          <option key={m.user.id} value={m.user.id}>
+                                            {m.user.name} {m.user.id === currentUser.id ? '(You)' : ''}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    ) : (
+                                      <span className="bg-slate-100 border border-slate-200 text-slate-700 text-[10px] font-bold rounded-lg px-2 py-0.5">
+                                        {item.assignedTo
+                                          ? `${item.assignedTo.name}${item.assignedTo.id === currentUser.id ? ' (You)' : ''}`
+                                          : 'Unassigned'}
+                                      </span>
+                                    )}
                                   </div>
                                 )}
                               </div>
@@ -662,7 +670,7 @@ export const TripChecklistView: React.FC<TripChecklistViewProps> = React.memo(({
             </div>
           )}
 
-          {section === 'GROUP' && (
+          {section === 'GROUP' && isAdmin && (
             <div>
               <label className="block text-xs font-semibold text-slate-700 tracking-wide uppercase mb-1.5">
                 Assign To (Optional)
