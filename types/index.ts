@@ -241,6 +241,7 @@ export interface StayDetail {
   bookingUrl?: string | null;
   contactPhone?: string | null;
   notes?: string | null;
+  availableItems?: string[];
   createdAt: string;
   updatedAt: string;
 }
@@ -405,6 +406,12 @@ export interface MemoryShareRequestDetail {
   updatedAt: string;
 }
 
+export interface ChecklistStayAvailability {
+  stayId: string;
+  stayName: string;
+  isProvided: boolean;
+}
+
 export interface ChecklistItemDetail {
   id: string;
   tripId: string;
@@ -421,6 +428,7 @@ export interface ChecklistItemDetail {
   completedByUsers?: UserSummary[];
   completedAt?: string | null;
   isCustom?: boolean;
+  stayAvailability?: ChecklistStayAvailability[];
   createdAt: string;
   updatedAt: string;
 }

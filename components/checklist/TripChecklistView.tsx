@@ -17,6 +17,8 @@ import {
   Ban,
   UserCheck,
   RotateCcw,
+  Hotel,
+  AlertTriangle,
 } from 'lucide-react';
 
 interface TripChecklistViewProps {
@@ -137,7 +139,10 @@ export const TripChecklistView: React.FC<TripChecklistViewProps> = React.memo(({
   // Overall Progress calculation (based strictly on active items)
   const totalItemsCount = activeItems.length;
   const noNeedCount = activeItems.filter((i) => i.status === 'NO_NEED').length;
-  const requiredItemsCount = Math.max(0, totalItemsCount - noNeedCount);
+  const providedCount = activeItems.filter(
+    (i) => i.status !== 'DONE' && i.status !== 'NO_NEED' && i.stayAvailability && i.stayAvailability.some((s) => s.isProvided)
+  ).length;
+  const requiredItemsCount = Math.max(0, totalItemsCount - noNeedCount - providedCount);
   const doneItemsCount = activeItems.filter((i) => i.status === 'DONE').length;
   const progressPercent = requiredItemsCount > 0 ? Math.round((doneItemsCount / requiredItemsCount) * 100) : 0;
 
@@ -542,10 +547,38 @@ export const TripChecklistView: React.FC<TripChecklistViewProps> = React.memo(({
                                   </span>
                                 )}
 
-                                {isNoNeed && (
+                                 {isNoNeed && (
                                   <span className="bg-slate-200 text-slate-600 font-bold px-2 py-0.5 rounded-md">
                                     No Need
                                   </span>
+                                )}
+
+                                {/* Stay Availability Badges */}
+                                {section === 'GROUP' && item.stayAvailability && item.stayAvailability.length > 0 && (
+                                  <>
+                                    {item.stayAvailability.length === 1 ? (
+                                      item.stayAvailability[0].isProvided && (
+                                        <span className="bg-pink-100 text-pink-900 border border-pink-200/90 font-extrabold px-2 py-0.5 rounded-md flex items-center gap-1">
+                                          <Hotel className="w-3 h-3 text-pink-600" />
+                                          <span>Provided by {item.stayAvailability[0].stayName}</span>
+                                        </span>
+                                      )
+                                    ) : (
+                                      item.stayAvailability.map((s) =>
+                                        s.isProvided ? (
+                                          <span key={s.stayId} className="bg-pink-100 text-pink-900 border border-pink-200/90 font-extrabold px-2 py-0.5 rounded-md flex items-center gap-1">
+                                            <Hotel className="w-3 h-3 text-pink-600" />
+                                            <span>{s.stayName} — Provided</span>
+                                          </span>
+                                        ) : (
+                                          <span key={s.stayId} className="bg-amber-50 text-amber-900 border border-amber-200/90 font-bold px-2 py-0.5 rounded-md flex items-center gap-1">
+                                            <AlertTriangle className="w-3 h-3 text-amber-600" />
+                                            <span>{s.stayName} — Not provided</span>
+                                          </span>
+                                        )
+                                      )
+                                    )}
+                                  </>
                                 )}
 
                                 {section === 'GROUP' && (

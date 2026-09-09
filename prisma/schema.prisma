@@ -282,6 +282,7 @@ model StayDetail {
   bookingUrl   String?
   contactPhone String?
   notes        String?
+  availableItems String[] @default([])
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 

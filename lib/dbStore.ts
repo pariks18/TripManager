@@ -829,6 +829,7 @@ export const dbStore = {
         bookingUrl: stay.bookingUrl,
         contactPhone: stay.contactPhone,
         notes: stay.notes,
+        availableItems: stay.availableItems || [],
         createdAt: stay.createdAt.toISOString(),
         updatedAt: stay.updatedAt.toISOString(),
       })),
@@ -3580,6 +3581,7 @@ async getTripItinerary(
       bookingUrl?: string;
       contactPhone?: string;
       notes?: string;
+      availableItems?: string[];
     }
   ): Promise<StayDetail> {
     await ensureDatabaseSeeded();
@@ -3609,6 +3611,7 @@ async getTripItinerary(
         bookingUrl: data.bookingUrl || null,
         contactPhone: data.contactPhone || null,
         notes: data.notes || null,
+        availableItems: data.availableItems || [],
       },
     });
 
@@ -3632,6 +3635,7 @@ async getTripItinerary(
       bookingUrl: stay.bookingUrl,
       contactPhone: stay.contactPhone,
       notes: stay.notes,
+      availableItems: stay.availableItems || [],
       createdAt: stay.createdAt.toISOString(),
       updatedAt: stay.updatedAt.toISOString(),
     };
@@ -3651,6 +3655,7 @@ async getTripItinerary(
       bookingUrl?: string;
       contactPhone?: string;
       notes?: string;
+      availableItems?: string[];
     }
   ): Promise<StayDetail> {
     await ensureDatabaseSeeded();
@@ -3677,6 +3682,7 @@ async getTripItinerary(
         bookingUrl: data.bookingUrl !== undefined ? data.bookingUrl : stay.bookingUrl,
         contactPhone: data.contactPhone !== undefined ? data.contactPhone : stay.contactPhone,
         notes: data.notes !== undefined ? data.notes : stay.notes,
+        availableItems: data.availableItems !== undefined ? data.availableItems : stay.availableItems,
       },
     });
 
@@ -3693,6 +3699,7 @@ async getTripItinerary(
       bookingUrl: updated.bookingUrl,
       contactPhone: updated.contactPhone,
       notes: updated.notes,
+      availableItems: updated.availableItems || [],
       createdAt: updated.createdAt.toISOString(),
       updatedAt: updated.updatedAt.toISOString(),
     };
@@ -5070,6 +5077,46 @@ async getTripItinerary(
       }
     }
 
+    const stays = await prisma.stayDetail.findMany({
+      where: { tripId },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    const allAvailableTitles = Array.from(new Set(stays.flatMap((s) => s.availableItems || [])));
+    if (allAvailableTitles.length > 0) {
+      let needsRefetch = false;
+      for (const title of allAvailableTitles) {
+        const trimmedTitle = title.trim();
+        if (!trimmedTitle) continue;
+        const exists = groupItemsRaw.some((item) => item.title.trim().toLowerCase() === trimmedTitle.toLowerCase());
+        if (!exists) {
+          await prisma.checklistItem.create({
+            data: {
+              id: generateObjectId(),
+              tripId,
+              type: 'GROUP',
+              userId: null,
+              title: trimmedTitle,
+              category: '🏨 Stay Provided',
+              status: 'PENDING',
+              isCustom: true,
+            },
+          });
+          needsRefetch = true;
+        }
+      }
+      if (needsRefetch) {
+        groupItemsRaw = await prisma.checklistItem.findMany({
+          where: { tripId, type: 'GROUP' },
+          include: {
+            assignedTo: userSelect,
+            completedBy: userSelect,
+          },
+          orderBy: { createdAt: 'asc' },
+        });
+      }
+    }
+
     const getEffectiveCompletedUserIds = (item: any): string[] => {
       const ids: string[] = Array.isArray(item.completedByUserIds) && item.completedByUserIds.length > 0
         ? item.completedByUserIds
@@ -5101,6 +5148,14 @@ async getTripItinerary(
         .map((id) => userMap.get(id))
         .filter((u): u is UserSummary => Boolean(u));
 
+      const stayAvailability = item.type === 'GROUP' ? stays.map((s) => ({
+        stayId: s.id,
+        stayName: s.name,
+        isProvided: (s.availableItems || []).some(
+          (a) => a.trim().toLowerCase() === item.title.trim().toLowerCase()
+        ),
+      })) : undefined;
+
       return {
         id: item.id,
         tripId: item.tripId,
@@ -5117,6 +5172,7 @@ async getTripItinerary(
         completedByUsers: completedByUsers,
         completedAt: item.completedAt ? item.completedAt.toISOString() : null,
         isCustom: item.isCustom || false,
+        stayAvailability,
         createdAt: item.createdAt.toISOString(),
         updatedAt: item.updatedAt.toISOString(),
       };
