@@ -149,15 +149,39 @@ export const TripChecklistView: React.FC<TripChecklistViewProps> = React.memo(({
   };
 
   const handleUpdateStatus = async (item: ChecklistItemDetail, newStatus: 'PENDING' | 'DONE' | 'NO_NEED' | 'REMOVED') => {
-    // Optimistic update
+    // Optimistic update calculation for per-user completion
+    let updatedCompletedUserIds = item.completedByUserIds ? [...item.completedByUserIds] : item.completedById ? [item.completedById] : [];
+    let updatedCompletedByUsers = item.completedByUsers ? [...item.completedByUsers] : item.completedBy ? [item.completedBy] : [];
+
+    if (newStatus === 'DONE') {
+      if (!updatedCompletedUserIds.includes(currentUser.id)) {
+        updatedCompletedUserIds.push(currentUser.id);
+        updatedCompletedByUsers.push(currentUser);
+      }
+    } else if (newStatus === 'PENDING') {
+      updatedCompletedUserIds = updatedCompletedUserIds.filter((id) => id !== currentUser.id);
+      updatedCompletedByUsers = updatedCompletedByUsers.filter((u) => u.id !== currentUser.id);
+    }
+
+    const effectiveStatus: 'PENDING' | 'DONE' | 'NO_NEED' | 'REMOVED' =
+      newStatus === 'DONE'
+        ? 'DONE'
+        : newStatus === 'PENDING'
+        ? updatedCompletedUserIds.length > 0
+          ? 'DONE'
+          : 'PENDING'
+        : newStatus;
+
     const updater = (prev: ChecklistItemDetail[]) =>
       prev.map((i) =>
         i.id === item.id
           ? {
               ...i,
-              status: newStatus,
-              completedById: newStatus === 'DONE' ? currentUser.id : null,
-              completedBy: newStatus === 'DONE' ? currentUser : null,
+              status: effectiveStatus,
+              completedByUserIds: updatedCompletedUserIds,
+              completedByUsers: updatedCompletedByUsers,
+              completedById: updatedCompletedUserIds[updatedCompletedUserIds.length - 1] || null,
+              completedBy: updatedCompletedByUsers[updatedCompletedByUsers.length - 1] || null,
             }
           : i
       );
@@ -440,6 +464,7 @@ export const TripChecklistView: React.FC<TripChecklistViewProps> = React.memo(({
                 {!isCollapsed && (
                   <div className="divide-y divide-slate-100">
                     {items.map((item) => {
+                      const isCompletedByMe = (item.completedByUserIds || []).includes(currentUser.id);
                       const isDone = item.status === 'DONE';
                       const isNoNeed = item.status === 'NO_NEED';
 
@@ -461,13 +486,13 @@ export const TripChecklistView: React.FC<TripChecklistViewProps> = React.memo(({
                               {/* 1. Done Toggle */}
                               <button
                                 type="button"
-                                onClick={() => handleUpdateStatus(item, isDone ? 'PENDING' : 'DONE')}
+                                onClick={() => handleUpdateStatus(item, isCompletedByMe ? 'PENDING' : 'DONE')}
                                 className={`p-1 rounded-xl transition-all cursor-pointer ${
-                                  isDone
+                                  isCompletedByMe
                                     ? 'bg-emerald-600 text-white shadow-xs'
                                     : 'bg-slate-100 hover:bg-emerald-100 text-slate-400 hover:text-emerald-700'
                                 }`}
-                                title={isDone ? 'Mark Pending' : 'Mark Done'}
+                                title={isCompletedByMe ? 'Uncheck (Remove your completion)' : 'Mark Done'}
                               >
                                 <CheckCircle2 className="w-4 h-4" />
                               </button>
@@ -503,10 +528,17 @@ export const TripChecklistView: React.FC<TripChecklistViewProps> = React.memo(({
 
                               {/* Completion & Assignment Badges */}
                               <div className="flex items-center gap-2 mt-1 flex-wrap text-[10px]">
-                                {isDone && item.completedBy && (
+                                {isDone && ((item.completedByUsers && item.completedByUsers.length > 0) || item.completedBy) && (
                                   <span className="bg-emerald-100 text-emerald-800 font-extrabold px-2 py-0.5 rounded-md flex items-center gap-1">
                                     <UserCheck className="w-3 h-3 text-emerald-600" />
-                                    <span>Completed by {item.completedBy.name}</span>
+                                    <span>
+                                      Completed by{' '}
+                                      {item.completedByUsers && item.completedByUsers.length > 0
+                                        ? item.completedByUsers
+                                            .map((u) => (u.id === currentUser.id ? `${u.name} (You)` : u.name))
+                                            .join(', ')
+                                        : item.completedBy?.name}
+                                    </span>
                                   </span>
                                 )}
 

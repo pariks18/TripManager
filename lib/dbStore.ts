@@ -3,7 +3,7 @@ import { prisma } from './prisma';
 import { hashPassword, comparePassword } from './auth';
 import { generateTripCode, generateObjectId } from './utils';
 import { calculateMemberBalances, computeSettlements } from './settlement';
-import { CategoryType, ExpenseDetail, TripSummary, UserSummary, ActivityDetail, SettlementRecordDetail, MemberBalance, MemberAnalytics, DocumentType, UserDocumentDetail, ItineraryItemDetail, StayDetail, PollDetail, PollOptionDetail, PollVoteDetail, MemberLocationDetail, MessageDetail, TripMemoryDetail, MemoryQuestionnaireAnswers, MemoryShareRequestDetail, ChecklistItemDetail } from '@/types';
+import { CategoryType, ExpenseDetail, TripSummary, UserSummary, ActivityDetail, SettlementRecordDetail, MemberBalance, MemberAnalytics, DocumentType, UserDocumentDetail, ItineraryItemDetail, StayDetail, PollDetail, PollOptionDetail, PollVoteDetail, MemberLocationDetail, MessageDetail, TripMemoryDetail, MemoryQuestionnaireAnswers, MemoryShareRequestDetail, ChecklistItemDetail, TripMemberDetail } from '@/types';
 
 const SEED_USERS = [
   {
@@ -32,7 +32,7 @@ const SEED_USERS = [
   },
 ];
 
-const userSelect = { select: { id: true, name: true, email: true } };
+const userSelect = { select: { id: true, name: true, email: true, isUnjoined: true } };
 
 const SEED_TRIPS = [
   {
@@ -645,7 +645,7 @@ export const dbStore = {
   async getTripById(tripId: string, userId: string): Promise<TripSummary | null> {
     await ensureDatabaseSeeded();
 
-    const userSelect = { select: { id: true, name: true, email: true } };
+    const userSelect = { select: { id: true, name: true, email: true, isUnjoined: true } };
 
     const directTrip = await prisma.trip.findUnique({
       where: { id: tripId },
@@ -679,9 +679,9 @@ export const dbStore = {
       amount: e.amount,
       category: e.category as CategoryType,
       paidById: e.paidById,
-      paidBy: { id: e.paidBy.id, name: e.paidBy.name, email: e.paidBy.email },
+      paidBy: { id: e.paidBy.id, name: e.paidBy.name, email: e.paidBy.email, isUnjoined: e.paidBy.isUnjoined || false },
       createdById: e.createdById || e.paidById,
-      createdBy: e.createdBy ? { id: e.createdBy.id, name: e.createdBy.name, email: e.createdBy.email } : undefined,
+      createdBy: e.createdBy ? { id: e.createdBy.id, name: e.createdBy.name, email: e.createdBy.email, isUnjoined: e.createdBy.isUnjoined || false } : undefined,
       lastUpdatedById: e.lastUpdatedById,
       status: e.status as 'APPROVED' | 'PENDING_APPROVAL' | 'REJECTED',
       rejectionReason: e.rejectionReason,
@@ -694,20 +694,20 @@ export const dbStore = {
         expenseId: p.expenseId,
         userId: p.userId,
         shareAmount: p.shareAmount,
-        user: { id: p.user.id, name: p.user.name, email: p.user.email },
+        user: { id: p.user.id, name: p.user.name, email: p.user.email, isUnjoined: p.user.isUnjoined || false },
       })),
       payers: (e as any).payers?.map((p: any) => ({
         id: p.id,
         expenseId: p.expenseId,
         userId: p.userId,
         amount: p.amount,
-        user: { id: p.user.id, name: p.user.name, email: p.user.email },
+        user: { id: p.user.id, name: p.user.name, email: p.user.email, isUnjoined: p.user.isUnjoined || false },
       })),
       editRequests: e.editRequests?.map((req) => ({
         id: req.id,
         expenseId: req.expenseId,
         requestedById: req.requestedById,
-        requestedBy: { id: req.requestedBy.id, name: req.requestedBy.name, email: req.requestedBy.email },
+        requestedBy: { id: req.requestedBy.id, name: req.requestedBy.name, email: req.requestedBy.email, isUnjoined: req.requestedBy.isUnjoined || false },
         requestType: req.requestType as 'EDIT' | 'DELETE',
         proposedData: req.proposedData,
         reason: req.reason,
@@ -722,8 +722,9 @@ export const dbStore = {
       tripId: mem.tripId,
       userId: mem.userId,
       role: mem.role as 'ADMIN' | 'MEMBER',
+      isUnjoined: mem.isUnjoined || mem.user.isUnjoined || false,
       joinedAt: mem.joinedAt.toISOString(),
-      user: { id: mem.user.id, name: mem.user.name, email: mem.user.email },
+      user: { id: mem.user.id, name: mem.user.name, email: mem.user.email, isUnjoined: mem.user.isUnjoined || mem.isUnjoined || false },
     }));
 
     const formattedSettlements: SettlementRecordDetail[] = directTrip.settlements.map((s) => ({
@@ -2512,6 +2513,13 @@ export const dbStore = {
       where: { id: targetMember.id },
     });
 
+    if (targetUser.isUnjoined) {
+      const remainingUsages = await prisma.tripMember.count({ where: { userId: targetUser.id } });
+      if (remainingUsages === 0) {
+        await prisma.user.delete({ where: { id: targetUser.id } }).catch(() => {});
+      }
+    }
+
     await logActivity(
       tripId,
       adminUserId,
@@ -2520,6 +2528,229 @@ export const dbStore = {
     );
 
     return true;
+  },
+
+  async addUnjoinedMember(
+    tripId: string,
+    hostUserId: string,
+    data: { name: string; email?: string; mobile?: string }
+  ): Promise<TripMemberDetail> {
+    await ensureDatabaseSeeded();
+
+    const trip = await prisma.trip.findUnique({
+      where: { id: tripId },
+      include: { members: true },
+    });
+    if (!trip) throw new Error('Trip not found.');
+
+    const hostMember = trip.members.find((m) => m.userId === hostUserId);
+    const isHost = trip.createdById === hostUserId || hostMember?.role === 'ADMIN';
+    if (!isHost) {
+      throw new Error('Forbidden: Only trip hosts can add unjoined participants.');
+    }
+
+    const trimmedName = data.name.trim();
+    if (!trimmedName) throw new Error('Participant name is required.');
+
+    const cleanEmail = data.email?.trim().toLowerCase() || `unjoined_${generateObjectId()}@unjoined.local`;
+    const cleanMobile = data.mobile?.trim() || null;
+
+    const userId = generateObjectId();
+    const newUser = await prisma.user.create({
+      data: {
+        id: userId,
+        name: trimmedName,
+        email: cleanEmail,
+        password: '',
+        mobile: cleanMobile,
+        isUnjoined: true,
+      },
+    });
+
+    const memberId = generateObjectId();
+    const newMember = await prisma.tripMember.create({
+      data: {
+        id: memberId,
+        tripId,
+        userId: newUser.id,
+        role: 'MEMBER',
+        isUnjoined: true,
+      },
+      include: {
+        user: { select: { id: true, name: true, email: true, isUnjoined: true } },
+      },
+    });
+
+    await logActivity(
+      tripId,
+      hostUserId,
+      'MEMBER_JOINED',
+      `${trimmedName} was added as an unjoined participant by host.`
+    );
+
+    return {
+      id: newMember.id,
+      tripId: newMember.tripId,
+      userId: newMember.userId,
+      role: newMember.role as 'ADMIN' | 'MEMBER',
+      isUnjoined: true,
+      joinedAt: newMember.joinedAt.toISOString(),
+      user: {
+        id: newMember.user.id,
+        name: newMember.user.name,
+        email: newMember.user.email,
+        isUnjoined: true,
+      },
+    };
+  },
+
+  async linkUnjoinedMember(
+    tripId: string,
+    hostUserId: string,
+    unjoinedMemberUserId: string,
+    targetRegisteredUserId: string
+  ): Promise<TripMemberDetail> {
+    await ensureDatabaseSeeded();
+
+    const trip = await prisma.trip.findUnique({
+      where: { id: tripId },
+      include: { members: { include: { user: true } } },
+    });
+    if (!trip) throw new Error('Trip not found.');
+
+    const hostMember = trip.members.find((m) => m.userId === hostUserId);
+    const isHost = trip.createdById === hostUserId || hostMember?.role === 'ADMIN';
+    if (!isHost) {
+      throw new Error('Forbidden: Only trip hosts can link unjoined participants.');
+    }
+
+    const unjoinedMember = trip.members.find((m) => m.userId === unjoinedMemberUserId);
+    if (!unjoinedMember) {
+      throw new Error('Unjoined participant is not a member of this trip.');
+    }
+    if (!unjoinedMember.isUnjoined && !unjoinedMember.user.isUnjoined) {
+      throw new Error('This participant is already a registered member.');
+    }
+
+    const targetUser = await prisma.user.findUnique({
+      where: { id: targetRegisteredUserId },
+    });
+    if (!targetUser) throw new Error('Target registered user account not found.');
+    if (targetUser.isUnjoined) throw new Error('Target user account cannot be an unjoined account.');
+
+    const existingTargetMember = trip.members.find((m) => m.userId === targetRegisteredUserId);
+
+    // Update ExpenseParticipant records combining shareAmount if both are participants in same expense
+    const unjoinedParticipants = await prisma.expenseParticipant.findMany({
+      where: { userId: unjoinedMemberUserId },
+    });
+    for (const p of unjoinedParticipants) {
+      const existingTargetP = await prisma.expenseParticipant.findUnique({
+        where: { expenseId_userId: { expenseId: p.expenseId, userId: targetRegisteredUserId } },
+      });
+      if (existingTargetP) {
+        await prisma.expenseParticipant.update({
+          where: { id: existingTargetP.id },
+          data: { shareAmount: existingTargetP.shareAmount + p.shareAmount },
+        });
+        await prisma.expenseParticipant.delete({ where: { id: p.id } });
+      } else {
+        await prisma.expenseParticipant.update({
+          where: { id: p.id },
+          data: { userId: targetRegisteredUserId },
+        });
+      }
+    }
+
+    // Update ExpensePayer records combining amount if both are payers in same expense
+    const unjoinedPayers = await prisma.expensePayer.findMany({
+      where: { userId: unjoinedMemberUserId },
+    });
+    for (const p of unjoinedPayers) {
+      const existingTargetPayer = await prisma.expensePayer.findUnique({
+        where: { expenseId_userId: { expenseId: p.expenseId, userId: targetRegisteredUserId } },
+      });
+      if (existingTargetPayer) {
+        await prisma.expensePayer.update({
+          where: { id: existingTargetPayer.id },
+          data: { amount: existingTargetPayer.amount + p.amount },
+        });
+        await prisma.expensePayer.delete({ where: { id: p.id } });
+      } else {
+        await prisma.expensePayer.update({
+          where: { id: p.id },
+          data: { userId: targetRegisteredUserId },
+        });
+      }
+    }
+
+    // Re-point Expenses paidById
+    await prisma.expense.updateMany({
+      where: { paidById: unjoinedMemberUserId, tripId },
+      data: { paidById: targetRegisteredUserId },
+    });
+
+    // Re-point Settlements
+    await prisma.settlement.updateMany({
+      where: { fromUserId: unjoinedMemberUserId, tripId },
+      data: { fromUserId: targetRegisteredUserId },
+    });
+    await prisma.settlement.updateMany({
+      where: { toUserId: unjoinedMemberUserId, tripId },
+      data: { toUserId: targetRegisteredUserId },
+    });
+
+    let resultMember;
+
+    if (!existingTargetMember) {
+      // Reassign unjoined member row to targetRegisteredUserId
+      resultMember = await prisma.tripMember.update({
+        where: { id: unjoinedMember.id },
+        data: {
+          userId: targetRegisteredUserId,
+          isUnjoined: false,
+        },
+        include: {
+          user: { select: { id: true, name: true, email: true, isUnjoined: true } },
+        },
+      });
+    } else {
+      // Delete unjoined member row as target is already a member
+      await prisma.tripMember.delete({
+        where: { id: unjoinedMember.id },
+      });
+      resultMember = existingTargetMember;
+    }
+
+    // Clean up unjoined placeholder user record
+    const remainingUsages = await prisma.tripMember.count({
+      where: { userId: unjoinedMemberUserId },
+    });
+    if (remainingUsages === 0) {
+      await prisma.user.delete({ where: { id: unjoinedMemberUserId } }).catch(() => {});
+    }
+
+    await logActivity(
+      tripId,
+      hostUserId,
+      'TRIP_UPDATED',
+      `Unjoined participant ${unjoinedMember.user.name} was linked to registered user account ${targetUser.name}.`
+    );
+
+    return {
+      id: resultMember.id,
+      tripId: resultMember.tripId,
+      userId: targetUser.id,
+      role: resultMember.role as 'ADMIN' | 'MEMBER',
+      isUnjoined: false,
+      joinedAt: resultMember.joinedAt.toISOString(),
+      user: {
+        id: targetUser.id,
+        name: targetUser.name,
+        email: targetUser.email,
+        isUnjoined: false,
+      },
+    };
   },
 
   async getMemberAnalytics(tripId: string): Promise<MemberAnalytics[]> {
@@ -4839,23 +5070,57 @@ async getTripItinerary(
       }
     }
 
-    const mapItem = (item: any): ChecklistItemDetail => ({
-      id: item.id,
-      tripId: item.tripId,
-      type: item.type as 'GROUP' | 'PERSONAL',
-      userId: item.userId,
-      title: item.title,
-      category: item.category,
-      status: item.status as 'PENDING' | 'DONE' | 'NO_NEED' | 'REMOVED',
-      assignedToId: item.assignedToId,
-      assignedTo: item.assignedTo ? { id: item.assignedTo.id, name: item.assignedTo.name, email: item.assignedTo.email } : null,
-      completedById: item.completedById,
-      completedBy: item.completedBy ? { id: item.completedBy.id, name: item.completedBy.name, email: item.completedBy.email } : null,
-      completedAt: item.completedAt ? item.completedAt.toISOString() : null,
-      isCustom: item.isCustom || false,
-      createdAt: item.createdAt.toISOString(),
-      updatedAt: item.updatedAt.toISOString(),
-    });
+    const getEffectiveCompletedUserIds = (item: any): string[] => {
+      const ids: string[] = Array.isArray(item.completedByUserIds) && item.completedByUserIds.length > 0
+        ? item.completedByUserIds
+        : item.completedById ? [item.completedById] : [];
+      return ids;
+    };
+
+    const allCompletedUserIds = Array.from(
+      new Set([
+        ...groupItemsRaw.flatMap(getEffectiveCompletedUserIds),
+        ...personalItemsRaw.flatMap(getEffectiveCompletedUserIds),
+      ])
+    );
+
+    const completedUsersList = allCompletedUserIds.length > 0
+      ? await prisma.user.findMany({
+          where: { id: { in: allCompletedUserIds } },
+          select: { id: true, name: true, email: true },
+        })
+      : [];
+
+    const userMap = new Map<string, UserSummary>(
+      completedUsersList.map((u) => [u.id, u])
+    );
+
+    const mapItem = (item: any): ChecklistItemDetail => {
+      const completedUserIds = getEffectiveCompletedUserIds(item);
+      const completedByUsers = completedUserIds
+        .map((id) => userMap.get(id))
+        .filter((u): u is UserSummary => Boolean(u));
+
+      return {
+        id: item.id,
+        tripId: item.tripId,
+        type: item.type as 'GROUP' | 'PERSONAL',
+        userId: item.userId,
+        title: item.title,
+        category: item.category,
+        status: item.status as 'PENDING' | 'DONE' | 'NO_NEED' | 'REMOVED',
+        assignedToId: item.assignedToId,
+        assignedTo: item.assignedTo ? { id: item.assignedTo.id, name: item.assignedTo.name, email: item.assignedTo.email } : null,
+        completedById: item.completedById,
+        completedBy: item.completedBy ? { id: item.completedBy.id, name: item.completedBy.name, email: item.completedBy.email } : null,
+        completedByUserIds: completedUserIds,
+        completedByUsers: completedByUsers,
+        completedAt: item.completedAt ? item.completedAt.toISOString() : null,
+        isCustom: item.isCustom || false,
+        createdAt: item.createdAt.toISOString(),
+        updatedAt: item.updatedAt.toISOString(),
+      };
+    };
 
     return {
       groupItems: groupItemsRaw.map(mapItem),
@@ -4931,6 +5196,8 @@ async getTripItinerary(
       assignedTo: item.assignedTo ? { id: item.assignedTo.id, name: item.assignedTo.name, email: item.assignedTo.email } : null,
       completedById: item.completedById,
       completedBy: item.completedBy ? { id: item.completedBy.id, name: item.completedBy.name, email: item.completedBy.email } : null,
+      completedByUserIds: item.completedByUserIds || [],
+      completedByUsers: [],
       completedAt: item.completedAt ? item.completedAt.toISOString() : null,
       isCustom: item.isCustom || false,
       createdAt: item.createdAt.toISOString(),
@@ -4988,13 +5255,31 @@ async getTripItinerary(
     }
 
     if (data.status !== undefined) {
-      updateData.status = data.status;
+      let currentCompletedIds: string[] = Array.isArray(item.completedByUserIds) && item.completedByUserIds.length > 0
+        ? [...item.completedByUserIds]
+        : item.completedById ? [item.completedById] : [];
+
       if (data.status === 'DONE') {
+        if (!currentCompletedIds.includes(currentUserId)) {
+          currentCompletedIds.push(currentUserId);
+        }
+        updateData.completedByUserIds = currentCompletedIds;
         updateData.completedById = currentUserId;
         updateData.completedAt = new Date();
+        updateData.status = 'DONE';
+      } else if (data.status === 'PENDING') {
+        currentCompletedIds = currentCompletedIds.filter((id) => id !== currentUserId);
+        updateData.completedByUserIds = currentCompletedIds;
+        if (currentCompletedIds.length > 0) {
+          updateData.status = 'DONE';
+          updateData.completedById = currentCompletedIds[currentCompletedIds.length - 1];
+        } else {
+          updateData.status = 'PENDING';
+          updateData.completedById = null;
+          updateData.completedAt = null;
+        }
       } else {
-        updateData.completedById = null;
-        updateData.completedAt = null;
+        updateData.status = data.status;
       }
     }
 
@@ -5006,6 +5291,19 @@ async getTripItinerary(
         completedBy: userSelect,
       },
     });
+
+    const finalCompletedUserIds: string[] = updated.completedByUserIds || [];
+    const completedByUsersList = finalCompletedUserIds.length > 0
+      ? await prisma.user.findMany({
+          where: { id: { in: finalCompletedUserIds } },
+          select: { id: true, name: true, email: true },
+        })
+      : [];
+
+    const completedUsersMap = new Map(completedByUsersList.map((u) => [u.id, u]));
+    const completedByUsers = finalCompletedUserIds
+      .map((id) => completedUsersMap.get(id))
+      .filter((u): u is UserSummary => Boolean(u));
 
     return {
       id: updated.id,
@@ -5019,6 +5317,8 @@ async getTripItinerary(
       assignedTo: updated.assignedTo ? { id: updated.assignedTo.id, name: updated.assignedTo.name, email: updated.assignedTo.email } : null,
       completedById: updated.completedById,
       completedBy: updated.completedBy ? { id: updated.completedBy.id, name: updated.completedBy.name, email: updated.completedBy.email } : null,
+      completedByUserIds: finalCompletedUserIds,
+      completedByUsers: completedByUsers,
       completedAt: updated.completedAt ? updated.completedAt.toISOString() : null,
       isCustom: updated.isCustom || false,
       createdAt: updated.createdAt.toISOString(),

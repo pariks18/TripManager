@@ -11,6 +11,8 @@ import { ExpenseBreakdownModal } from '@/components/expense/ExpenseBreakdownModa
 import { AdvanceCreditModal } from '@/components/wallet/AdvanceCreditModal';
 import { ExpenseCard } from '@/components/expense/ExpenseCard';
 import { PersonalBalanceBreakdown } from '@/components/expense/PersonalBalanceBreakdown';
+import { AddUnjoinedMemberModal } from '@/components/member/AddUnjoinedMemberModal';
+import { LinkUnjoinedMemberModal } from '@/components/member/LinkUnjoinedMemberModal';
 import {
   ArrowUpRight,
   ArrowDownLeft,
@@ -77,6 +79,8 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = React.memo(({
   const [breakdownMember, setBreakdownMember] = useState<UserSummary | null>(null);
   const [isBreakdownOpen, setIsBreakdownOpen] = useState(false);
   const [isAdvanceCreditOpen, setIsAdvanceCreditOpen] = useState(false);
+  const [isAddUnjoinedOpen, setIsAddUnjoinedOpen] = useState(false);
+  const [selectedUnjoinedMember, setSelectedUnjoinedMember] = useState<TripMemberDetail | null>(null);
 
   const myBalanceRecord = memberBalances.find((b) => b.user.id === currentUserId);
 
@@ -310,9 +314,20 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = React.memo(({
               <Users className="w-4 h-4 text-slate-600" />
               <h4 className="text-sm font-bold text-slate-900">Trip Members</h4>
             </div>
-            <span className="text-xs text-slate-400 font-medium">
-              {memberBalances.length} Members
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-slate-400 font-medium">
+                {memberBalances.length} Members
+              </span>
+              {isAdmin && tripId && (
+                <button
+                  type="button"
+                  onClick={() => setIsAddUnjoinedOpen(true)}
+                  className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200/80 text-xs font-bold rounded-xl transition-all flex items-center gap-1 cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5 text-emerald-600" /> Add Participant
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="space-y-2.5">
@@ -334,6 +349,9 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = React.memo(({
                   onMemberRemoved={onMemberRemoved}
                   onRoleUpdated={onMemberRemoved}
                   onViewBreakdown={handleOpenBreakdown}
+                  onLinkAccount={() => {
+                    if (memDetail) setSelectedUnjoinedMember(memDetail);
+                  }}
                 />
               );
             })}
@@ -358,25 +376,37 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = React.memo(({
         />
       )}
 
-      {isBreakdownOpen && (
+      {tripId && isAddUnjoinedOpen && (
+        <AddUnjoinedMemberModal
+          isOpen={isAddUnjoinedOpen}
+          onClose={() => setIsAddUnjoinedOpen(false)}
+          tripId={tripId}
+          onMemberAdded={() => {
+            if (onMemberRemoved) onMemberRemoved();
+          }}
+        />
+      )}
+
+      {tripId && selectedUnjoinedMember && (
+        <LinkUnjoinedMemberModal
+          isOpen={!!selectedUnjoinedMember}
+          onClose={() => setSelectedUnjoinedMember(null)}
+          tripId={tripId}
+          unjoinedMember={selectedUnjoinedMember}
+          onMemberLinked={() => {
+            setSelectedUnjoinedMember(null);
+            if (onMemberRemoved) onMemberRemoved();
+          }}
+        />
+      )}
+
+      {isBreakdownOpen && breakdownMember && (
         <ExpenseBreakdownModal
           isOpen={isBreakdownOpen}
           onClose={() => setIsBreakdownOpen(false)}
           currency={currency}
           currentUserId={currentUserId}
           otherMember={breakdownMember}
-          expenses={expenses}
-        />
-      )}
-
-      {isAdvanceCreditOpen && (
-        <AdvanceCreditModal
-          isOpen={isAdvanceCreditOpen}
-          onClose={() => setIsAdvanceCreditOpen(false)}
-          currency={currency}
-          currentUserId={currentUserId}
-          memberBalance={myBalanceRecord}
-          settlementRecords={settlementRecords}
           expenses={expenses}
         />
       )}

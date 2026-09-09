@@ -1,3 +1,19 @@
+import fs from 'fs';
+import path from 'path';
+
+if (!process.env.DATABASE_URL) {
+  const envPath = path.resolve(__dirname, '../.env');
+  if (fs.existsSync(envPath)) {
+    const lines = fs.readFileSync(envPath, 'utf8').split('\n');
+    for (const line of lines) {
+      const match = line.match(/^\s*([\w.-]+)\s*=\s*"(.*)"\s*$/) || line.match(/^\s*([\w.-]+)\s*=\s*(.*)\s*$/);
+      if (match) {
+        process.env[match[1]] = match[2];
+      }
+    }
+  }
+}
+
 import { dbStore } from '../lib/dbStore';
 import { prisma } from '../lib/prisma';
 

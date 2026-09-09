@@ -24,6 +24,7 @@ model User {
   emergencyContactName String?
   emergencyContactPhone String?
   travelPreferences   String?
+  isUnjoined          Boolean  @default(false)
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
@@ -90,6 +91,7 @@ model TripMember {
   tripId     String    @db.ObjectId
   userId     String    @db.ObjectId
   role       String    @default("MEMBER") // ADMIN or MEMBER
+  isUnjoined Boolean   @default(false)
   lastReadAt DateTime?
   joinedAt   DateTime  @default(now())
 
@@ -426,9 +428,10 @@ model ChecklistItem {
   title         String
   category      String    @default("General")
   status        String    @default("PENDING") // "PENDING", "DONE", "NO_NEED"
-  assignedToId  String?   @db.ObjectId // Optional assignment for GROUP items
-  completedById String?   @db.ObjectId // Member who marked it DONE
-  completedAt   DateTime?
+  assignedToId       String?   @db.ObjectId // Optional assignment for GROUP items
+  completedById      String?   @db.ObjectId // Member who marked it DONE
+  completedByUserIds String[]  @default([])
+  completedAt        DateTime?
   isCustom      Boolean   @default(false)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt

@@ -41,6 +41,7 @@ export interface UserSummary {
   emergencyContactName?: string | null;
   emergencyContactPhone?: string | null;
   travelPreferences?: string | null;
+  isUnjoined?: boolean;
 }
 
 export interface UserProfileDetail extends UserSummary {
@@ -53,6 +54,7 @@ export interface TripMemberDetail {
   tripId: string;
   userId: string;
   role: 'ADMIN' | 'MEMBER';
+  isUnjoined?: boolean;
   joinedAt: string;
   user: UserSummary;
 }
@@ -415,6 +417,8 @@ export interface ChecklistItemDetail {
   assignedTo?: UserSummary | null;
   completedById?: string | null;
   completedBy?: UserSummary | null;
+  completedByUserIds?: string[];
+  completedByUsers?: UserSummary[];
   completedAt?: string | null;
   isCustom?: boolean;
   createdAt: string;
