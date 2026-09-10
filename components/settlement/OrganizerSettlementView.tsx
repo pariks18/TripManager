@@ -109,7 +109,7 @@ export const OrganizerSettlementView: React.FC<OrganizerSettlementViewProps> = (
 
           <div className="bg-white/5 rounded-2xl p-2.5 backdrop-blur-sm">
             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-              Optimal Payments
+              Direct Payments
             </span>
             <span className="text-sm sm:text-base font-black text-amber-400 block mt-0.5">
               {settlements.length} {settlements.length === 1 ? 'Tx' : 'Txs'}
@@ -187,7 +187,7 @@ export const OrganizerSettlementView: React.FC<OrganizerSettlementViewProps> = (
                 <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
                   <span className="text-[11px] text-slate-500 font-medium">
                     {isNetPositive
-                      ? `Receives ${formatCurrency(mb.netBalance, currency)} from trip pool`
+                      ? `Receives ${formatCurrency(mb.netBalance, currency)} from trip members`
                       : isNetNegative
                       ? `Needs to pay ${formatCurrency(Math.abs(mb.netBalance), currency)}`
                       : 'Fully settled up'}
@@ -211,9 +211,9 @@ export const OrganizerSettlementView: React.FC<OrganizerSettlementViewProps> = (
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-emerald-600" />
-            <h3 className="text-sm font-bold text-slate-900">Recommended Settlement Transfers</h3>
+            <h3 className="text-sm font-bold text-slate-900">Direct Pairwise Settlement Transfers</h3>
           </div>
-          <span className="text-xs text-slate-400 font-medium">Consolidated Greedy Match</span>
+          <span className="text-xs text-slate-400 font-medium">Direct Bilateral Position</span>
         </div>
 
         {settlements.length > 0 ? (

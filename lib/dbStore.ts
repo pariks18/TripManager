@@ -1765,9 +1765,7 @@ export const dbStore = {
       if (!member) throw new Error('Forbidden: You must be a member of the trip to add Advance Credit.');
 
       const hostMember = trip.createdById || trip.members.find((m) => m.role === 'ADMIN')?.userId || sessionUserId;
-      const effectiveToUserId = hostMember === sessionUserId
-        ? (trip.members.find((m) => m.userId !== sessionUserId)?.userId || sessionUserId)
-        : hostMember;
+      const effectiveToUserId = hostMember;
 
       const user = await tx.user.findUnique({ where: { id: sessionUserId } });
       if (!user) throw new Error('User not found.');
@@ -1793,7 +1791,7 @@ export const dbStore = {
           id: generateObjectId(),
           tripId,
           userId: sessionUserId,
-          actionType: 'SETTLEMENT_CONFIRMED',
+          actionType: 'SETTLEMENT_MARKED',
           details: `${user.name} submitted an Advance Credit request of ${trip.currency || '₹'}${roundedAmount} (Pending Host Approval)`,
           amount: roundedAmount,
         },
@@ -1927,7 +1925,7 @@ export const dbStore = {
       const totalPendingAmount = existingPendingRecords.reduce((sum, s) => sum + s.amount, 0);
       const remainingPayable = Math.max(0, Math.round((currentOutstanding - totalPendingAmount) * 100) / 100);
 
-      if (remainingPayable <= 0.01) {
+      if (remainingPayable <= 0.01 && currentOutstanding > 0) {
         throw new Error(
           `You cannot initiate a new settlement request. All remaining debt between ${fromUser.name} and ${toUser.name} (${trip.currency}${currentOutstanding}) is already covered by pending approval requests.`
         );
@@ -1953,7 +1951,7 @@ export const dbStore = {
           id: generateObjectId(),
           tripId,
           userId: fromUserId,
-          actionType: 'SETTLEMENT_CONFIRMED',
+          actionType: 'SETTLEMENT_MARKED',
           details: `${fromUser.name} submitted a settlement payment request of ${trip.currency}${roundedPaymentAmount} to ${toUser.name} (Pending Host Approval)`,
           amount: roundedPaymentAmount,
         },

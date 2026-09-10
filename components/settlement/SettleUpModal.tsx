@@ -57,19 +57,20 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
     ? transaction.toUser
     : members.find((m) => m.userId === selectedToUserId)?.user;
 
-  const outstandingAmount = transaction ? transaction.amount : 0;
+  const realOutstandingAmount = transaction ? transaction.amount : 0;
 
   // Determine if this is a Host recording payment received on behalf of a member
   const isHostRecord = isAdmin && !!fromUser && fromUser.id !== currentUserId;
 
-  const isCoveredByPending = React.useMemo(() => {
-    if (!fromUser || !toUser || !settlementRecords.length) return false;
-    const pendingRecords = settlementRecords.filter(
-      (r) => r.fromUserId === fromUser.id && r.toUserId === toUser.id && r.status === 'PENDING'
-    );
-    const totalPending = pendingRecords.reduce((sum, r) => sum + r.amount, 0);
-    return outstandingAmount > 0 && totalPending >= outstandingAmount;
-  }, [fromUser, toUser, settlementRecords, outstandingAmount]);
+  const pendingAmount = React.useMemo(() => {
+    if (!fromUser || !toUser || !settlementRecords.length) return 0;
+    return settlementRecords
+      .filter((r) => r.fromUserId === fromUser.id && r.toUserId === toUser.id && r.status === 'PENDING')
+      .reduce((sum, r) => sum + r.amount, 0);
+  }, [fromUser, toUser, settlementRecords]);
+
+  const remainingPayable = Math.max(0, Math.round((realOutstandingAmount - pendingAmount) * 100) / 100);
+  const isCoveredByPending = realOutstandingAmount > 0 && remainingPayable <= 0.01;
 
   useEffect(() => {
     if (transaction) {
@@ -105,7 +106,7 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
     setError('');
 
     if (isCoveredByPending && !isHostRecord) {
-      setError(`Your debt of ${formatCurrency(outstandingAmount, currency)} is already covered by a pending approval request.`);
+      setError(`Your debt of ${formatCurrency(realOutstandingAmount, currency)} is already covered by a pending approval request.`);
       return;
     }
 
@@ -121,6 +122,11 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
 
     if (fromUser.id === toUser.id) {
       setError('Payer and recipient cannot be the same person.');
+      return;
+    }
+
+    if (!isAdmin && fromUser.id !== currentUserId) {
+      setError('Forbidden: You can only initiate payment requests for your own debt.');
       return;
     }
 
@@ -226,13 +232,16 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
                 <select
                   value={selectedFromUserId}
                   onChange={(e) => setSelectedFromUserId(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 text-slate-900 text-xs font-bold rounded-xl p-2.5 focus:outline-none focus:border-emerald-500"
+                  disabled={!isAdmin}
+                  className="w-full bg-slate-50 border border-slate-200 text-slate-900 text-xs font-bold rounded-xl p-2.5 focus:outline-none focus:border-emerald-500 disabled:opacity-80"
                 >
-                  {members.map((m) => (
-                    <option key={m.userId} value={m.userId}>
-                      {m.userId === currentUserId ? 'You (Host)' : m.user.name}
-                    </option>
-                  ))}
+                  {members
+                    .filter((m) => isAdmin || m.userId === currentUserId)
+                    .map((m) => (
+                      <option key={m.userId} value={m.userId}>
+                        {m.userId === currentUserId ? (isAdmin ? 'You (Host)' : 'You') : m.user.name}
+                      </option>
+                    ))}
                 </select>
               </div>
 
@@ -245,11 +254,13 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
                   onChange={(e) => setSelectedToUserId(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-200 text-slate-900 text-xs font-bold rounded-xl p-2.5 focus:outline-none focus:border-emerald-500"
                 >
-                  {members.map((m) => (
-                    <option key={m.userId} value={m.userId}>
-                      {m.userId === currentUserId ? 'You (Host)' : m.user.name}
-                    </option>
-                  ))}
+                  {members
+                    .filter((m) => m.userId !== selectedFromUserId)
+                    .map((m) => (
+                      <option key={m.userId} value={m.userId}>
+                        {m.userId === currentUserId ? 'You (Host)' : m.user.name}
+                      </option>
+                    ))}
                 </select>
               </div>
             </div>
@@ -268,17 +279,17 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
                     <>
                       Record payment received from{' '}
                       <span className="text-slate-900 font-bold">{fromUser.name}</span>
-                      {outstandingAmount > 0 && (
+                      {realOutstandingAmount > 0 && (
                         <>
-                          {' '}(owes{' '}
-                          <span className="text-emerald-700">{formatCurrency(outstandingAmount, currency)}</span>)
+                          {' '}(remaining debt:{' '}
+                          <span className="text-emerald-700">{formatCurrency(remainingPayable, currency)}</span>)
                         </>
                       )}
                     </>
                   ) : (
                     <>
                       {fromUser.id === currentUserId ? 'You owe' : `${fromUser.name} owes`}{' '}
-                      <span className="text-emerald-700">{formatCurrency(outstandingAmount || amountToSettle, currency)}</span> to{' '}
+                      <span className="text-emerald-700">{formatCurrency(remainingPayable || amountToSettle, currency)}</span> to{' '}
                       <span className="text-slate-900">{toUser.id === currentUserId ? 'You' : toUser.name}</span>
                     </>
                   )}
@@ -293,7 +304,7 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
               <label className="text-xs font-semibold text-slate-700 uppercase tracking-wide">
                 Amount
               </label>
-              {outstandingAmount > 0 && (
+              {realOutstandingAmount > 0 && (
                 <button
                   type="button"
                   onClick={() => setIsEditingAmount(!isEditingAmount)}
@@ -305,7 +316,7 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
               )}
             </div>
 
-            {isEditingAmount || outstandingAmount === 0 ? (
+            {isEditingAmount || realOutstandingAmount === 0 ? (
               <input
                 type="number"
                 step="any"
@@ -340,17 +351,17 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
               <Clock className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
               <div>
                 <span className="font-extrabold block">Debt Already Covered by Pending Request</span>
-                Your debt of <span className="font-bold">{formatCurrency(outstandingAmount, currency)}</span> is already covered by a pending approval request. Please wait for the recipient or Host to confirm.
+                Your debt of <span className="font-bold">{formatCurrency(realOutstandingAmount, currency)}</span> is already covered by a pending approval request. Please wait for the recipient or Host to confirm.
               </div>
             </div>
           )}
 
-          {amountToSettle > outstandingAmount && outstandingAmount > 0 && (
+          {amountToSettle > realOutstandingAmount && realOutstandingAmount > 0 && (
             <div className="p-3 bg-emerald-50 border border-emerald-200/80 rounded-2xl text-xs text-emerald-800 flex items-start gap-2 font-medium">
               <Info className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
               <div>
                 <span className="font-bold block">Extra Payment / Advance Credit Notice</span>
-                You are paying <span className="font-bold">{formatCurrency(amountToSettle, currency)}</span>, which is <span className="font-bold">{formatCurrency(amountToSettle - outstandingAmount, currency)}</span> more than your current debt of {formatCurrency(outstandingAmount, currency)}. The excess {formatCurrency(amountToSettle - outstandingAmount, currency)} will automatically become Advance Credit after approval.
+                You are paying <span className="font-bold">{formatCurrency(amountToSettle, currency)}</span>, which is <span className="font-bold">{formatCurrency(amountToSettle - realOutstandingAmount, currency)}</span> more than your current debt of {formatCurrency(realOutstandingAmount, currency)}. The excess {formatCurrency(amountToSettle - realOutstandingAmount, currency)} will automatically become Advance Credit after approval.
               </div>
             </div>
           )}

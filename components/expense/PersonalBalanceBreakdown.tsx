@@ -323,45 +323,89 @@ export const PersonalBalanceBreakdown: React.FC<PersonalBalanceBreakdownProps> =
           )}
 
           {/* Step 4: Mathematical Verification Formula Card */}
-          <div className="bg-emerald-950 text-white rounded-2xl p-4 space-y-2 shadow-md">
-            <span className="text-[10px] font-bold text-emerald-300 uppercase tracking-wider block">
-              Mathematical Verification Trail
-            </span>
+          {(() => {
+            const expenseNet = paid - share;
+            const netSettlements = totalSettlementsPaid - totalSettlementsReceived;
+            const isOverpaid = expenseNet < 0 && netSettlements > Math.abs(expenseNet);
+            const overpaidAdvanceCredit = isOverpaid ? netSettlements - Math.abs(expenseNet) : 0;
 
-            <div className="space-y-1 text-xs font-mono">
-              <div className="flex justify-between">
-                <span className="text-slate-300">Total Paid:</span>
-                <span className="text-emerald-300 font-bold">+{formatCurrency(paid, currency)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-300">Less Your Share:</span>
-                <span className="text-rose-300 font-bold">−{formatCurrency(share, currency)}</span>
-              </div>
-              {totalSettlementsPaid > 0 && (
-                <div className="flex justify-between">
-                  <span className="text-slate-300">Plus Settlements Paid:</span>
-                  <span className="text-emerald-300 font-bold">+{formatCurrency(totalSettlementsPaid, currency)}</span>
+            return (
+              <div className="bg-slate-900 text-white rounded-2xl p-4 space-y-3 shadow-md border border-slate-800">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider block">
+                    Mathematical Verification Trail
+                  </span>
+                  <span className="text-[10px] text-slate-400 font-mono">
+                    (Paid − Share) + Settlements
+                  </span>
                 </div>
-              )}
-              {totalSettlementsReceived > 0 && (
-                <div className="flex justify-between">
-                  <span className="text-slate-300">Less Settlements Received:</span>
-                  <span className="text-rose-300 font-bold">−{formatCurrency(totalSettlementsReceived, currency)}</span>
-                </div>
-              )}
 
-              <div className="pt-2 border-t border-emerald-800 flex justify-between font-extrabold text-sm">
-                <span>Final Reconciled Balance:</span>
-                <span className={isNetNegative ? 'text-rose-400' : 'text-emerald-400'}>
-                  {isNetPositive
-                    ? `+${formatCurrency(netBalance, currency)} (To Receive)`
-                    : isNetNegative
-                    ? `-${formatCurrency(Math.abs(netBalance), currency)} (To Pay)`
-                    : `${currency}0 (Settled)`}
-                </span>
+                <div className="space-y-2 text-xs font-mono">
+                  {/* Trip Expenses Subtotal */}
+                  <div className="space-y-1 pb-2 border-b border-slate-800">
+                    <div className="flex justify-between">
+                      <span className="text-slate-300">Total Paid:</span>
+                      <span className="text-emerald-400 font-bold">+{formatCurrency(paid, currency)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-300">Less Your Share:</span>
+                      <span className="text-rose-400 font-bold">−{formatCurrency(share, currency)}</span>
+                    </div>
+                    <div className="flex justify-between text-slate-300 font-sans text-[11px] pt-0.5 font-medium">
+                      <span>Expense Debt Subtotal:</span>
+                      <span className={expenseNet >= 0 ? "text-emerald-400 font-bold" : "text-rose-400 font-bold"}>
+                        {expenseNet >= 0 ? `+${formatCurrency(expenseNet, currency)}` : `-${formatCurrency(Math.abs(expenseNet), currency)}`}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Direct Settlements Section */}
+                  {(totalSettlementsPaid > 0 || totalSettlementsReceived > 0) && (
+                    <div className="space-y-1 pb-2 border-b border-slate-800">
+                      {totalSettlementsPaid > 0 && (
+                        <div className="flex justify-between">
+                          <span className="text-slate-300">Plus Settlements Paid:</span>
+                          <span className="text-emerald-400 font-bold">+{formatCurrency(totalSettlementsPaid, currency)}</span>
+                        </div>
+                      )}
+                      {totalSettlementsReceived > 0 && (
+                        <div className="flex justify-between">
+                          <span className="text-slate-300">Less Settlements Received:</span>
+                          <span className="text-rose-400 font-bold">−{formatCurrency(totalSettlementsReceived, currency)}</span>
+                        </div>
+                      )}
+                      {overpaidAdvanceCredit > 0 && (
+                        <div className="flex justify-between text-emerald-300 font-sans text-[11px] pt-0.5 font-medium">
+                          <span>Applied to Debt:</span>
+                          <span className="font-bold">-{formatCurrency(Math.abs(expenseNet), currency)}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Final Summary Row */}
+                  <div className="pt-1 flex flex-col space-y-2">
+                    <div className="flex justify-between font-extrabold text-sm">
+                      <span>Net Expense Balance:</span>
+                      <span className={isNetNegative ? 'text-rose-400' : 'text-emerald-400'}>
+                        {isNetPositive
+                          ? `+${formatCurrency(netBalance, currency)} (To Receive)`
+                          : isNetNegative
+                          ? `-${formatCurrency(Math.abs(netBalance), currency)} (To Pay)`
+                          : `${currency}0 (Settled)`}
+                      </span>
+                    </div>
+                    {overpaidAdvanceCredit > 0 && (
+                      <div className="flex justify-between font-extrabold text-xs text-emerald-300 bg-emerald-950/80 p-2.5 rounded-xl border border-emerald-700/80">
+                        <span>Surplus Advance Credit (To Receive / Refund):</span>
+                        <span>+{formatCurrency(overpaidAdvanceCredit, currency)}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
+            );
+          })()}
         </div>
       )}
     </div>
