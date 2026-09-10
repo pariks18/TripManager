@@ -513,7 +513,7 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
               {isAllSettled
                 ? 'All Settled Up'
                 : totalOwed > 0
-                ? 'Payment Required'
+                ? 'You Owe'
                 : 'You Are Owed'}
             </span>
 
@@ -531,14 +531,14 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
                 <h3 className="text-2xl font-black text-slate-900 tracking-tight">
                   {totalOwed > 0 ? (
                     <>
-                      You need to pay{' '}
+                      You owe{' '}
                       <span className="text-rose-600">
                         {formatCurrency(totalOwed, currency)}
                       </span>
                     </>
                   ) : (
                     <>
-                      You will receive{' '}
+                      You are owed{' '}
                       <span className="text-emerald-600">
                         {formatCurrency(totalReceivable, currency)}
                       </span>

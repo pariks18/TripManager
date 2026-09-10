@@ -212,7 +212,7 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = React.memo(({
               </div>
               <div>
                 <h4 className="text-sm font-bold text-slate-900">You Need to Pay</h4>
-                <p className="text-[11px] text-slate-400">Direct debt payments</p>
+                <p className="text-[11px] text-slate-400">Direct payments you need to make</p>
               </div>
             </div>
 
@@ -230,8 +230,8 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = React.memo(({
                 <div className="flex items-center gap-2.5">
                   <Avatar name={tx.toUser.name} size="sm" />
                   <div>
-                    <span className="text-xs font-bold text-slate-900 block">Pay {tx.toUser.name}</span>
-                    <span className="text-[10px] text-slate-500">outstanding debt</span>
+                    <span className="text-xs font-bold text-slate-900 block">{tx.toUser.name}</span>
+                    <span className="text-[10px] text-slate-500 font-medium">You owe {formatCurrency(tx.amount, currency)}</span>
                   </div>
                 </div>
 
@@ -268,8 +268,8 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = React.memo(({
                 <ArrowDownLeft className="w-4 h-4" />
               </div>
               <div>
-                <h4 className="text-sm font-bold text-slate-900">You Will Receive</h4>
-                <p className="text-[11px] text-slate-400">Incoming payments</p>
+                <h4 className="text-sm font-bold text-slate-900">You Are Owed</h4>
+                <p className="text-[11px] text-slate-400">Payments members owe to you</p>
               </div>
             </div>
 
@@ -288,13 +288,13 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = React.memo(({
                   <Avatar name={tx.fromUser.name} size="sm" />
                   <div>
                     <span className="text-xs font-bold text-slate-900 block">{tx.fromUser.name}</span>
-                    <span className="text-[10px] text-slate-500">owes you money</span>
+                    <span className="text-[10px] text-slate-500 font-medium">Owes you {formatCurrency(tx.amount, currency)}</span>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-black text-emerald-600">
-                    +{formatCurrency(tx.amount, currency).replace('+', '')}
+                    {formatCurrency(tx.amount, currency)}
                   </span>
                   <button
                     onClick={() => handleOpenBreakdown(tx.fromUser)}

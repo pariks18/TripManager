@@ -127,7 +127,7 @@ export const PersonalBalanceBreakdown: React.FC<PersonalBalanceBreakdownProps> =
                     : 'bg-emerald-100 text-emerald-800 border border-emerald-200'
                 }`}
               >
-                {isSettled ? 'All Settled Up' : isNetNegative ? 'Payment Required' : 'To Receive'}
+                {isSettled ? 'All Settled Up' : isNetNegative ? 'You Owe' : 'You Are Owed'}
               </span>
             </div>
             <h3 className="text-xl sm:text-2xl font-black text-slate-900 mt-1.5 tracking-tight">
@@ -142,7 +142,7 @@ export const PersonalBalanceBreakdown: React.FC<PersonalBalanceBreakdownProps> =
                 </>
               ) : (
                 <>
-                  {isCurrentUser ? 'You should receive ' : `${user.name} should receive `}
+                  {isCurrentUser ? 'You are owed ' : `${user.name} is owed `}
                   <span className="text-emerald-600 font-extrabold">
                     {formatCurrency(netBalance, currency)}
                   </span>
@@ -151,10 +151,10 @@ export const PersonalBalanceBreakdown: React.FC<PersonalBalanceBreakdownProps> =
             </h3>
             <p className="text-xs text-slate-500 font-medium mt-0.5">
               {isSettled
-                ? 'No pending debt or receivable'
+                ? 'No outstanding debt or receivable'
                 : isNetNegative
-                ? `${subjectLabel} need to pay this amount to settle trip expenses.`
-                : `Other members will pay ${subjectLabel.toLowerCase()} to clear the balance.`}
+                ? `${subjectLabel} need to pay this amount to clear remaining debt.`
+                : `Other members will pay ${subjectLabel.toLowerCase()} to settle trip expenses.`}
             </p>
           </div>
 
@@ -163,7 +163,7 @@ export const PersonalBalanceBreakdown: React.FC<PersonalBalanceBreakdownProps> =
             className="flex items-center gap-1 text-xs font-extrabold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/80 px-3 py-1.5 rounded-2xl transition-all shrink-0 cursor-pointer shadow-sm active:scale-95"
           >
             <Calculator className="w-3.5 h-3.5 text-emerald-600" />
-            <span>{isExpanded ? 'Hide Calculation' : 'How was this calculated?'}</span>
+            <span>{isExpanded ? 'Hide Details' : 'How was this calculated?'}</span>
             {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
           </button>
         </div>
@@ -190,7 +190,7 @@ export const PersonalBalanceBreakdown: React.FC<PersonalBalanceBreakdownProps> =
 
           <div className="bg-slate-50/80 rounded-2xl p-2.5 border border-slate-100 text-center min-w-0">
             <span className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider block truncate">
-              Net Balance
+              Trip Balance
             </span>
             <span
               className={`text-xs sm:text-sm font-black block truncate mt-0.5 ${
@@ -207,13 +207,13 @@ export const PersonalBalanceBreakdown: React.FC<PersonalBalanceBreakdownProps> =
         </div>
       </div>
 
-      {/* Expanded Calculation Details (TRANSPARENT WHEN EXPANDED) */}
+      {/* Expanded Calculation Details (PROGRESSIVE DISCLOSURE) */}
       {isExpanded && (
         <div className="border-t border-slate-100 bg-slate-50/60 p-4 sm:p-5 space-y-4">
           <div className="flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-emerald-600" />
             <h4 className="text-xs font-black uppercase tracking-wider text-slate-700">
-              Detailed Calculation Breakdown
+              Calculation Summary
             </h4>
           </div>
 
@@ -255,7 +255,7 @@ export const PersonalBalanceBreakdown: React.FC<PersonalBalanceBreakdownProps> =
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
                 <ArrowUpRight className="w-4 h-4 text-rose-600" />
-                2. {possessiveLabel} Share of All Expenses ({shareExpenses.length})
+                2. {possessiveLabel} Share of Expenses ({shareExpenses.length})
               </span>
               <span className="text-xs font-black text-rose-600">
                 Total Share: {formatCurrency(share, currency)}
@@ -289,7 +289,7 @@ export const PersonalBalanceBreakdown: React.FC<PersonalBalanceBreakdownProps> =
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
                   <CheckCircle2 className="w-4 h-4 text-blue-600" />
-                  3. Settlement Payments & Adjustments ({userSettlements.length})
+                  3. Settlements & Advances ({userSettlements.length})
                 </span>
               </div>
 
@@ -298,18 +298,21 @@ export const PersonalBalanceBreakdown: React.FC<PersonalBalanceBreakdownProps> =
                   const isPayer = s.fromUserId === user.id;
                   const effAmt = s.settledAmount || s.amount;
                   const otherPartyName = isPayer ? s.toUser?.name || 'Member' : s.fromUser?.name || 'Member';
+                  const isAdvance = s.type === 'ADVANCE_CREDIT';
                   return (
                     <div key={s.id} className="pt-1.5 first:pt-0 flex items-center justify-between text-xs">
                       <div>
                         <span className="font-bold text-slate-900 block">
-                          {isPayer ? `Paid to ${otherPartyName}` : `Received from ${otherPartyName}`}
+                          {isAdvance
+                            ? (isPayer ? `Advance paid to ${otherPartyName}` : `Advance received from ${otherPartyName}`)
+                            : (isPayer ? `Paid to ${otherPartyName}` : `Received from ${otherPartyName}`)}
                         </span>
                         <span className="text-[10px] text-slate-400">
-                          Status: {s.status} • {s.note || 'Direct Settlement'}
+                          {s.status === 'CONFIRMED' || s.status === 'SETTLED' ? '✓ Settled' : s.status} • {s.note || (isAdvance ? 'Advance Credit' : 'Direct Settlement')}
                         </span>
                       </div>
                       <span className={`font-extrabold ${isPayer ? 'text-emerald-600' : 'text-rose-600'}`}>
-                        {isPayer ? `+${formatCurrency(effAmt, currency)}` : `-${formatCurrency(effAmt, currency)}`}
+                        {formatCurrency(effAmt, currency)}
                       </span>
                     </div>
                   );
@@ -322,7 +325,7 @@ export const PersonalBalanceBreakdown: React.FC<PersonalBalanceBreakdownProps> =
             </div>
           )}
 
-          {/* Step 4: Mathematical Verification Formula Card */}
+          {/* Step 4: Simple Explanation Box */}
           {(() => {
             const expenseNet = paid - share;
             const netSettlements = totalSettlementsPaid - totalSettlementsReceived;
@@ -333,7 +336,7 @@ export const PersonalBalanceBreakdown: React.FC<PersonalBalanceBreakdownProps> =
               <div className="bg-slate-900 text-white rounded-2xl p-4 space-y-3 shadow-md border border-slate-800">
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider block">
-                    Mathematical Verification Trail
+                    Calculation Summary
                   </span>
                   <span className="text-[10px] text-slate-400 font-mono">
                     (Paid − Share) + Settlements
@@ -344,15 +347,15 @@ export const PersonalBalanceBreakdown: React.FC<PersonalBalanceBreakdownProps> =
                   {/* Trip Expenses Subtotal */}
                   <div className="space-y-1 pb-2 border-b border-slate-800">
                     <div className="flex justify-between">
-                      <span className="text-slate-300">Total Paid:</span>
-                      <span className="text-emerald-400 font-bold">+{formatCurrency(paid, currency)}</span>
+                      <span className="text-slate-300">You paid for expenses:</span>
+                      <span className="text-emerald-400 font-bold">{formatCurrency(paid, currency)}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-slate-300">Less Your Share:</span>
+                      <span className="text-slate-300">Your share of expenses:</span>
                       <span className="text-rose-400 font-bold">−{formatCurrency(share, currency)}</span>
                     </div>
                     <div className="flex justify-between text-slate-300 font-sans text-[11px] pt-0.5 font-medium">
-                      <span>Expense Debt Subtotal:</span>
+                      <span>Net expense position:</span>
                       <span className={expenseNet >= 0 ? "text-emerald-400 font-bold" : "text-rose-400 font-bold"}>
                         {expenseNet >= 0 ? `+${formatCurrency(expenseNet, currency)}` : `-${formatCurrency(Math.abs(expenseNet), currency)}`}
                       </span>
@@ -364,19 +367,19 @@ export const PersonalBalanceBreakdown: React.FC<PersonalBalanceBreakdownProps> =
                     <div className="space-y-1 pb-2 border-b border-slate-800">
                       {totalSettlementsPaid > 0 && (
                         <div className="flex justify-between">
-                          <span className="text-slate-300">Plus Settlements Paid:</span>
+                          <span className="text-slate-300">Settlements you paid:</span>
                           <span className="text-emerald-400 font-bold">+{formatCurrency(totalSettlementsPaid, currency)}</span>
                         </div>
                       )}
                       {totalSettlementsReceived > 0 && (
                         <div className="flex justify-between">
-                          <span className="text-slate-300">Less Settlements Received:</span>
+                          <span className="text-slate-300">Settlements you received:</span>
                           <span className="text-rose-400 font-bold">−{formatCurrency(totalSettlementsReceived, currency)}</span>
                         </div>
                       )}
                       {overpaidAdvanceCredit > 0 && (
                         <div className="flex justify-between text-emerald-300 font-sans text-[11px] pt-0.5 font-medium">
-                          <span>Applied to Debt:</span>
+                          <span>Applied to debt:</span>
                           <span className="font-bold">-{formatCurrency(Math.abs(expenseNet), currency)}</span>
                         </div>
                       )}
@@ -386,19 +389,19 @@ export const PersonalBalanceBreakdown: React.FC<PersonalBalanceBreakdownProps> =
                   {/* Final Summary Row */}
                   <div className="pt-1 flex flex-col space-y-2">
                     <div className="flex justify-between font-extrabold text-sm">
-                      <span>Net Expense Balance:</span>
+                      <span>Current Balance:</span>
                       <span className={isNetNegative ? 'text-rose-400' : 'text-emerald-400'}>
                         {isNetPositive
-                          ? `+${formatCurrency(netBalance, currency)} (To Receive)`
+                          ? `You are owed ${formatCurrency(netBalance, currency)}`
                           : isNetNegative
-                          ? `-${formatCurrency(Math.abs(netBalance), currency)} (To Pay)`
-                          : `${currency}0 (Settled)`}
+                          ? `You owe ${formatCurrency(Math.abs(netBalance), currency)}`
+                          : `All settled up 🎉 (${currency}0)`}
                       </span>
                     </div>
                     {overpaidAdvanceCredit > 0 && (
                       <div className="flex justify-between font-extrabold text-xs text-emerald-300 bg-emerald-950/80 p-2.5 rounded-xl border border-emerald-700/80">
-                        <span>Surplus Advance Credit (To Receive / Refund):</span>
-                        <span>+{formatCurrency(overpaidAdvanceCredit, currency)}</span>
+                        <span>Available advance credit (to receive/refund):</span>
+                        <span>{formatCurrency(overpaidAdvanceCredit, currency)}</span>
                       </div>
                     )}
                   </div>
