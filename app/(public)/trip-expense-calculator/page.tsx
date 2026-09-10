@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { InteractiveCalculator } from '@/components/seo/InteractiveCalculator';
 import Link from 'next/link';
 import { ArrowRight, Calculator } from 'lucide-react';
+import { getSessionUser } from '@/lib/auth';
 
 const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://tripnizer.com';
 
@@ -19,7 +20,9 @@ export const metadata: Metadata = {
   },
 };
 
-export default function TripExpenseCalculatorPage() {
+export default async function TripExpenseCalculatorPage() {
+  const user = await getSessionUser();
+
   const jsonLd = {
     '@context': 'https://schema.org',
     '@type': 'WebApplication',
@@ -73,16 +76,33 @@ export default function TripExpenseCalculatorPage() {
         </article>
 
         <div className="bg-emerald-950/40 border border-emerald-500/30 p-8 rounded-3xl text-center space-y-4">
-          <h2 className="text-xl font-bold text-white">Want to Save Your Trip Expense Records?</h2>
-          <p className="text-xs text-slate-300 max-w-md mx-auto">
-            Create a free TripNizer account to save your trip, share a 6-character code with friends, and log expenses anytime.
-          </p>
-          <Link
-            href="/register"
-            className="inline-flex items-center gap-2 px-6 py-3 bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-extrabold text-xs rounded-2xl transition-all shadow-lg shadow-emerald-500/20"
-          >
-            Create Free Account <ArrowRight className="w-4 h-4" />
-          </Link>
+          {user ? (
+            <>
+              <h2 className="text-xl font-bold text-white">Ready to Track Expenses for Your Group Trip?</h2>
+              <p className="text-xs text-slate-300 max-w-md mx-auto">
+                You are logged in as <span className="font-bold text-emerald-400">{user.name}</span>. Go to your dashboard to create a trip or view active expense logs.
+              </p>
+              <Link
+                href="/dashboard"
+                className="inline-flex items-center gap-2 px-6 py-3 bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-extrabold text-xs rounded-2xl transition-all shadow-lg shadow-emerald-500/20"
+              >
+                Go to Dashboard <ArrowRight className="w-4 h-4" />
+              </Link>
+            </>
+          ) : (
+            <>
+              <h2 className="text-xl font-bold text-white">Want to Save Your Trip Expense Records?</h2>
+              <p className="text-xs text-slate-300 max-w-md mx-auto">
+                Create a free TripNizer account to save your trip, share a 6-character code with friends, and log expenses anytime.
+              </p>
+              <Link
+                href="/register"
+                className="inline-flex items-center gap-2 px-6 py-3 bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-extrabold text-xs rounded-2xl transition-all shadow-lg shadow-emerald-500/20"
+              >
+                Create Free Account <ArrowRight className="w-4 h-4" />
+              </Link>
+            </>
+          )}
         </div>
       </div>
     </>

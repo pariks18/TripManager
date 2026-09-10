@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { InteractiveChecklist } from '@/components/seo/InteractiveChecklist';
 import Link from 'next/link';
 import { CheckSquare, ArrowRight } from 'lucide-react';
+import { getSessionUser } from '@/lib/auth';
 
 const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://tripnizer.com';
 
@@ -19,7 +20,9 @@ export const metadata: Metadata = {
   },
 };
 
-export default function GroupTripChecklistPage() {
+export default async function GroupTripChecklistPage() {
+  const user = await getSessionUser();
+
   const jsonLd = {
     '@context': 'https://schema.org',
     '@type': 'WebApplication',
@@ -68,16 +71,33 @@ export default function GroupTripChecklistPage() {
         </article>
 
         <div className="bg-emerald-950/40 border border-emerald-500/30 p-8 rounded-3xl text-center space-y-4">
-          <h2 className="text-xl font-bold text-white">Create a Custom Checklist for Your Trip</h2>
-          <p className="text-xs text-slate-300 max-w-md mx-auto">
-            Create a trip, customize pre-seeded categories, and share with your group in seconds.
-          </p>
-          <Link
-            href="/register"
-            className="inline-flex items-center gap-2 px-6 py-3 bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-extrabold text-xs rounded-2xl transition-all shadow-lg shadow-emerald-500/20"
-          >
-            Create Free Account <ArrowRight className="w-4 h-4" />
-          </Link>
+          {user ? (
+            <>
+              <h2 className="text-xl font-bold text-white">Ready to Manage Packing Checklists for Your Trip?</h2>
+              <p className="text-xs text-slate-300 max-w-md mx-auto">
+                You are logged in as <span className="font-bold text-emerald-400">{user.name}</span>. Access your group trip checklists in your dashboard.
+              </p>
+              <Link
+                href="/dashboard"
+                className="inline-flex items-center gap-2 px-6 py-3 bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-extrabold text-xs rounded-2xl transition-all shadow-lg shadow-emerald-500/20"
+              >
+                Go to Dashboard <ArrowRight className="w-4 h-4" />
+              </Link>
+            </>
+          ) : (
+            <>
+              <h2 className="text-xl font-bold text-white">Create a Custom Checklist for Your Trip</h2>
+              <p className="text-xs text-slate-300 max-w-md mx-auto">
+                Create a trip, customize pre-seeded categories, and share with your group in seconds.
+              </p>
+              <Link
+                href="/register"
+                className="inline-flex items-center gap-2 px-6 py-3 bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-extrabold text-xs rounded-2xl transition-all shadow-lg shadow-emerald-500/20"
+              >
+                Create Free Account <ArrowRight className="w-4 h-4" />
+              </Link>
+            </>
+          )}
         </div>
       </div>
     </>

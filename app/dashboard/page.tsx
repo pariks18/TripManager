@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/Button';
 import { formatCurrency } from '@/lib/utils';
 import { Plus, KeyRound, Compass, Search, User, LogOut, ShieldCheck, AlertTriangle, Loader2 } from 'lucide-react';
 import { fetchClientSession, clearClientSession } from '@/lib/clientSession';
+import { ExploreResourcesSection } from '@/components/dashboard/ExploreResourcesSection';
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -324,6 +325,9 @@ export default function DashboardPage() {
             </div>
           </div>
         )}
+
+        {/* Explore & Resources Section */}
+        <ExploreResourcesSection />
       </main>
 
       {/* Floating Action Button (FAB) on Mobile */}
