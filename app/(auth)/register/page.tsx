@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { fetchClientSession } from '@/lib/clientSession';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import {
@@ -31,6 +32,14 @@ export default function RegisterPage() {
   const [gender, setGender] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    fetchClientSession().then((meUser) => {
+      if (meUser) {
+        router.replace('/dashboard');
+      }
+    });
+  }, [router]);
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();

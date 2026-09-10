@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useState, Suspense } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import { fetchClientSession } from '@/lib/clientSession';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import {
@@ -39,6 +40,15 @@ function LoginFormContent() {
   const [isResending, setIsResending] = useState(false);
   const [resendMessage, setResendMessage] = useState('');
   const [isForgotPasswordOpen, setIsForgotPasswordOpen] = useState(false);
+
+  useEffect(() => {
+    fetchClientSession().then((meUser) => {
+      if (meUser) {
+        const returnUrl = searchParams ? searchParams.get('returnUrl') : null;
+        router.replace(returnUrl || '/dashboard');
+      }
+    });
+  }, [router, searchParams]);
 
   const handleLogin = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();

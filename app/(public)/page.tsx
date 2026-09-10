@@ -1,5 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
+import { getSessionUser } from '@/lib/auth';
 import { Sparkles, ArrowRight, ShieldCheck, Zap, Users, CreditCard, CheckSquare, Calculator, Compass } from 'lucide-react';
 
 const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://tripnizer.com';
@@ -25,7 +27,11 @@ export const metadata: Metadata = {
   },
 };
 
-export default function HomePage() {
+export default async function HomePage() {
+  const user = await getSessionUser();
+  if (user) {
+    redirect('/dashboard');
+  }
   const jsonLd = {
     '@context': 'https://schema.org',
     '@type': 'SoftwareApplication',
