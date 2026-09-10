@@ -9,9 +9,16 @@ import { PieChart, TrendingUp, Award, Layers, BarChart2 } from 'lucide-react';
 interface AnalyticsViewProps {
   tripId: string;
   currency: string;
+  currentUserId?: string;
+  isAdmin?: boolean;
 }
 
-export const AnalyticsView: React.FC<AnalyticsViewProps> = React.memo(({ tripId, currency }) => {
+export const AnalyticsView: React.FC<AnalyticsViewProps> = React.memo(({
+  tripId,
+  currency,
+  currentUserId,
+  isAdmin = false,
+}) => {
   const [analytics, setAnalytics] = useState<MemberAnalytics[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -47,50 +54,54 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = React.memo(({ tripId,
       </div>
 
       <div className="space-y-3">
-        {analytics.map((item) => (
-          <div
-            key={item.user.id}
-            className="bg-white rounded-3xl p-5 border border-slate-100 apple-shadow space-y-4"
-          >
-            {/* Header: Member Avatar & Net Status */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <Avatar name={item.user.name} size="md" />
-                <div>
-                  <h4 className="text-sm font-bold text-slate-900">{item.user.name}</h4>
-                  <p className="text-[11px] text-slate-400">
-                    Logged {item.expensesAddedCount} expense{item.expensesAddedCount !== 1 ? 's' : ''}
-                  </p>
+        {analytics.map((item) => {
+          const canViewFinancials = isAdmin || (currentUserId && item.user.id === currentUserId);
+          return (
+            <div
+              key={item.user.id}
+              className="bg-white rounded-3xl p-5 border border-slate-100 apple-shadow space-y-4"
+            >
+              {/* Header: Member Avatar & Net Status */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <Avatar name={item.user.name} size="md" />
+                  <div>
+                    <h4 className="text-sm font-bold text-slate-900">{item.user.name}</h4>
+                    <p className="text-[11px] text-slate-400">
+                      Logged {item.expensesAddedCount} expense{item.expensesAddedCount !== 1 ? 's' : ''}
+                    </p>
+                  </div>
                 </div>
+
+                {canViewFinancials && (
+                  <span
+                    className={`text-xs font-extrabold px-3 py-1 rounded-full border ${
+                      item.netBalance > 0
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                        : item.netBalance < 0
+                        ? 'bg-rose-50 text-rose-700 border-rose-200'
+                        : 'bg-slate-100 text-slate-700 border-slate-200'
+                    }`}
+                  >
+                    {item.netBalance > 0
+                      ? `+${formatCurrency(item.netBalance, currency).replace('+', '')}`
+                      : item.netBalance < 0
+                      ? formatCurrency(item.netBalance, currency)
+                      : 'Settled'}
+                  </span>
+                )}
               </div>
 
-              <span
-                className={`text-xs font-extrabold px-3 py-1 rounded-full border ${
-                  item.netBalance > 0
-                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                    : item.netBalance < 0
-                    ? 'bg-rose-50 text-rose-700 border-rose-200'
-                    : 'bg-slate-100 text-slate-700 border-slate-200'
-                }`}
-              >
-                {item.netBalance > 0
-                  ? `+${formatCurrency(item.netBalance, currency).replace('+', '')}`
-                  : item.netBalance < 0
-                  ? formatCurrency(item.netBalance, currency)
-                  : 'Settled'}
-              </span>
-            </div>
-
-            {/* Metrics Breakdown Grid */}
-            <div className="grid grid-cols-3 gap-2 text-center bg-slate-50 rounded-2xl p-3 border border-slate-100">
-              <div>
-                <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">
-                  Total Paid
-                </span>
-                <span className="text-xs font-bold text-slate-900 block mt-0.5">
-                  {formatCurrency(item.totalPaid, currency)}
-                </span>
-              </div>
+              {/* Metrics Breakdown Grid */}
+              <div className="grid grid-cols-3 gap-2 text-center bg-slate-50 rounded-2xl p-3 border border-slate-100">
+                <div>
+                  <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">
+                    Total Paid
+                  </span>
+                  <span className="text-xs font-bold text-slate-900 block mt-0.5">
+                    {canViewFinancials ? formatCurrency(item.totalPaid, currency) : '—'}
+                  </span>
+                </div>
 
               <div>
                 <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">
@@ -125,7 +136,8 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = React.memo(({ tripId,
               </div>
             </div>
           </div>
-        ))}
+        );
+      })}
       </div>
     </div>
   );

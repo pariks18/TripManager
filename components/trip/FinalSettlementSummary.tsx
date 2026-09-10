@@ -35,6 +35,10 @@ export const FinalSettlementSummary: React.FC<FinalSettlementSummaryProps> = ({
   const debtors = memberBalances.filter((m) => m.netBalance < -0.01);
   const settled = memberBalances.filter((m) => Math.abs(m.netBalance) <= 0.01);
 
+  const isHost =
+    trip.createdById === currentUser.id ||
+    trip.members.some((m) => m.userId === currentUser.id && m.role === 'ADMIN');
+
   return (
     <div className="bg-gradient-to-br from-amber-500/10 via-emerald-500/5 to-slate-50 border border-amber-200/80 rounded-3xl p-4 sm:p-6 space-y-6 shadow-sm">
       {/* Banner Header */}
@@ -131,62 +135,64 @@ export const FinalSettlementSummary: React.FC<FinalSettlementSummaryProps> = ({
         )}
       </div>
 
-      {/* Breakdown: Who Needs to Pay & Who Needs to Receive */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-slate-200/80 pt-4">
-        {/* Debtors: Who Needs to Pay */}
-        <div className="bg-white rounded-2xl p-4 border border-slate-200 space-y-3">
-          <h4 className="text-xs font-extrabold text-rose-700 uppercase tracking-wider flex items-center gap-1.5">
-            <AlertCircle className="w-4 h-4 text-rose-600" />
-            Who Needs to Pay ({debtors.length})
-          </h4>
-          {debtors.length === 0 ? (
-            <p className="text-xs text-slate-500 font-medium">Nobody owes any money.</p>
-          ) : (
-            <div className="space-y-2">
-              {debtors.map((d) => (
-                <div key={d.user.id} className="flex items-center justify-between gap-2 p-2 rounded-xl bg-rose-50/50 border border-rose-100">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <Avatar name={d.user.name} size="sm" />
-                    <span className="text-xs font-bold text-slate-900 truncate">
-                      {d.user.name} {d.user.id === currentUser.id ? '(You)' : ''}
+      {/* Host-Only Breakdown: Who Needs to Pay & Who Needs to Receive */}
+      {isHost && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-slate-200/80 pt-4">
+          {/* Debtors: Who Needs to Pay */}
+          <div className="bg-white rounded-2xl p-4 border border-slate-200 space-y-3">
+            <h4 className="text-xs font-extrabold text-rose-700 uppercase tracking-wider flex items-center gap-1.5">
+              <AlertCircle className="w-4 h-4 text-rose-600" />
+              Who Needs to Pay ({debtors.length})
+            </h4>
+            {debtors.length === 0 ? (
+              <p className="text-xs text-slate-500 font-medium">Nobody owes any money.</p>
+            ) : (
+              <div className="space-y-2">
+                {debtors.map((d) => (
+                  <div key={d.user.id} className="flex items-center justify-between gap-2 p-2 rounded-xl bg-rose-50/50 border border-rose-100">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Avatar name={d.user.name} size="sm" />
+                      <span className="text-xs font-bold text-slate-900 truncate">
+                        {d.user.name} {d.user.id === currentUser.id ? '(You)' : ''}
+                      </span>
+                    </div>
+                    <span className="text-xs font-black text-rose-700 shrink-0">
+                      Owes {formatCurrency(Math.abs(d.netBalance), trip.currency)}
                     </span>
                   </div>
-                  <span className="text-xs font-black text-rose-700 shrink-0">
-                    Owes {formatCurrency(Math.abs(d.netBalance), trip.currency)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+                ))}
+              </div>
+            )}
+          </div>
 
-        {/* Creditors: Who Needs to Receive */}
-        <div className="bg-white rounded-2xl p-4 border border-slate-200 space-y-3">
-          <h4 className="text-xs font-extrabold text-emerald-700 uppercase tracking-wider flex items-center gap-1.5">
-            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-            Who Needs to Receive ({creditors.length})
-          </h4>
-          {creditors.length === 0 ? (
-            <p className="text-xs text-slate-500 font-medium">Nobody is owed money.</p>
-          ) : (
-            <div className="space-y-2">
-              {creditors.map((c) => (
-                <div key={c.user.id} className="flex items-center justify-between gap-2 p-2 rounded-xl bg-emerald-50/50 border border-emerald-100">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <Avatar name={c.user.name} size="sm" />
-                    <span className="text-xs font-bold text-slate-900 truncate">
-                      {c.user.name} {c.user.id === currentUser.id ? '(You)' : ''}
+          {/* Creditors: Who Needs to Receive */}
+          <div className="bg-white rounded-2xl p-4 border border-slate-200 space-y-3">
+            <h4 className="text-xs font-extrabold text-emerald-700 uppercase tracking-wider flex items-center gap-1.5">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+              Who Needs to Receive ({creditors.length})
+            </h4>
+            {creditors.length === 0 ? (
+              <p className="text-xs text-slate-500 font-medium">Nobody is owed money.</p>
+            ) : (
+              <div className="space-y-2">
+                {creditors.map((c) => (
+                  <div key={c.user.id} className="flex items-center justify-between gap-2 p-2 rounded-xl bg-emerald-50/50 border border-emerald-100">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Avatar name={c.user.name} size="sm" />
+                      <span className="text-xs font-bold text-slate-900 truncate">
+                        {c.user.name} {c.user.id === currentUser.id ? '(You)' : ''}
+                      </span>
+                    </div>
+                    <span className="text-xs font-black text-emerald-700 shrink-0">
+                      Gets {formatCurrency(c.netBalance, trip.currency)}
                     </span>
                   </div>
-                  <span className="text-xs font-black text-emerald-700 shrink-0">
-                    Gets {formatCurrency(c.netBalance, trip.currency)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
+                ))}
+              </div>
+            )}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };

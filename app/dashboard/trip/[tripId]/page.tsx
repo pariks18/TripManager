@@ -880,7 +880,7 @@ export default function TripDashboardPage() {
 
         {/* TAB 6: MEMBER ANALYTICS */}
         {activeTab === 'analytics' && (
-          <AnalyticsView tripId={trip.id} currency={trip.currency} />
+          <AnalyticsView tripId={trip.id} currency={trip.currency} currentUserId={user.id} isAdmin={isAdmin} />
         )}
       </main>
 
