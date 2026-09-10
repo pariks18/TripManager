@@ -1326,7 +1326,20 @@ export const dbStore = {
     }
 
     const effectivePaidById = paidById || payersList[0].userId;
-    const shareAmount = participantUserIds.length > 0 ? amount / participantUserIds.length : 0;
+    const numParticipants = participantUserIds.length;
+    const baseShare = numParticipants > 0 ? Math.floor((amount / numParticipants) * 100) / 100 : 0;
+    const totalBase = Math.round(baseShare * numParticipants * 100) / 100;
+    let remainderCents = numParticipants > 0 ? Math.round((amount - totalBase) * 100) : 0;
+
+    const participantSharesList = participantUserIds.map((uid) => {
+      let share = baseShare;
+      if (remainderCents > 0) {
+        share = Math.round((share + 0.01) * 100) / 100;
+        remainderCents--;
+      }
+      return { userId: uid, shareAmount: share };
+    });
+
     const expenseObjectId = generateObjectId();
 
     const creatorMember = await prisma.tripMember.findFirst({
@@ -1349,10 +1362,10 @@ export const dbStore = {
           receiptUrl: receiptUrl || null,
           date: new Date(),
           participants: {
-            create: participantUserIds.map((uid) => ({
+            create: participantSharesList.map((p) => ({
               id: generateObjectId(),
-              userId: uid,
-              shareAmount,
+              userId: p.userId,
+              shareAmount: p.shareAmount,
             })),
           },
           payers: {
@@ -1466,7 +1479,19 @@ export const dbStore = {
     }
 
     const effectivePaidById = paidById || payersList[0].userId;
-    const shareAmount = participantUserIds.length > 0 ? amount / participantUserIds.length : 0;
+    const numParticipants = participantUserIds.length;
+    const baseShare = numParticipants > 0 ? Math.floor((amount / numParticipants) * 100) / 100 : 0;
+    const totalBase = Math.round(baseShare * numParticipants * 100) / 100;
+    let remainderCents = numParticipants > 0 ? Math.round((amount - totalBase) * 100) : 0;
+
+    const participantSharesList = participantUserIds.map((uid) => {
+      let share = baseShare;
+      if (remainderCents > 0) {
+        share = Math.round((share + 0.01) * 100) / 100;
+        remainderCents--;
+      }
+      return { userId: uid, shareAmount: share };
+    });
 
     const updated = await prisma.$transaction(async (tx) => {
       await tx.expenseParticipant.deleteMany({ where: { expenseId } });
@@ -1482,10 +1507,10 @@ export const dbStore = {
           lastUpdatedById: currentUserId,
           receiptUrl: receiptUrl !== undefined ? receiptUrl : existingExpense.receiptUrl,
           participants: {
-            create: participantUserIds.map((uid) => ({
+            create: participantSharesList.map((p) => ({
               id: generateObjectId(),
-              userId: uid,
-              shareAmount,
+              userId: p.userId,
+              shareAmount: p.shareAmount,
             })),
           },
           payers: {
@@ -1846,6 +1871,24 @@ export const dbStore = {
         tx.user.findUnique({ where: { id: toUserId } }),
       ]);
       if (!fromUser || !toUser) throw new Error('Users not found.');
+
+      // DUPLICATE PROTECTION: Ensure member does not submit duplicate settlement within 60 seconds
+      const sixtySecondsAgo = new Date(Date.now() - 60 * 1000);
+      const recentDuplicate = await tx.settlement.findFirst({
+        where: {
+          tripId,
+          fromUserId,
+          toUserId,
+          amount: roundedPaymentAmount,
+          createdAt: { gte: sixtySecondsAgo },
+        },
+      });
+
+      if (recentDuplicate) {
+        throw new Error(
+          `Duplicate payment request detected: A payment request of ${trip.currency || '₹'}${roundedPaymentAmount} from ${fromUser.name} to ${toUser.name} was already submitted less than a minute ago.`
+        );
+      }
 
       const approvedExpenses: ExpenseDetail[] = trip.expenses
         .filter((e) => e.status === 'APPROVED')
