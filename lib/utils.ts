@@ -25,17 +25,20 @@ export function generateObjectId(): string {
 }
 
 export function formatCurrency(amount: number, currency: string = '₹'): string {
+  const absAmount = isNaN(amount) ? 0 : Math.abs(amount);
   const formatted = new Intl.NumberFormat('en-IN', {
     maximumFractionDigits: 2,
     minimumFractionDigits: 0,
-  }).format(Math.abs(amount));
+  }).format(absAmount);
 
-  if (amount < 0) {
-    return `-${currency}${formatted}`;
-  } else if (amount > 0) {
-    return `+${currency}${formatted}`;
-  }
-  return `${currency}0`;
+  return `${currency}${formatted}`;
+}
+
+export function formatSignedCurrency(amount: number, currency: string = '₹'): string {
+  const formatted = formatCurrency(Math.abs(amount), currency);
+  if (amount > 0) return `+${formatted}`;
+  if (amount < 0) return `-${formatted}`;
+  return formatted;
 }
 
 export function formatDate(dateString: string | Date): string {

@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { ExpenseDetail, SettlementRecordDetail, UserSummary } from '@/types';
-import { formatCurrency, formatDate } from '@/lib/utils';
+import { formatCurrency, formatDate, formatSignedCurrency } from '@/lib/utils';
 import {
   ChevronDown,
   ChevronUp,
@@ -197,11 +197,7 @@ export const PersonalBalanceBreakdown: React.FC<PersonalBalanceBreakdownProps> =
                 isNetNegative ? 'text-rose-600' : isNetPositive ? 'text-emerald-600' : 'text-slate-700'
               }`}
             >
-              {isNetPositive
-                ? `+${formatCurrency(netBalance, currency)}`
-                : isNetNegative
-                ? `-${formatCurrency(Math.abs(netBalance), currency)}`
-                : `${currency}0`}
+              {formatSignedCurrency(netBalance, currency)}
             </span>
           </div>
         </div>
@@ -351,13 +347,17 @@ export const PersonalBalanceBreakdown: React.FC<PersonalBalanceBreakdownProps> =
                       <span className="text-emerald-400 font-bold">{formatCurrency(paid, currency)}</span>
                     </div>
                     <div className="flex justify-between">
+                      <span className="text-slate-300">You paid for expenses:</span>
+                      <span className="text-emerald-400 font-bold">{formatCurrency(paid, currency)}</span>
+                    </div>
+                    <div className="flex justify-between">
                       <span className="text-slate-300">Your share of expenses:</span>
-                      <span className="text-rose-400 font-bold">−{formatCurrency(share, currency)}</span>
+                      <span className="text-rose-400 font-bold">{formatCurrency(share, currency)}</span>
                     </div>
                     <div className="flex justify-between text-slate-300 font-sans text-[11px] pt-0.5 font-medium">
                       <span>Net expense position:</span>
                       <span className={expenseNet >= 0 ? "text-emerald-400 font-bold" : "text-rose-400 font-bold"}>
-                        {expenseNet >= 0 ? `+${formatCurrency(expenseNet, currency)}` : `-${formatCurrency(Math.abs(expenseNet), currency)}`}
+                        {formatSignedCurrency(expenseNet, currency)}
                       </span>
                     </div>
                   </div>
@@ -368,19 +368,19 @@ export const PersonalBalanceBreakdown: React.FC<PersonalBalanceBreakdownProps> =
                       {totalSettlementsPaid > 0 && (
                         <div className="flex justify-between">
                           <span className="text-slate-300">Settlements you paid:</span>
-                          <span className="text-emerald-400 font-bold">+{formatCurrency(totalSettlementsPaid, currency)}</span>
+                          <span className="text-emerald-400 font-bold">{formatCurrency(totalSettlementsPaid, currency)}</span>
                         </div>
                       )}
                       {totalSettlementsReceived > 0 && (
                         <div className="flex justify-between">
                           <span className="text-slate-300">Settlements you received:</span>
-                          <span className="text-rose-400 font-bold">−{formatCurrency(totalSettlementsReceived, currency)}</span>
+                          <span className="text-rose-400 font-bold">{formatCurrency(totalSettlementsReceived, currency)}</span>
                         </div>
                       )}
                       {overpaidAdvanceCredit > 0 && (
                         <div className="flex justify-between text-emerald-300 font-sans text-[11px] pt-0.5 font-medium">
                           <span>Applied to debt:</span>
-                          <span className="font-bold">-{formatCurrency(Math.abs(expenseNet), currency)}</span>
+                          <span className="font-bold">{formatCurrency(Math.abs(expenseNet), currency)}</span>
                         </div>
                       )}
                     </div>

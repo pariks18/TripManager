@@ -119,7 +119,7 @@ export const MemberCard: React.FC<MemberCardProps> = React.memo(({
                   Paid {formatCurrency(paid, currency)} • Share {formatCurrency(share, currency)}
                   {memberBalance.advanceCredit && memberBalance.advanceCredit > 0 ? (
                     <span className="ml-1 font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded-md border border-emerald-200/60 inline-block">
-                      Advance Credit +{formatCurrency(memberBalance.advanceCredit, currency)}
+                      Advance Credit {formatCurrency(memberBalance.advanceCredit, currency)}
                     </span>
                   ) : null}
                 </p>
@@ -175,7 +175,7 @@ export const MemberCard: React.FC<MemberCardProps> = React.memo(({
               <div className="bg-emerald-50 border border-emerald-200/80 px-3 py-1 rounded-2xl">
                 <span className="text-[10px] font-semibold text-emerald-600 uppercase tracking-wider block">Gets back</span>
                 <span className="text-xs font-black text-emerald-700 block">
-                  +{formatCurrency(netBalance, currency).replace('+', '')}
+                  {formatCurrency(netBalance, currency)}
                 </span>
               </div>
             )}
@@ -184,7 +184,7 @@ export const MemberCard: React.FC<MemberCardProps> = React.memo(({
               <div className="bg-rose-50 border border-rose-200/80 px-3 py-1 rounded-2xl">
                 <span className="text-[10px] font-semibold text-rose-600 uppercase tracking-wider block">Owes</span>
                 <span className="text-xs font-black text-rose-700 block">
-                  {formatCurrency(netBalance, currency)}
+                  {formatCurrency(Math.abs(netBalance), currency)}
                 </span>
               </div>
             )}

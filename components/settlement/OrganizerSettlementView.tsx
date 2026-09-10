@@ -173,10 +173,10 @@ export const OrganizerSettlementView: React.FC<OrganizerSettlementViewProps> = (
                       }`}
                     >
                       {isNetPositive
-                        ? `+${formatCurrency(mb.netBalance, currency)}`
+                        ? formatCurrency(mb.netBalance, currency)
                         : isNetNegative
-                        ? `-${formatCurrency(Math.abs(mb.netBalance), currency)}`
-                        : `${currency}0`}
+                        ? formatCurrency(Math.abs(mb.netBalance), currency)
+                        : formatCurrency(0, currency)}
                     </span>
                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
                       {isNetPositive ? 'To Receive' : isNetNegative ? 'Owes' : 'Settled'}

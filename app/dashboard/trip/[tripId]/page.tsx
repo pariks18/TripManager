@@ -433,7 +433,7 @@ export default function TripDashboardPage() {
               <CreditCard className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
               <span>
                 {userAdvanceCredit > 0
-                  ? `+${formatCurrency(userAdvanceCredit, trip.currency)}`
+                  ? formatCurrency(userAdvanceCredit, trip.currency)
                   : formatCurrency(0, trip.currency)}
               </span>
             </button>

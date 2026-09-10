@@ -306,7 +306,7 @@ export const AdvanceCreditModal: React.FC<AdvanceCreditModalProps> = ({
                       </div>
 
                       <span className="text-xs font-black text-emerald-700">
-                        +{formatCurrency(record.amount, currency)}
+                        {formatCurrency(record.amount, currency)}
                       </span>
                     </div>
                   ))}
