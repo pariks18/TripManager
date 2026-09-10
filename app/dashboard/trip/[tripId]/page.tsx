@@ -173,25 +173,30 @@ export default function TripDashboardPage() {
 
   const fetchTripDetails = React.useCallback(async () => {
     try {
-      const [meUser, resTrip] = await Promise.all([
-        fetchClientSession(),
-        fetch(`/api/trips/${tripId}`),
-      ]);
-
+      const meUser = await fetchClientSession();
       if (!meUser) {
         router.push('/login');
         return;
       }
       setUser(meUser);
 
-      const dataTrip = await resTrip.json();
-      if (!resTrip.ok) {
-        router.push('/dashboard');
-        return;
+      try {
+        const resTrip = await fetch(`/api/trips/${tripId}`);
+        if (resTrip.status === 401) {
+          router.push('/login');
+          return;
+        }
+        if (!resTrip.ok) {
+          router.push('/dashboard');
+          return;
+        }
+        const dataTrip = await resTrip.json();
+        setTrip(dataTrip.trip);
+      } catch (tripErr) {
+        console.error('Failed to fetch trip details:', tripErr);
       }
-      setTrip(dataTrip.trip);
-    } catch {
-      router.push('/dashboard');
+    } catch (sessionErr) {
+      console.error('Failed to verify client session:', sessionErr);
     } finally {
       setIsLoading(false);
     }
@@ -523,6 +528,7 @@ export default function TripDashboardPage() {
             tripId={trip.id}
             tripCreatedById={trip.createdById || undefined}
             isAdmin={isAdmin}
+            isEnded={trip.isEnded}
             onMemberRemoved={fetchTripDetails}
             onNavigateTab={(tab) => setActiveTab(tab as any)}
             onAddExpense={() => {
@@ -970,9 +976,11 @@ export default function TripDashboardPage() {
           onClose={() => setIsAdvanceCreditOpen(false)}
           currency={trip.currency}
           currentUserId={user.id}
+          tripId={trip.id}
           memberBalance={currentUserBalanceRecord}
           settlementRecords={trip.settlementRecords}
           expenses={trip.expenses}
+          onSuccess={() => fetchTripDetails()}
         />
       )}
 

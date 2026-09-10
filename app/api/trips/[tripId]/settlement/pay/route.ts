@@ -14,7 +14,9 @@ export async function POST(
   try {
     const { fromUserId, toUserId, paymentAmount, note, isHostRecord } = await request.json();
 
-    if (!fromUserId || !toUserId || !paymentAmount || paymentAmount <= 0) {
+    const effectiveFromUserId = isHostRecord ? fromUserId : user.id;
+
+    if (!effectiveFromUserId || !toUserId || !paymentAmount || paymentAmount <= 0) {
       return NextResponse.json({ error: 'Invalid settlement payment payload' }, { status: 400 });
     }
 
@@ -22,7 +24,7 @@ export async function POST(
       const record = await dbStore.recordHostPayment(
         params.tripId,
         user.id,
-        fromUserId,
+        effectiveFromUserId,
         toUserId,
         paymentAmount,
         note
@@ -30,17 +32,10 @@ export async function POST(
       return NextResponse.json({ record });
     }
 
-    if (fromUserId !== user.id) {
-      return NextResponse.json(
-        { error: 'Forbidden: You can only make settlement payments for your own debts' },
-        { status: 403 }
-      );
-    }
-
     const record = await dbStore.paySettlement(
       params.tripId,
       user.id,
-      fromUserId,
+      effectiveFromUserId,
       toUserId,
       paymentAmount,
       note

@@ -83,6 +83,8 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
   const [declineModalRecord, setDeclineModalRecord] = useState<SettlementRecordDetail | null>(null);
   const [declineReason, setDeclineReason] = useState('');
   const [declineProofUrl, setDeclineProofUrl] = useState('');
+  const [declinePaymentMethod, setDeclinePaymentMethod] = useState<'UPI' | 'CASH'>('UPI');
+  const [declineUtr, setDeclineUtr] = useState('');
 
   // Host Review Modal State
   const [hostReviewRecord, setHostReviewRecord] = useState<SettlementRecordDetail | null>(null);
@@ -322,12 +324,19 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
     setDeclineModalRecord(rec);
     setDeclineReason('');
     setDeclineProofUrl('');
+    setDeclineUtr('');
+    setDeclinePaymentMethod('UPI');
   };
 
   const handleDeclineReversalSubmit = async () => {
     if (!tripId || !declineModalRecord) return;
     if (!declineReason.trim()) {
       showToast('A mandatory reason is required to decline a reversal.', 'error', 'Missing Reason');
+      return;
+    }
+
+    if (declinePaymentMethod === 'UPI' && !declineUtr.trim()) {
+      showToast('UPI Transaction ID (UTR) is mandatory when declining a UPI payment reversal.', 'error', 'Proof Required');
       return;
     }
 
@@ -340,6 +349,8 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
           action: 'DECLINE_REVERSAL',
           declineReason: declineReason.trim(),
           proofUrl: declineProofUrl.trim() || undefined,
+          reversalUtr: declineUtr.trim() || undefined,
+          isUpi: declinePaymentMethod === 'UPI',
         }),
       });
       const data = await res.json();
@@ -357,6 +368,10 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
 
   const handleHostApproveReversal = async (settlementId: string) => {
     if (!tripId) return;
+    if (!hostReason.trim()) {
+      showToast('A mandatory host decision note/reason is required for Host Override.', 'error', 'Missing Host Reason');
+      return;
+    }
     setSubmittingId(settlementId);
     try {
       const res = await fetch(`/api/trips/${tripId}/settlement/${settlementId}`, {
@@ -364,7 +379,7 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'HOST_APPROVE_REVERSAL',
-          hostReason: hostReason.trim() || 'Host Override Approved',
+          hostReason: hostReason.trim(),
         }),
       });
       const data = await res.json();
@@ -382,6 +397,10 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
 
   const handleHostRejectReversal = async (settlementId: string) => {
     if (!tripId) return;
+    if (!hostReason.trim()) {
+      showToast('A mandatory host decision note/reason is required.', 'error', 'Missing Host Reason');
+      return;
+    }
     setSubmittingId(settlementId);
     try {
       const res = await fetch(`/api/trips/${tripId}/settlement/${settlementId}`, {
@@ -1032,6 +1051,7 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
           currency={currency}
           transaction={settleModalTx}
           members={members}
+          settlementRecords={settlementRecords}
           currentUserId={currentUserId}
           isAdmin={isAdmin}
           onSuccess={() => {
@@ -1136,12 +1156,62 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
           </p>
 
           <div className="space-y-1.5">
+            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide">
+              Payment Method Type <span className="text-rose-500">*</span>
+            </label>
+            <div className="grid grid-cols-2 gap-2 text-xs font-bold">
+              <button
+                type="button"
+                onClick={() => setDeclinePaymentMethod('UPI')}
+                className={`py-2 px-3 rounded-xl border text-center transition-all ${
+                  declinePaymentMethod === 'UPI'
+                    ? 'bg-emerald-50 border-emerald-500 text-emerald-800'
+                    : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                UPI Payment (Proof Required)
+              </button>
+              <button
+                type="button"
+                onClick={() => setDeclinePaymentMethod('CASH')}
+                className={`py-2 px-3 rounded-xl border text-center transition-all ${
+                  declinePaymentMethod === 'CASH'
+                    ? 'bg-amber-50 border-amber-500 text-amber-900'
+                    : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                Cash Payment (Host Dispute)
+              </button>
+            </div>
+          </div>
+
+          {declinePaymentMethod === 'UPI' && (
+            <div className="space-y-1.5">
+              <label className="block text-xs font-bold text-slate-700">
+                UPI Reference ID / UTR <span className="text-rose-500">*</span>
+              </label>
+              <Input
+                placeholder="e.g. 423456789012 (12-digit UTR)"
+                value={declineUtr}
+                onChange={(e) => setDeclineUtr(e.target.value)}
+                required
+              />
+            </div>
+          )}
+
+          {declinePaymentMethod === 'CASH' && (
+            <div className="p-3 bg-amber-50 border border-amber-200/80 rounded-2xl text-[11px] font-medium text-amber-900 leading-relaxed">
+              ⚠️ Cash payments cannot be digitally verified. Your explanation will be escalated to the Trip Host for final resolution.
+            </div>
+          )}
+
+          <div className="space-y-1.5">
             <label className="block text-xs font-bold text-slate-700">
               Mandatory Decline Reason <span className="text-rose-500">*</span>
             </label>
             <textarea
               rows={3}
-              placeholder="State your reason for declining this reversal..."
+              placeholder="State your detailed reason for declining this reversal..."
               value={declineReason}
               onChange={(e) => setDeclineReason(e.target.value)}
               className="w-full p-3 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-rose-500 font-medium text-slate-800"
@@ -1149,9 +1219,9 @@ export const SettlementList: React.FC<SettlementListProps> = React.memo(({
           </div>
 
           <div className="space-y-1.5">
-            <label className="block text-xs font-bold text-slate-700">Supporting Proof URL (Optional)</label>
+            <label className="block text-xs font-bold text-slate-700">Payment Screenshot / Receipt URL (Optional)</label>
             <Input
-              placeholder="Paste proof image URL"
+              placeholder="Paste image URL (e.g. Cloudinary/Upload)"
               value={declineProofUrl}
               onChange={(e) => setDeclineProofUrl(e.target.value)}
             />

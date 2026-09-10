@@ -40,23 +40,28 @@ export default function DashboardPage() {
 
   const fetchTrips = async () => {
     try {
-      const [meUser, resTrips] = await Promise.all([
-        fetchClientSession(),
-        fetch('/api/trips'),
-      ]);
-
+      const meUser = await fetchClientSession();
       if (!meUser) {
         router.push('/login');
         return;
       }
       setUser(meUser);
 
-      const dataTrips = await resTrips.json();
-      if (resTrips.ok) {
-        setTrips(dataTrips.trips || []);
+      try {
+        const resTrips = await fetch('/api/trips');
+        if (resTrips.status === 401) {
+          router.push('/login');
+          return;
+        }
+        if (resTrips.ok) {
+          const dataTrips = await resTrips.json();
+          setTrips(dataTrips.trips || []);
+        }
+      } catch (tripsErr) {
+        console.error('Failed to fetch trips list:', tripsErr);
       }
-    } catch {
-      router.push('/login');
+    } catch (sessionErr) {
+      console.error('Failed to verify client session:', sessionErr);
     } finally {
       setIsLoading(false);
     }

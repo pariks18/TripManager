@@ -5,10 +5,10 @@ import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Avatar } from '@/components/ui/Avatar';
-import { SettlementTransaction, TripMemberDetail, UserSummary } from '@/types';
+import { ExpenseDetail, SettlementRecordDetail, SettlementTransaction, TripMemberDetail, UserSummary } from '@/types';
 import { formatCurrency } from '@/lib/utils';
 import { useToast } from '@/components/ui/Toast';
-import { CheckCircle2, AlertCircle, Edit3 } from 'lucide-react';
+import { CheckCircle2, AlertCircle, Edit3, Info, Clock } from 'lucide-react';
 
 interface SettleUpModalProps {
   isOpen: boolean;
@@ -17,6 +17,7 @@ interface SettleUpModalProps {
   currency: string;
   transaction: SettlementTransaction | null;
   members?: TripMemberDetail[];
+  settlementRecords?: SettlementRecordDetail[];
   currentUserId: string;
   isAdmin?: boolean;
   onSuccess: () => void;
@@ -29,6 +30,7 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
   currency,
   transaction,
   members = [],
+  settlementRecords = [],
   currentUserId,
   isAdmin = false,
   onSuccess,
@@ -59,6 +61,15 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
 
   // Determine if this is a Host recording payment received on behalf of a member
   const isHostRecord = isAdmin && !!fromUser && fromUser.id !== currentUserId;
+
+  const isCoveredByPending = React.useMemo(() => {
+    if (!fromUser || !toUser || !settlementRecords.length) return false;
+    const pendingRecords = settlementRecords.filter(
+      (r) => r.fromUserId === fromUser.id && r.toUserId === toUser.id && r.status === 'PENDING'
+    );
+    const totalPending = pendingRecords.reduce((sum, r) => sum + r.amount, 0);
+    return outstandingAmount > 0 && totalPending >= outstandingAmount;
+  }, [fromUser, toUser, settlementRecords, outstandingAmount]);
 
   useEffect(() => {
     if (transaction) {
@@ -92,6 +103,11 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+
+    if (isCoveredByPending && !isHostRecord) {
+      setError(`Your debt of ${formatCurrency(outstandingAmount, currency)} is already covered by a pending approval request.`);
+      return;
+    }
 
     if (amountToSettle <= 0) {
       setError('Please enter a valid settlement amount.');
@@ -319,6 +335,26 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
             />
           </div>
 
+          {isCoveredByPending && !isHostRecord && (
+            <div className="p-3.5 bg-amber-50 border border-amber-200/80 rounded-2xl text-xs text-amber-900 flex items-start gap-2 font-medium">
+              <Clock className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+              <div>
+                <span className="font-extrabold block">Debt Already Covered by Pending Request</span>
+                Your debt of <span className="font-bold">{formatCurrency(outstandingAmount, currency)}</span> is already covered by a pending approval request. Please wait for the recipient or Host to confirm.
+              </div>
+            </div>
+          )}
+
+          {amountToSettle > outstandingAmount && outstandingAmount > 0 && (
+            <div className="p-3 bg-emerald-50 border border-emerald-200/80 rounded-2xl text-xs text-emerald-800 flex items-start gap-2 font-medium">
+              <Info className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+              <div>
+                <span className="font-bold block">Extra Payment / Advance Credit Notice</span>
+                You are paying <span className="font-bold">{formatCurrency(amountToSettle, currency)}</span>, which is <span className="font-bold">{formatCurrency(amountToSettle - outstandingAmount, currency)}</span> more than your current debt of {formatCurrency(outstandingAmount, currency)}. The excess {formatCurrency(amountToSettle - outstandingAmount, currency)} will automatically become Advance Credit after approval.
+              </div>
+            </div>
+          )}
+
           {/* Confirm Button */}
           <div className="pt-2 flex gap-2">
             <button
@@ -331,7 +367,8 @@ export const SettleUpModal: React.FC<SettleUpModalProps> = ({
             <Button
               type="submit"
               isLoading={isLoading}
-              className="flex-1 text-xs font-bold py-3 bg-emerald-600 hover:bg-emerald-700 text-white"
+              disabled={isLoading || (isCoveredByPending && !isHostRecord)}
+              className="flex-1 text-xs font-bold py-3 bg-emerald-600 hover:bg-emerald-700 text-white disabled:opacity-50"
             >
               {isHostRecord ? 'Record Payment Received' : 'Confirm Payment'}
             </Button>

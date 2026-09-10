@@ -49,11 +49,20 @@ export interface UserProfileDetail extends UserSummary {
   updatedAt?: string;
 }
 
+export type TripRoleType = 
+  | 'FUND_MANAGER'
+  | 'EXPENSE_MANAGER'
+  | 'TRIP_PLANNER'
+  | 'STAY_MANAGER'
+  | 'TRAVEL_MANAGER'
+  | 'POLL_MANAGER';
+
 export interface TripMemberDetail {
   id: string;
   tripId: string;
   userId: string;
   role: 'ADMIN' | 'MEMBER';
+  roles?: TripRoleType[];
   isUnjoined?: boolean;
   joinedAt: string;
   user: UserSummary;
@@ -160,6 +169,9 @@ export interface ActivityDetail {
     | 'SETTLEMENT_ROLLBACK_APPROVED'
     | 'SETTLEMENT_ROLLBACK_REJECTED'
     | 'MEMBER_REMOVED'
+    | 'ROLE_ASSIGNED'
+    | 'ROLE_REMOVED'
+    | 'TRIP_ENDED'
     | 'POLL_CREATED'
     | 'POLL_VOTED'
     | 'POLL_CLOSED'
@@ -198,9 +210,11 @@ export interface SettlementRecordDetail {
     | 'REVERSAL_REJECTED'
     | 'ROLLBACK_REQUESTED'
     | 'ROLLED_BACK';
+  type?: 'SETTLEMENT' | 'ADVANCE_CREDIT';
   note?: string | null;
   reversalReason?: string | null;
   reversalProofUrl?: string | null;
+  reversalUtr?: string | null;
   reversalRequestedById?: string | null;
   reversalRequestedAt?: string | null;
   reversalRecipientDecision?: 'ACCEPTED' | 'DECLINED' | null;
@@ -257,6 +271,8 @@ export interface TripSummary {
   endDate?: string | null;
   createdById?: string | null;
   isLocked: boolean;
+  isEnded?: boolean;
+  endedAt?: string | null;
   approvalMode: boolean;
   createdAt: string;
   members: TripMemberDetail[];

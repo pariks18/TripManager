@@ -57,23 +57,33 @@ export async function removeAuthCookie() {
 }
 
 export async function getSessionUser(): Promise<UserSession | null> {
-  const cookieStore = cookies();
-  const token = cookieStore.get(TOKEN_NAME)?.value;
-  if (!token) return null;
+  try {
+    const cookieStore = cookies();
+    const token = cookieStore.get(TOKEN_NAME)?.value;
+    if (!token) return null;
 
-  const session = await verifyJWT(token);
-  if (!session || !session.id) {
-    await removeAuthCookie();
+    const session = await verifyJWT(token);
+    if (!session || !session.id) {
+      try {
+        await removeAuthCookie();
+      } catch {}
+      return null;
+    }
+
+    // Validate user existence in MongoDB and verification status
+    const user = await dbStore.findUserById(session.id);
+    if (!user || user.isEmailVerified === false) {
+      if (user && user.isEmailVerified === false) {
+        try {
+          await removeAuthCookie();
+        } catch {}
+      }
+      return null;
+    }
+
+    return { id: user.id, name: user.name, email: user.email };
+  } catch (error) {
     return null;
   }
-
-  // Validate user existence in MongoDB and verification status
-  const user = await dbStore.findUserById(session.id);
-  if (!user || user.isEmailVerified === false) {
-    await removeAuthCookie();
-    return null;
-  }
-
-  return { id: user.id, name: user.name, email: user.email };
 }
 

@@ -12,19 +12,23 @@ export async function fetchClientSession(forceRefresh: boolean = false): Promise
     return cachedSessionPromise;
   }
 
-  cachedSessionPromise = fetch('/api/auth/me')
+  cachedSessionPromise = fetch('/api/auth/me', {
+    cache: 'no-store',
+    headers: { 'Cache-Control': 'no-cache' },
+  })
     .then(async (res) => {
       if (!res.ok) {
-        cachedSessionData = null;
-        return null;
+        if (res.status === 401) {
+          cachedSessionData = null;
+        }
+        return cachedSessionData;
       }
       const data = await res.json();
       cachedSessionData = data.user || null;
       return cachedSessionData;
     })
     .catch(() => {
-      cachedSessionData = null;
-      return null;
+      return cachedSessionData;
     })
     .finally(() => {
       cachedSessionPromise = null;

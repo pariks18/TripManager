@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { ExpenseDetail, MemberBalance, SettlementRecordDetail, SettlementTransaction, TripMemberDetail, UserSummary } from '@/types';
+import { ExpenseDetail, MemberBalance, SettlementRecordDetail, SettlementTransaction, TripMemberDetail, UserSummary, TripSummary } from '@/types';
 import { formatCurrency } from '@/lib/utils';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
@@ -25,6 +25,8 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 
+import { FinalSettlementSummary } from './FinalSettlementSummary';
+
 interface PersonalDashboardProps {
   currentUserId: string;
   currency: string;
@@ -40,6 +42,7 @@ interface PersonalDashboardProps {
   tripId?: string;
   tripCreatedById?: string;
   isAdmin?: boolean;
+  isEnded?: boolean;
   onMemberRemoved?: () => void;
   onNavigateTab?: (tab: string) => void;
   onAddExpense?: () => void;
@@ -64,6 +67,7 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = React.memo(({
   tripId,
   tripCreatedById,
   isAdmin = false,
+  isEnded = false,
   onMemberRemoved,
   onNavigateTab,
   onAddExpense,
@@ -121,8 +125,38 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = React.memo(({
     email: members.find((m) => m.userId === currentUserId)?.user.email || '',
   };
 
+  const fullTripSummary: TripSummary = {
+    id: tripId || '',
+    name: 'Trip',
+    code: '',
+    currency,
+    isLocked: false,
+    isEnded,
+    approvalMode: false,
+    createdAt: new Date().toISOString(),
+    members,
+    expenses,
+    settlementRecords,
+    totalExpense: expenses.reduce((s, e) => s + e.amount, 0),
+    userBalance: netBalance,
+    userTotalPaid: totalPaid,
+    userTotalShare: totalShare,
+  };
+
   return (
     <div className="space-y-6">
+      {/* Final Settlement Summary Banner when Trip is Ended */}
+      {isEnded && (
+        <FinalSettlementSummary
+          trip={fullTripSummary}
+          currentUser={currentUserSummary}
+          onSettleUp={() => {
+            if (onNavigateTab) onNavigateTab('settlement');
+            else if (outgoingSettlements.length > 0) handleSettleClick(outgoingSettlements[0]);
+          }}
+        />
+      )}
+
       {/* 1. Transparent Personal Balance Breakdown */}
       <PersonalBalanceBreakdown
         user={currentUserSummary}
@@ -158,12 +192,14 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = React.memo(({
           </button>
         )}
 
-        <button
-          onClick={() => setIsAdvanceCreditOpen(true)}
-          className="flex-1 py-3 px-4 bg-slate-50 hover:bg-slate-100 border border-slate-200 active:scale-[0.98] text-slate-700 font-bold text-xs rounded-2xl transition-all flex items-center justify-center gap-1.5 cursor-pointer"
-        >
-          💰 Credit: {formatCurrency(myBalanceRecord?.advanceCredit || 0, currency)}
-        </button>
+        {!isEnded && (
+          <button
+            onClick={() => setIsAdvanceCreditOpen(true)}
+            className="flex-1 py-3 px-4 bg-slate-50 hover:bg-slate-100 border border-slate-200 active:scale-[0.98] text-slate-700 font-bold text-xs rounded-2xl transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+          >
+            💰 Credit: {formatCurrency(myBalanceRecord?.advanceCredit || 0, currency)}
+          </button>
+        )}
       </div>
 
       {/* 3. Action Items: "Whom Do I Owe?" */}
@@ -343,6 +379,7 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = React.memo(({
                   currency={currency}
                   isCurrentUser={mb.user.id === currentUserId}
                   isAdmin={isMemAdmin}
+                  memberRoles={memDetail?.roles || []}
                   isCurrentAdmin={isAdmin}
                   isPrimaryCreator={isCreator}
                   tripId={tripId}

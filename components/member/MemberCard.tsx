@@ -1,10 +1,10 @@
 'use client';
 
 import React, { useState } from 'react';
-import { MemberBalance, UserSummary } from '@/types';
+import { MemberBalance, UserSummary, TripRoleType } from '@/types';
 import { Avatar } from '@/components/ui/Avatar';
 import { formatCurrency } from '@/lib/utils';
-import { FileText, UserX, Receipt, Crown, Shield, ShieldCheck, ShieldAlert, User, Link2 } from 'lucide-react';
+import { FileText, UserX, Receipt, Crown, Shield, ShieldCheck, User, Link2, Wallet, Compass, Hotel, Vote } from 'lucide-react';
 import { MemberDocumentsModal } from './MemberDocumentsModal';
 import { RemoveMemberModal } from './RemoveMemberModal';
 import { ManageRoleModal } from './ManageRoleModal';
@@ -14,6 +14,7 @@ interface MemberCardProps {
   currency: string;
   isCurrentUser: boolean;
   isAdmin?: boolean; // Target member is ADMIN
+  memberRoles?: TripRoleType[];
   isCurrentAdmin?: boolean; // Current session user is ADMIN/Organizer
   isPrimaryCreator?: boolean; // Target member created the trip
   tripId?: string;
@@ -23,11 +24,21 @@ interface MemberCardProps {
   onLinkAccount?: (user: UserSummary) => void;
 }
 
+const ROLE_LABEL_MAP: Record<TripRoleType, { label: string; bg: string; text: string; border: string }> = {
+  FUND_MANAGER: { label: 'Fund Mgr', bg: 'bg-blue-50', text: 'text-blue-800', border: 'border-blue-200' },
+  EXPENSE_MANAGER: { label: 'Expense Mgr', bg: 'bg-emerald-50', text: 'text-emerald-800', border: 'border-emerald-200' },
+  TRIP_PLANNER: { label: 'Trip Planner', bg: 'bg-indigo-50', text: 'text-indigo-800', border: 'border-indigo-200' },
+  STAY_MANAGER: { label: 'Stay Mgr', bg: 'bg-purple-50', text: 'text-purple-800', border: 'border-purple-200' },
+  TRAVEL_MANAGER: { label: 'Ticket Mgr', bg: 'bg-amber-50', text: 'text-amber-800', border: 'border-amber-200' },
+  POLL_MANAGER: { label: 'Poll Mgr', bg: 'bg-teal-50', text: 'text-teal-800', border: 'border-teal-200' },
+};
+
 export const MemberCard: React.FC<MemberCardProps> = React.memo(({
   memberBalance,
   currency,
   isCurrentUser,
   isAdmin = false,
+  memberRoles = [],
   isCurrentAdmin = false,
   isPrimaryCreator = false,
   tripId,
@@ -63,7 +74,7 @@ export const MemberCard: React.FC<MemberCardProps> = React.memo(({
           <Avatar name={user.name} size="md" />
 
           <div className="min-w-0">
-            <div className="flex items-center gap-1.5 flex-wrap sm:flex-nowrap">
+            <div className="flex items-center gap-1.5 flex-wrap">
               <h4 className="text-xs sm:text-base font-bold text-slate-900 truncate max-w-[130px] sm:max-w-none">
                 {user.name} {isCurrentUser ? '(You)' : ''}
               </h4>
@@ -86,11 +97,27 @@ export const MemberCard: React.FC<MemberCardProps> = React.memo(({
                   <User className="w-3 h-3 text-slate-400" /> Member
                 </span>
               )}
+
+              {/* Functional Role Badges */}
+              {memberRoles.map((r) => {
+                const style = ROLE_LABEL_MAP[r];
+                if (!style) return null;
+                return (
+                  <span key={r} className={`${style.bg} ${style.text} ${style.border} text-[9px] sm:text-[10px] font-extrabold px-2 py-0.5 rounded-full border shrink-0`}>
+                    {style.label}
+                  </span>
+                );
+              })}
             </div>
 
             <div className="flex items-center gap-2 mt-0.5 flex-wrap">
               <p className="text-xs text-slate-500 font-medium">
                 Paid {formatCurrency(paid, currency)} • Share {formatCurrency(share, currency)}
+                {memberBalance.advanceCredit && memberBalance.advanceCredit > 0 ? (
+                  <span className="ml-1 font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded-md border border-emerald-200/60 inline-block">
+                    Advance Credit +{formatCurrency(memberBalance.advanceCredit, currency)}
+                  </span>
+                ) : null}
               </p>
 
               {isUnjoined && isCurrentAdmin && onLinkAccount && (
@@ -112,19 +139,14 @@ export const MemberCard: React.FC<MemberCardProps> = React.memo(({
                 </button>
               )}
 
-              {/* Organizer Role Promotion / Demotion Action */}
+              {/* Manage Roles Action */}
               {canManageRole && (
                 <button
                   onClick={() => setShowRoleModal(true)}
-                  className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border transition-colors cursor-pointer ${
-                    isAdmin
-                      ? 'text-amber-800 bg-amber-50 hover:bg-amber-100 border-amber-200'
-                      : 'text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border-emerald-200'
-                  }`}
-                  title={isAdmin ? 'Remove Organizer Role' : 'Promote to Organizer'}
+                  className="inline-flex items-center gap-1 text-[10px] font-bold text-indigo-800 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-2 py-0.5 rounded-full transition-colors cursor-pointer"
+                  title="Manage Member Roles & Permissions"
                 >
-                  <Shield className="w-3 h-3" />
-                  {isAdmin ? 'Demote to Member' : 'Make Organizer'}
+                  <Shield className="w-3 h-3" /> Manage Roles
                 </button>
               )}
 
@@ -211,6 +233,7 @@ export const MemberCard: React.FC<MemberCardProps> = React.memo(({
           targetUserId={user.id}
           targetUserName={user.name}
           currentRole={currentRole}
+          currentRoles={memberRoles}
           onSuccess={() => {
             if (onRoleUpdated) onRoleUpdated();
             if (onMemberRemoved) onMemberRemoved();

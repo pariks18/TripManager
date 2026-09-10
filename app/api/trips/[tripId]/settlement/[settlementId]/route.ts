@@ -13,7 +13,7 @@ export async function PATCH(
 
   try {
     const body = await request.json();
-    const { action, note, reason, proofUrl, declineReason, hostReason } = body;
+    const { action, note, reason, proofUrl, declineReason, hostReason, reversalUtr, isUpi } = body;
 
     const validActions = [
       'APPROVE',
@@ -50,7 +50,9 @@ export async function PATCH(
         proofUrl,
         declineReason,
         hostReason,
-      }
+        reversalUtr,
+        isUpi,
+      } as any
     );
 
     return NextResponse.json({ record });

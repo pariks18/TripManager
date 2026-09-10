@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { UserProfileDetail, UserDocumentDetail } from '@/types';
+import { fetchClientSession } from '@/lib/clientSession';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
@@ -72,6 +73,12 @@ export default function ProfilePage() {
   const fetchProfileAndDocuments = async () => {
     setIsLoading(true);
     try {
+      const meUser = await fetchClientSession();
+      if (!meUser) {
+        router.push('/login');
+        return;
+      }
+
       const [profileRes, docsRes] = await Promise.all([
         fetch('/api/user/profile'),
         fetch('/api/user/documents'),

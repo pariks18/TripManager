@@ -23,6 +23,8 @@ import {
   Edit3,
 } from 'lucide-react';
 
+import { EndTripModal } from './EndTripModal';
+
 interface TripSettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -57,6 +59,7 @@ export const TripSettingsModal: React.FC<TripSettingsModalProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [showConfirmDelete, setShowConfirmDelete] = useState(false);
+  const [showEndTripModal, setShowEndTripModal] = useState(false);
 
   const isHost =
     trip.createdById === currentUserId ||
@@ -361,9 +364,33 @@ export const TripSettingsModal: React.FC<TripSettingsModalProps> = ({
           </Button>
         </div>
 
-        {/* 7. Delete Trip Destructive Section at Bottom */}
-        {isHost && onDeleteTrip && (
+        {/* 7. End Trip Host Action */}
+        {isHost && !trip.isEnded && (
           <div className="pt-4 border-t border-slate-200">
+            <div className="bg-amber-50/70 border border-amber-200/90 rounded-2xl p-4 space-y-2">
+              <div className="flex items-center gap-2 text-amber-900 font-extrabold text-xs">
+                <AlertTriangle className="w-4 h-4 shrink-0 text-amber-600" />
+                <span>Host Control - End Trip</span>
+              </div>
+              <p className="text-[11px] text-amber-800">
+                End this trip to lock Advance Credit contributions and calculate final settlements for all members.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowEndTripModal(true);
+                }}
+                className="w-full py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-xs rounded-xl transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
+              >
+                <Calendar className="w-4 h-4" /> End Trip
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* 8. Delete Trip Destructive Section at Bottom */}
+        {isHost && onDeleteTrip && (
+          <div className="pt-2 border-t border-slate-200">
             <div className="bg-rose-50/70 border border-rose-200/90 rounded-2xl p-4 space-y-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 text-rose-700 font-extrabold text-xs">
@@ -386,6 +413,19 @@ export const TripSettingsModal: React.FC<TripSettingsModalProps> = ({
               </button>
             </div>
           </div>
+        )}
+
+        {showEndTripModal && (
+          <EndTripModal
+            isOpen={showEndTripModal}
+            onClose={() => setShowEndTripModal(false)}
+            tripId={trip.id}
+            tripName={trip.name}
+            onTripEnded={() => {
+              onSettingsUpdated();
+              onClose();
+            }}
+          />
         )}
       </form>
     </Modal>

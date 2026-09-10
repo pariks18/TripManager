@@ -3,7 +3,7 @@ import { prisma } from './prisma';
 import { hashPassword, comparePassword } from './auth';
 import { generateTripCode, generateObjectId } from './utils';
 import { calculateMemberBalances, computeSettlements } from './settlement';
-import { CategoryType, ExpenseDetail, TripSummary, UserSummary, ActivityDetail, SettlementRecordDetail, MemberBalance, MemberAnalytics, DocumentType, UserDocumentDetail, ItineraryItemDetail, StayDetail, PollDetail, PollOptionDetail, PollVoteDetail, MemberLocationDetail, MessageDetail, TripMemoryDetail, MemoryQuestionnaireAnswers, MemoryShareRequestDetail, ChecklistItemDetail, TripMemberDetail } from '@/types';
+import { CategoryType, ExpenseDetail, TripSummary, UserSummary, ActivityDetail, SettlementRecordDetail, MemberBalance, MemberAnalytics, DocumentType, UserDocumentDetail, ItineraryItemDetail, StayDetail, PollDetail, PollOptionDetail, PollVoteDetail, MemberLocationDetail, MessageDetail, TripMemoryDetail, MemoryQuestionnaireAnswers, MemoryShareRequestDetail, ChecklistItemDetail, TripMemberDetail, TripRoleType } from '@/types';
 
 const SEED_USERS = [
   {
@@ -722,6 +722,7 @@ export const dbStore = {
       tripId: mem.tripId,
       userId: mem.userId,
       role: mem.role as 'ADMIN' | 'MEMBER',
+      roles: ((mem as any).roles || []) as TripRoleType[],
       isUnjoined: mem.isUnjoined || mem.user.isUnjoined || false,
       joinedAt: mem.joinedAt.toISOString(),
       user: { id: mem.user.id, name: mem.user.name, email: mem.user.email, isUnjoined: mem.user.isUnjoined || mem.isUnjoined || false },
@@ -784,6 +785,8 @@ export const dbStore = {
       endDate: directTrip.endDate ? directTrip.endDate.toISOString() : null,
       createdById: directTrip.createdById || '',
       isLocked: directTrip.isLocked,
+      isEnded: (directTrip as any).isEnded || false,
+      endedAt: (directTrip as any).endedAt ? (directTrip as any).endedAt.toISOString() : null,
       approvalMode: directTrip.approvalMode,
       createdAt: directTrip.createdAt.toISOString(),
       members: formattedMembers,
@@ -1636,6 +1639,7 @@ export const dbStore = {
     const settlementRecords: SettlementRecordDetail[] = trip.settlements.map((s) => ({
       ...s,
       status: s.status as any,
+      type: (s as any).type as any,
       reversalRequestedAt: s.reversalRequestedAt ? s.reversalRequestedAt.toISOString() : null,
       reversalRecipientDecision: s.reversalRecipientDecision as any,
       reversalHostDecision: s.reversalHostDecision as any,
@@ -1707,6 +1711,98 @@ export const dbStore = {
     };
   },
 
+  async addAdvanceCredit(
+    tripId: string,
+    sessionUserId: string,
+    amount: number,
+    note?: string
+  ): Promise<SettlementRecordDetail> {
+    await ensureDatabaseSeeded();
+
+    if (!amount || isNaN(amount) || amount <= 0) {
+      throw new Error('Advance credit amount must be greater than zero.');
+    }
+
+    const roundedAmount = Math.round(amount * 100) / 100;
+    const userSelect = { select: { id: true, name: true, email: true } };
+
+    const result = await prisma.$transaction(async (tx) => {
+      const trip = await tx.trip.findUnique({
+        where: { id: tripId },
+        include: { members: { include: { user: userSelect } } },
+      });
+      if (!trip) throw new Error('Trip not found.');
+      if ((trip as any).isEnded) {
+        throw new Error('Cannot add Advance Credit to an ended trip.');
+      }
+
+      const member = trip.members.find((m) => m.userId === sessionUserId);
+      if (!member) throw new Error('Forbidden: You must be a member of the trip to add Advance Credit.');
+
+      const hostMember = trip.createdById || trip.members.find((m) => m.role === 'ADMIN')?.userId || sessionUserId;
+      const effectiveToUserId = hostMember === sessionUserId
+        ? (trip.members.find((m) => m.userId !== sessionUserId)?.userId || sessionUserId)
+        : hostMember;
+
+      const user = await tx.user.findUnique({ where: { id: sessionUserId } });
+      if (!user) throw new Error('User not found.');
+
+      const newRecord = await tx.settlement.create({
+        data: {
+          id: generateObjectId(),
+          tripId,
+          fromUserId: sessionUserId,
+          toUserId: effectiveToUserId,
+          amount: roundedAmount,
+          settledAmount: 0,
+          remainingAmount: roundedAmount,
+          status: 'PENDING',
+          type: 'ADVANCE_CREDIT',
+          note: note ? note.trim() : 'Advance Credit Fund',
+        },
+        include: { fromUser: true, toUser: true },
+      });
+
+      await tx.activity.create({
+        data: {
+          id: generateObjectId(),
+          tripId,
+          userId: sessionUserId,
+          actionType: 'SETTLEMENT_CONFIRMED',
+          details: `${user.name} submitted an Advance Credit request of ${trip.currency || '₹'}${roundedAmount} (Pending Host Approval)`,
+          amount: roundedAmount,
+        },
+      });
+
+      return newRecord;
+    });
+
+    return {
+      id: result.id,
+      tripId: result.tripId,
+      fromUserId: result.fromUserId,
+      fromUser: {
+        id: (result as any).fromUser?.id || sessionUserId,
+        name: (result as any).fromUser?.name || 'User',
+        email: (result as any).fromUser?.email || '',
+      },
+      toUserId: result.toUserId,
+      toUser: {
+        id: (result as any).toUser?.id || result.toUserId,
+        name: (result as any).toUser?.name || 'User',
+        email: (result as any).toUser?.email || '',
+      },
+      amount: result.amount,
+      settledAmount: result.settledAmount || 0,
+      remainingAmount: result.remainingAmount ?? 0,
+      status: result.status as SettlementRecordDetail['status'],
+      type: (result as any).type as SettlementRecordDetail['type'],
+      note: result.note,
+      createdAt: result.createdAt.toISOString(),
+      updatedAt: result.updatedAt.toISOString(),
+    };
+  },
+
   async paySettlement(
     tripId: string,
     sessionUserId: string,
@@ -1766,6 +1862,7 @@ export const dbStore = {
       const settlementRecords: SettlementRecordDetail[] = trip.settlements.map((s) => ({
         ...s,
         status: s.status as any,
+        type: (s as any).type as any,
         reversalRequestedAt: s.reversalRequestedAt ? s.reversalRequestedAt.toISOString() : null,
         reversalRecipientDecision: s.reversalRecipientDecision as any,
         reversalHostDecision: s.reversalHostDecision as any,
@@ -1930,6 +2027,7 @@ export const dbStore = {
       const settlementRecords: SettlementRecordDetail[] = trip.settlements.map((s) => ({
         ...s,
         status: s.status as any,
+        type: (s as any).type as any,
         reversalRequestedAt: s.reversalRequestedAt ? s.reversalRequestedAt.toISOString() : null,
         reversalRecipientDecision: s.reversalRecipientDecision as any,
         reversalHostDecision: s.reversalHostDecision as any,
@@ -2147,6 +2245,12 @@ export const dbStore = {
         if (settlement.status !== 'PENDING_REVERSAL' && settlement.status !== 'REVERSAL_DECLINED_PENDING_HOST' && settlement.status !== 'ROLLBACK_REQUESTED') {
           throw new Error('Invalid action: No reversal request is pending for this settlement.');
         }
+        if (settlement.reversalRequestedAt) {
+          const elapsedMs = Date.now() - new Date(settlement.reversalRequestedAt).getTime();
+          if (elapsedMs > 24 * 60 * 60 * 1000 && !isAdmin) {
+            throw new Error('The 24-hour response window for recipient reversal has expired. This request has been escalated to Host Review.');
+          }
+        }
         finalStatus = 'REVERSED';
         updateData.status = 'REVERSED';
         updateData.reversalRecipientDecision = 'ACCEPTED';
@@ -2159,14 +2263,26 @@ export const dbStore = {
         if (settlement.status !== 'PENDING_REVERSAL') {
           throw new Error('Invalid action: No reversal request is pending for this settlement.');
         }
+        if (settlement.reversalRequestedAt) {
+          const elapsedMs = Date.now() - new Date(settlement.reversalRequestedAt).getTime();
+          if (elapsedMs > 24 * 60 * 60 * 1000 && !isAdmin) {
+            throw new Error('The 24-hour response window for recipient reversal has expired. This request has been escalated to Host Review.');
+          }
+        }
+        const isUpi = (payload as any)?.isUpi || !!(payload as any)?.reversalUtr;
+        const reversalUtr = (payload as any)?.reversalUtr?.trim();
         if (!declineReason) {
           throw new Error('A mandatory reason must be provided when declining a settlement reversal.');
+        }
+        if (isUpi && (!reversalUtr || !declineReason)) {
+          throw new Error('UPI Transaction ID (UTR) and Reason are required when declining a UPI payment reversal.');
         }
         finalStatus = 'REVERSAL_DECLINED_PENDING_HOST';
         updateData.status = 'REVERSAL_DECLINED_PENDING_HOST';
         updateData.reversalRecipientDecision = 'DECLINED';
         updateData.reversalRecipientReason = declineReason;
         updateData.reversalRecipientProofUrl = proofUrl || null;
+        if (reversalUtr) updateData.reversalUtr = reversalUtr;
         actionType = 'SETTLEMENT_REVERSAL_DECLINED';
         activityText = `${settlement.toUser.name} declined reversal request for settlement (${settlement.trip.currency || '₹'}${settlement.amount}). Submitted to Trip Host for review. Reason: ${declineReason}`;
       } else if (action === 'HOST_APPROVE_REVERSAL' || action === 'APPROVE_ROLLBACK') {
@@ -2176,12 +2292,15 @@ export const dbStore = {
         if (settlement.status !== 'PENDING_REVERSAL' && settlement.status !== 'REVERSAL_DECLINED_PENDING_HOST' && settlement.status !== 'ROLLBACK_REQUESTED') {
           throw new Error('Invalid action: Settlement does not have an active reversal request.');
         }
+        if (!hostReason && !reason) {
+          throw new Error('A mandatory host reason is required when performing a Host Override.');
+        }
         finalStatus = 'REVERSED';
         updateData.status = 'REVERSED';
         updateData.reversalHostDecision = 'APPROVED_OVERRIDE';
-        updateData.reversalHostReason = hostReason || reason || 'Host Override Approved';
+        updateData.reversalHostReason = hostReason || reason;
         actionType = 'SETTLEMENT_REVERSAL_HOST_APPROVED';
-        activityText = `Trip Host approved reversal (Host Override) for settlement (${settlement.trip.currency || '₹'}${settlement.amount}). Settlement reversed and balances restored.`;
+        activityText = `Trip Host approved reversal (Host Override) for settlement (${settlement.trip.currency || '₹'}${settlement.amount}). Reason: ${hostReason || reason}`;
       } else if (action === 'HOST_REJECT_REVERSAL' || action === 'REJECT_ROLLBACK') {
         if (!isAdmin && !isPayer) {
           throw new Error('Forbidden: Only the Trip Host/Organizer can reject a reversal review.');
@@ -2189,12 +2308,15 @@ export const dbStore = {
         if (settlement.status !== 'PENDING_REVERSAL' && settlement.status !== 'REVERSAL_DECLINED_PENDING_HOST' && settlement.status !== 'ROLLBACK_REQUESTED') {
           throw new Error('Invalid action: Settlement does not have an active reversal request.');
         }
+        if (!hostReason && !reason) {
+          throw new Error('A mandatory host reason is required when resolving a reversal case.');
+        }
         finalStatus = 'REVERSAL_REJECTED';
         updateData.status = 'REVERSAL_REJECTED';
         updateData.reversalHostDecision = 'REJECTED';
-        updateData.reversalHostReason = hostReason || reason || 'Reversal Rejected';
+        updateData.reversalHostReason = hostReason || reason;
         actionType = 'SETTLEMENT_REVERSAL_HOST_REJECTED';
-        activityText = `Trip Host rejected reversal request for settlement (${settlement.trip.currency || '₹'}${settlement.amount}). Settlement remains completed.`;
+        activityText = `Trip Host rejected reversal request for settlement (${settlement.trip.currency || '₹'}${settlement.amount}). Reason: ${hostReason || reason}`;
       } else {
         throw new Error(`Unsupported settlement action: ${action}`);
       }
@@ -3353,6 +3475,152 @@ export const dbStore = {
     return true;
   },
 
+  async endTrip(tripId: string, hostUserId: string): Promise<TripSummary> {
+    await ensureDatabaseSeeded();
+    const trip = await prisma.trip.findUnique({
+      where: { id: tripId },
+      include: { members: true },
+    });
+    if (!trip) throw new Error('Trip not found');
+
+    const isHost = trip.createdById === hostUserId || trip.members.find((m) => m.userId === hostUserId)?.role === 'ADMIN';
+    if (!isHost) throw new Error('Forbidden: Only the Trip Host can end the trip.');
+
+    if ((trip as any).isEnded) {
+      const summary = await this.getTripById(tripId, hostUserId);
+      if (!summary) throw new Error('Trip summary not found');
+      return summary;
+    }
+
+    const pendingSettlements = await prisma.settlement.findMany({
+      where: {
+        tripId,
+        status: { in: ['PENDING', 'PENDING_REVERSAL', 'REVERSAL_DECLINED_PENDING_HOST'] },
+      },
+    });
+
+    if (pendingSettlements.length > 0) {
+      throw new Error('Cannot end trip while there are pending Advance Credit or Settlement Reversal requests. Please approve or reject all pending requests before ending the trip.');
+    }
+
+    const endedAt = new Date();
+    await prisma.trip.update({
+      where: { id: tripId },
+      data: {
+        isEnded: true,
+        endedAt,
+      },
+    });
+
+    const hostUser = await prisma.user.findUnique({ where: { id: hostUserId } });
+    await logActivity(
+      tripId,
+      hostUserId,
+      'TRIP_ENDED',
+      `Trip "${trip.name}" has been marked as ended by ${hostUser?.name || 'Host'}. Moved to final settlement.`
+    );
+
+    const summary = await this.getTripById(tripId, hostUserId);
+    if (!summary) throw new Error('Trip summary not found after ending');
+    return summary;
+  },
+
+  async assignMemberRole(
+    tripId: string,
+    hostUserId: string,
+    targetUserId: string,
+    roleToAssign: TripRoleType
+  ): Promise<TripMemberDetail> {
+    await ensureDatabaseSeeded();
+    const trip = await prisma.trip.findUnique({
+      where: { id: tripId },
+      include: { members: { include: { user: true } } },
+    });
+    if (!trip) throw new Error('Trip not found');
+
+    const isHost = trip.createdById === hostUserId || trip.members.find((m) => m.userId === hostUserId)?.role === 'ADMIN';
+    if (!isHost) throw new Error('Forbidden: Only the Trip Host can assign roles.');
+
+    const targetMember = trip.members.find((m) => m.userId === targetUserId);
+    if (!targetMember) throw new Error('Member not found in trip');
+
+    const currentRoles: string[] = [...((targetMember as any).roles || [])];
+    if (!currentRoles.includes(roleToAssign)) {
+      currentRoles.push(roleToAssign);
+      await prisma.tripMember.update({
+        where: { id: targetMember.id },
+        data: { roles: currentRoles },
+      });
+
+      const hostUser = await prisma.user.findUnique({ where: { id: hostUserId } });
+      await logActivity(
+        tripId,
+        hostUserId,
+        'ROLE_ASSIGNED',
+        `${hostUser?.name || 'Host'} assigned role "${roleToAssign}" to ${targetMember.user.name}`
+      );
+    }
+
+    return {
+      id: targetMember.id,
+      tripId: targetMember.tripId,
+      userId: targetMember.userId,
+      role: targetMember.role as 'ADMIN' | 'MEMBER',
+      roles: currentRoles as TripRoleType[],
+      isUnjoined: targetMember.isUnjoined || targetMember.user.isUnjoined || false,
+      joinedAt: targetMember.joinedAt.toISOString(),
+      user: { id: targetMember.user.id, name: targetMember.user.name, email: targetMember.user.email, isUnjoined: targetMember.user.isUnjoined || false },
+    };
+  },
+
+  async removeMemberRole(
+    tripId: string,
+    hostUserId: string,
+    targetUserId: string,
+    roleToRemove: TripRoleType
+  ): Promise<TripMemberDetail> {
+    await ensureDatabaseSeeded();
+    const trip = await prisma.trip.findUnique({
+      where: { id: tripId },
+      include: { members: { include: { user: true } } },
+    });
+    if (!trip) throw new Error('Trip not found');
+
+    const isHost = trip.createdById === hostUserId || trip.members.find((m) => m.userId === hostUserId)?.role === 'ADMIN';
+    if (!isHost) throw new Error('Forbidden: Only the Trip Host can remove roles.');
+
+    const targetMember = trip.members.find((m) => m.userId === targetUserId);
+    if (!targetMember) throw new Error('Member not found in trip');
+
+    let currentRoles: string[] = [...((targetMember as any).roles || [])];
+    if (currentRoles.includes(roleToRemove)) {
+      currentRoles = currentRoles.filter((r) => r !== roleToRemove);
+      await prisma.tripMember.update({
+        where: { id: targetMember.id },
+        data: { roles: currentRoles },
+      });
+
+      const hostUser = await prisma.user.findUnique({ where: { id: hostUserId } });
+      await logActivity(
+        tripId,
+        hostUserId,
+        'ROLE_REMOVED',
+        `${hostUser?.name || 'Host'} removed role "${roleToRemove}" from ${targetMember.user.name}`
+      );
+    }
+
+    return {
+      id: targetMember.id,
+      tripId: targetMember.tripId,
+      userId: targetMember.userId,
+      role: targetMember.role as 'ADMIN' | 'MEMBER',
+      roles: currentRoles as TripRoleType[],
+      isUnjoined: targetMember.isUnjoined || targetMember.user.isUnjoined || false,
+      joinedAt: targetMember.joinedAt.toISOString(),
+      user: { id: targetMember.user.id, name: targetMember.user.name, email: targetMember.user.email, isUnjoined: targetMember.user.isUnjoined || false },
+    };
+  },
+
   // --- ITINERARY METHODS ---
   async addItineraryItem(
     tripId: string,
@@ -3377,8 +3645,8 @@ export const dbStore = {
     if (!trip) throw new Error('Trip not found');
 
     const adminMember = trip.members.find((m) => m.userId === adminUserId);
-    const isAdmin = adminMember?.role === 'ADMIN' || trip.createdById === adminUserId;
-    if (!isAdmin) throw new Error('Forbidden: Only Super Host / Trip Admin can manage itinerary.');
+    const hasPermission = adminMember?.role === 'ADMIN' || trip.createdById === adminUserId || ((adminMember as any)?.roles || []).includes('TRIP_PLANNER');
+    if (!hasPermission) throw new Error('Forbidden: Only Super Host, Trip Admin, or Trip Planner can manage itinerary.');
 
     const adminUser = await prisma.user.findUnique({ where: { id: adminUserId } });
 
@@ -3445,8 +3713,8 @@ export const dbStore = {
     if (!item) throw new Error('Itinerary item not found');
 
     const adminMember = item.trip.members.find((m) => m.userId === adminUserId);
-    const isAdmin = adminMember?.role === 'ADMIN' || item.trip.createdById === adminUserId;
-    if (!isAdmin) throw new Error('Forbidden: Only Super Host / Trip Admin can edit itinerary.');
+    const hasPermission = adminMember?.role === 'ADMIN' || item.trip.createdById === adminUserId || ((adminMember as any)?.roles || []).includes('TRIP_PLANNER');
+    if (!hasPermission) throw new Error('Forbidden: Only Super Host, Trip Admin, or Trip Planner can edit itinerary.');
 
     const updated = await prisma.itineraryItem.update({
       where: { id: itemId },
@@ -3489,8 +3757,8 @@ export const dbStore = {
     if (!item) return false;
 
     const adminMember = item.trip.members.find((m) => m.userId === adminUserId);
-    const isAdmin = adminMember?.role === 'ADMIN' || item.trip.createdById === adminUserId;
-    if (!isAdmin) throw new Error('Forbidden: Only Super Host / Trip Admin can delete itinerary item.');
+    const hasPermission = adminMember?.role === 'ADMIN' || item.trip.createdById === adminUserId || ((adminMember as any)?.roles || []).includes('TRIP_PLANNER');
+    if (!hasPermission) throw new Error('Forbidden: Only Super Host, Trip Admin, or Trip Planner can delete itinerary item.');
 
     await prisma.itineraryItem.delete({ where: { id: itemId } });
     return true;
@@ -3592,8 +3860,8 @@ async getTripItinerary(
     if (!trip) throw new Error('Trip not found');
 
     const adminMember = trip.members.find((m) => m.userId === adminUserId);
-    const isAdmin = adminMember?.role === 'ADMIN' || trip.createdById === adminUserId;
-    if (!isAdmin) throw new Error('Forbidden: Only Super Host / Trip Admin can manage stay details.');
+    const hasPermission = adminMember?.role === 'ADMIN' || trip.createdById === adminUserId || ((adminMember as any)?.roles || []).includes('STAY_MANAGER');
+    if (!hasPermission) throw new Error('Forbidden: Only Super Host, Trip Admin, or Stay Manager can manage stay details.');
 
     const adminUser = await prisma.user.findUnique({ where: { id: adminUserId } });
 
@@ -3666,8 +3934,8 @@ async getTripItinerary(
     if (!stay) throw new Error('Stay detail record not found');
 
     const adminMember = stay.trip.members.find((m) => m.userId === adminUserId);
-    const isAdmin = adminMember?.role === 'ADMIN' || stay.trip.createdById === adminUserId;
-    if (!isAdmin) throw new Error('Forbidden: Only Super Host / Trip Admin can edit stay details.');
+    const hasPermission = adminMember?.role === 'ADMIN' || stay.trip.createdById === adminUserId || ((adminMember as any)?.roles || []).includes('STAY_MANAGER');
+    if (!hasPermission) throw new Error('Forbidden: Only Super Host, Trip Admin, or Stay Manager can edit stay details.');
 
     const updated = await prisma.stayDetail.update({
       where: { id: stayId },
@@ -3714,8 +3982,8 @@ async getTripItinerary(
     if (!stay) return false;
 
     const adminMember = stay.trip.members.find((m) => m.userId === adminUserId);
-    const isAdmin = adminMember?.role === 'ADMIN' || stay.trip.createdById === adminUserId;
-    if (!isAdmin) throw new Error('Forbidden: Only Super Host / Trip Admin can delete stay details.');
+    const hasPermission = adminMember?.role === 'ADMIN' || stay.trip.createdById === adminUserId || ((adminMember as any)?.roles || []).includes('STAY_MANAGER');
+    if (!hasPermission) throw new Error('Forbidden: Only Super Host, Trip Admin, or Stay Manager can delete stay details.');
 
     await prisma.stayDetail.delete({ where: { id: stayId } });
     return true;
@@ -3739,8 +4007,8 @@ async getTripItinerary(
     if (!trip) throw new Error('Trip not found');
 
     const adminMember = trip.members.find((m) => m.userId === adminUserId);
-    const isAdmin = adminMember?.role === 'ADMIN' || trip.createdById === adminUserId;
-    if (!isAdmin) throw new Error('Forbidden: Only Super Host / Trip Admin can create live polls.');
+    const hasPermission = adminMember?.role === 'ADMIN' || trip.createdById === adminUserId || ((adminMember as any)?.roles || []).includes('POLL_MANAGER');
+    if (!hasPermission) throw new Error('Forbidden: Only Super Host, Trip Admin, or Poll Manager can create live polls.');
 
     const adminUser = await prisma.user.findUnique({ where: { id: adminUserId } });
     if (!adminUser) throw new Error('Admin user not found');
@@ -3870,8 +4138,8 @@ async getTripItinerary(
     if (!poll || poll.tripId !== tripId) throw new Error('Poll not found');
 
     const adminMember = poll.trip.members.find((m) => m.userId === adminUserId);
-    const isAdmin = adminMember?.role === 'ADMIN' || poll.trip.createdById === adminUserId;
-    if (!isAdmin) throw new Error('Forbidden: Only Super Host / Trip Admin can close or reopen polls.');
+    const hasPermission = adminMember?.role === 'ADMIN' || poll.trip.createdById === adminUserId || ((adminMember as any)?.roles || []).includes('POLL_MANAGER');
+    if (!hasPermission) throw new Error('Forbidden: Only Super Host, Trip Admin, or Poll Manager can close or reopen polls.');
 
     const adminUser = await prisma.user.findUnique({ where: { id: adminUserId } });
 

@@ -67,6 +67,8 @@ model Trip {
   endDate       DateTime?
   createdById   String?   @db.ObjectId
   isLocked      Boolean   @default(false)
+  isEnded       Boolean   @default(false)
+  endedAt       DateTime?
   approvalMode  Boolean   @default(false)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
@@ -91,6 +93,7 @@ model TripMember {
   tripId     String    @db.ObjectId
   userId     String    @db.ObjectId
   role       String    @default("MEMBER") // ADMIN or MEMBER
+  roles      String[]  @default([])
   isUnjoined Boolean   @default(false)
   lastReadAt DateTime?
   joinedAt   DateTime  @default(now())
@@ -193,11 +196,13 @@ model Settlement {
   settledAmount   Float    @default(0)
   remainingAmount Float?
   status          String   @default("PENDING") // PENDING, PARTIALLY_SETTLED, SETTLED, CONFIRMED, REJECTED, COMPLETED, PENDING_REVERSAL, REVERSAL_DECLINED_PENDING_HOST, REVERSED, REVERSAL_REJECTED
+  type            String   @default("SETTLEMENT") // SETTLEMENT or ADVANCE_CREDIT
   note            String?
 
   // Reversal Audit Trail
   reversalReason            String?
   reversalProofUrl          String?
+  reversalUtr               String?
   reversalRequestedById     String?
   reversalRequestedAt       DateTime?
   reversalRecipientDecision String? // ACCEPTED, DECLINED
