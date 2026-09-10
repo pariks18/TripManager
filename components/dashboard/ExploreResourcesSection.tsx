@@ -23,9 +23,9 @@ const RESOURCES: ResourceItem[] = [
     href: '/trip-expense-calculator',
     icon: Calculator,
     badge: 'Free Tool',
-    colorBg: 'bg-[#051e16]/80 hover:bg-[#082b20]/95',
-    colorBorder: 'border-emerald-500/20 hover:border-emerald-400/40',
-    colorIcon: 'text-emerald-400 bg-emerald-950/80',
+    colorBg: 'bg-emerald-50 hover:bg-emerald-100/80',
+    colorBorder: 'border-emerald-200/80',
+    colorIcon: 'text-emerald-600',
   },
   {
     id: 'checklist',
@@ -34,9 +34,9 @@ const RESOURCES: ResourceItem[] = [
     href: '/group-trip-checklist',
     icon: CheckSquare,
     badge: 'Packing Tool',
-    colorBg: 'bg-[#051e16]/80 hover:bg-[#082b20]/95',
-    colorBorder: 'border-emerald-500/20 hover:border-emerald-400/40',
-    colorIcon: 'text-teal-400 bg-teal-950/80',
+    colorBg: 'bg-blue-50 hover:bg-blue-100/80',
+    colorBorder: 'border-blue-200/80',
+    colorIcon: 'text-blue-600',
   },
   {
     id: 'planner',
@@ -45,9 +45,9 @@ const RESOURCES: ResourceItem[] = [
     href: '/group-trip-planner',
     icon: Compass,
     badge: 'Planning Guide',
-    colorBg: 'bg-[#051e16]/80 hover:bg-[#082b20]/95',
-    colorBorder: 'border-emerald-500/20 hover:border-emerald-400/40',
-    colorIcon: 'text-cyan-400 bg-cyan-950/80',
+    colorBg: 'bg-indigo-50 hover:bg-indigo-100/80',
+    colorBorder: 'border-indigo-200/80',
+    colorIcon: 'text-indigo-600',
   },
   {
     id: 'blog',
@@ -56,23 +56,23 @@ const RESOURCES: ResourceItem[] = [
     href: '/blog',
     icon: BookOpen,
     badge: 'Blog & Tips',
-    colorBg: 'bg-[#051e16]/80 hover:bg-[#082b20]/95',
-    colorBorder: 'border-emerald-500/20 hover:border-emerald-400/40',
-    colorIcon: 'text-emerald-300 bg-emerald-950/80',
+    colorBg: 'bg-purple-50 hover:bg-purple-100/80',
+    colorBorder: 'border-purple-200/80',
+    colorIcon: 'text-purple-600',
   },
 ];
 
 export const ExploreResourcesSection: React.FC = () => {
   return (
-    <div className="bg-[#07251b]/80 backdrop-blur-xl rounded-3xl p-5 sm:p-6 border border-emerald-500/20 shadow-xl space-y-4">
+    <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-100/90 shadow-sm space-y-4">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2.5">
-          <div className="p-2 bg-amber-500/10 text-amber-400 rounded-xl border border-amber-500/20">
+        <div className="flex items-center gap-2">
+          <div className="p-2 bg-amber-50 text-amber-600 rounded-xl border border-amber-200/60">
             <Sparkles className="w-4 h-4" />
           </div>
           <div>
-            <h3 className="text-sm font-extrabold text-white tracking-tight">Explore & Resources</h3>
-            <p className="text-[11px] text-slate-300/80 font-medium">
+            <h3 className="text-sm font-bold text-slate-900">Explore & Resources</h3>
+            <p className="text-[11px] text-slate-400 font-medium">
               Free tools, packing guides & budgeting tips
             </p>
           </div>
@@ -88,27 +88,27 @@ export const ExploreResourcesSection: React.FC = () => {
               href={item.href}
               target="_blank"
               rel="noopener noreferrer"
-              className={`p-4 rounded-2xl border transition-all ${item.colorBg} ${item.colorBorder} flex flex-col justify-between space-y-3 group cursor-pointer shadow-sm`}
+              className={`p-4 rounded-2xl border transition-all ${item.colorBg} ${item.colorBorder} flex flex-col justify-between space-y-3 group cursor-pointer`}
             >
               <div className="flex items-start justify-between gap-2">
                 <div className="flex items-center gap-2.5">
-                  <div className={`p-2 rounded-xl border border-emerald-500/30 shrink-0 ${item.colorIcon}`}>
+                  <div className={`p-2 bg-white rounded-xl shadow-xs shrink-0 ${item.colorIcon}`}>
                     <Icon className="w-4 h-4" />
                   </div>
                   <div>
-                    <h4 className="text-xs font-bold text-white group-hover:text-emerald-300 transition-colors">
+                    <h4 className="text-xs font-bold text-slate-900 group-hover:text-slate-950 transition-colors">
                       {item.title}
                     </h4>
-                    <span className="text-[10px] font-extrabold text-emerald-400 uppercase tracking-wider block mt-0.5">
+                    <span className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider block mt-0.5">
                       {item.badge}
                     </span>
                   </div>
                 </div>
 
-                <ArrowUpRight className="w-4 h-4 text-slate-400 group-hover:text-emerald-300 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all shrink-0" />
+                <ArrowUpRight className="w-4 h-4 text-slate-400 group-hover:text-slate-700 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all shrink-0" />
               </div>
 
-              <p className="text-[11px] text-slate-300/80 leading-relaxed font-medium">
+              <p className="text-[11px] text-slate-600 leading-relaxed font-medium">
                 {item.description}
               </p>
             </a>
