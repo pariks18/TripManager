@@ -43,10 +43,11 @@ export async function sendEmailOtp(
         html: `
           <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 24px; max-width: 480px; margin: 0 auto; background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.05);">
             <div style="text-align: center; margin-bottom: 20px;">
-              <div style="display: inline-block; background: linear-gradient(135deg, #10b981, #059669); color: white; font-weight: 800; font-size: 20px; padding: 10px 18px; border-radius: 12px;">
-                TN
+              <div style="display: inline-block; padding: 6px 16px; background-color: #0f172a; border-radius: 12px;">
+                <span style="color: #ffffff; font-weight: 900; font-size: 22px; letter-spacing: -0.5px;">TripNizer</span>
+                <span style="display: block; color: #34d399; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; margin-top: 2px;">Less Math. More Travel.</span>
               </div>
-              <h2 style="color: #0f172a; font-size: 20px; font-weight: 800; margin-top: 12px; margin-bottom: 4px;">Verification Code</h2>
+              <h2 style="color: #0f172a; font-size: 20px; font-weight: 800; margin-top: 14px; margin-bottom: 4px;">Verification Code</h2>
               <p style="color: #64748b; font-size: 13px; margin: 0;">For ${purposeTitle}</p>
             </div>
             

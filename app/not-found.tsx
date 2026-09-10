@@ -1,9 +1,11 @@
 import Link from 'next/link';
 import { ArrowLeft, Compass } from 'lucide-react';
+import Logo from '@/components/ui/Logo';
 
 export default function NotFound() {
   return (
     <div className="min-h-screen bg-slate-900 text-white flex flex-col items-center justify-center p-6 text-center">
+      <Logo variant="full" size="lg" href="/" onDarkBackground showTagline priority className="mb-6" />
       <div className="p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-3xl mb-4">
         <Compass className="w-12 h-12 text-emerald-400 animate-pulse" />
       </div>

@@ -16,6 +16,7 @@ import { formatCurrency } from '@/lib/utils';
 import { Plus, KeyRound, Compass, Search, User, LogOut, ShieldCheck, AlertTriangle, Loader2 } from 'lucide-react';
 import { fetchClientSession, clearClientSession } from '@/lib/clientSession';
 import { ExploreResourcesSection } from '@/components/dashboard/ExploreResourcesSection';
+import Logo from '@/components/ui/Logo';
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -174,18 +175,12 @@ export default function DashboardPage() {
       {/* Sticky App Header */}
       <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-slate-100 px-3 py-3.5 sm:px-6">
         <div className="w-full max-w-4xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 bg-emerald-600 rounded-2xl flex items-center justify-center text-white font-black text-sm shadow-sm">
-              TN
-            </div>
-            <div>
-              <h1 className="text-base font-black text-slate-900 tracking-tight leading-none">
-                TripNizer
-              </h1>
-              <p className="text-[11px] text-slate-500 mt-0.5 font-medium">
-                Hello, <span className="text-slate-800 font-bold">{user?.name || 'Explorer'}</span>
-              </p>
-            </div>
+          <div className="flex items-center gap-3">
+            <Logo variant="full" size="sm" href="/dashboard" priority />
+            <div className="hidden sm:block h-6 w-px bg-slate-200" />
+            <p className="text-xs text-slate-500 font-medium hidden sm:block">
+              Hello, <span className="text-slate-800 font-bold">{user?.name || 'Explorer'}</span> 👋
+            </p>
           </div>
 
           <div className="flex items-center gap-2">

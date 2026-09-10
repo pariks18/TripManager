@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { Modal } from '@/components/ui/Modal';
+import Logo from '@/components/ui/Logo';
 import {
   ArrowLeft,
   Sparkles,
@@ -25,16 +26,10 @@ export const AppInfoView: React.FC<AppInfoViewProps> = ({ onBack }) => {
   return (
     <div className="space-y-6">
       {/* Hero Header */}
-      <div className="bg-white rounded-3xl p-6 border border-slate-100 apple-shadow text-center space-y-3">
-        <div className="w-14 h-14 bg-emerald-100 text-emerald-600 rounded-3xl flex items-center justify-center mx-auto shadow-sm">
-          <Sparkles className="w-7 h-7" />
-        </div>
-        <div>
-          <h3 className="text-lg font-extrabold text-slate-900">TripNizer</h3>
-          <p className="text-xs text-slate-400 mt-0.5">Smart Group Travel & Expense Management</p>
-        </div>
-        <span className="inline-block text-[11px] font-extrabold bg-emerald-50 text-emerald-700 px-3 py-1 rounded-full border border-emerald-200">
-          Version 2.6 Mobile First
+      <div className="bg-white rounded-3xl p-6 border border-slate-100 apple-shadow text-center space-y-3 flex flex-col items-center">
+        <Logo variant="full" size="lg" showTagline priority />
+        <span className="inline-block text-[11px] font-extrabold bg-emerald-50 text-emerald-700 px-3 py-1 rounded-full border border-emerald-200 mt-1">
+          Version 2.6 • Mobile First
         </span>
       </div>
 

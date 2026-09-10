@@ -4,6 +4,7 @@ import React, { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { fetchClientSession } from '@/lib/clientSession';
+import Logo from '@/components/ui/Logo';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import {
@@ -125,14 +126,8 @@ function LoginFormContent() {
         <div className="absolute inset-0 opacity-10 pointer-events-none bg-[radial-gradient(#10b981_1px,transparent_1px)] [background-size:24px_24px]" />
 
         {/* Top Brand Header */}
-        <div className="relative z-10 flex items-center gap-3 cursor-pointer" onClick={() => router.push('/')}>
-          <div className="w-11 h-11 bg-gradient-to-tr from-emerald-400 to-emerald-600 rounded-2xl flex items-center justify-center font-black text-slate-950 text-xl shadow-lg shadow-emerald-500/25">
-            TN
-          </div>
-          <div>
-            <span className="text-2xl font-black tracking-tight text-white">TripNizer</span>
-            <span className="block text-[10px] uppercase font-bold tracking-widest text-emerald-400">Travel & Expenses</span>
-          </div>
+        <div className="relative z-10">
+          <Logo variant="full" size="lg" href="/" onDarkBackground showTagline priority />
         </div>
 
         {/* Hero Middle Content */}
@@ -184,12 +179,7 @@ function LoginFormContent() {
       <div className="col-span-1 lg:col-span-6 xl:col-span-5 flex flex-col justify-between p-6 sm:p-12 relative z-10">
         {/* Mobile Header Logo */}
         <div className="lg:hidden flex items-center justify-between mb-8">
-          <div className="flex items-center gap-2.5 cursor-pointer" onClick={() => router.push('/')}>
-            <div className="w-10 h-10 bg-gradient-to-tr from-emerald-400 to-emerald-600 rounded-2xl flex items-center justify-center font-extrabold text-slate-950 text-lg shadow-md shadow-emerald-500/20">
-              TN
-            </div>
-            <span className="text-xl font-black tracking-tight text-white">TripNizer</span>
-          </div>
+          <Logo variant="full" size="sm" href="/" onDarkBackground priority />
           <Link href="/register" className="text-xs font-semibold text-emerald-400 hover:underline">
             Create Account
           </Link>

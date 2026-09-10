@@ -57,7 +57,7 @@ export default function BlogPostPage({ params }: { params: { slug: string } }) {
       name: 'TripNizer',
       logo: {
         '@type': 'ImageObject',
-        url: `${baseUrl}/favicon.ico`,
+        url: `${baseUrl}/logo.png`,
       },
     },
     datePublished: post.publishedAt,

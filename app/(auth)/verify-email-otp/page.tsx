@@ -3,6 +3,7 @@
 import React, { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
+import Logo from '@/components/ui/Logo';
 import { Button } from '@/components/ui/Button';
 import { CheckCircle2, AlertTriangle, RefreshCw, ArrowRight, ShieldCheck, Mail } from 'lucide-react';
 
@@ -284,14 +285,9 @@ export default function VerifyEmailOtpPage() {
 
       <div className="w-full max-w-md mx-auto space-y-6 relative z-10">
         {/* Logo Header */}
-        <div className="text-center space-y-2">
-          <div
-            onClick={() => router.push('/')}
-            className="w-12 h-12 bg-gradient-to-tr from-emerald-400 to-emerald-600 rounded-2xl flex items-center justify-center font-black text-slate-950 text-xl shadow-lg shadow-emerald-500/25 mx-auto cursor-pointer"
-          >
-            TN
-          </div>
-          <h2 className="text-2xl font-black tracking-tight text-white">TripNizer Verification</h2>
+        <div className="text-center space-y-2 flex flex-col items-center">
+          <Logo variant="full" size="lg" href="/" onDarkBackground priority />
+          <p className="text-xs text-slate-400 font-medium">Verify your email account</p>
         </div>
 
         <Suspense

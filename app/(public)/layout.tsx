@@ -1,6 +1,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { getSessionUser } from '@/lib/auth';
+import Logo from '@/components/ui/Logo';
 
 export default async function PublicLayout({ children }: { children: React.ReactNode }) {
   const user = await getSessionUser();
@@ -8,13 +9,8 @@ export default async function PublicLayout({ children }: { children: React.React
   return (
     <div className="min-h-screen bg-slate-900 text-white flex flex-col justify-between selection:bg-emerald-500 selection:text-slate-950">
       {/* Crawlable Header */}
-      <header className="sticky top-0 z-50 bg-slate-900/90 backdrop-blur-md border-b border-white/10 px-4 sm:px-8 py-3.5 flex items-center justify-between">
-        <Link href="/" className="flex items-center gap-2.5 group">
-          <div className="w-9 h-9 bg-gradient-to-tr from-emerald-400 to-emerald-600 rounded-xl flex items-center justify-center font-extrabold text-white text-base shadow-md shadow-emerald-500/20 group-hover:scale-105 transition-transform">
-            TN
-          </div>
-          <span className="text-lg font-extrabold tracking-tight text-white">TripNizer</span>
-        </Link>
+      <header className="sticky top-0 z-50 bg-slate-900/90 backdrop-blur-md border-b border-white/10 px-4 sm:px-8 py-3 flex items-center justify-between">
+        <Logo variant="full" size="sm" href="/" onDarkBackground priority />
 
         {/* Crawlable Nav Links */}
         <nav className="hidden md:flex items-center gap-6 text-xs font-semibold text-slate-300">
@@ -72,13 +68,8 @@ export default async function PublicLayout({ children }: { children: React.React
       <footer className="bg-slate-950 border-t border-white/10 text-slate-400 text-xs py-12 px-6 sm:px-12">
         <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-8">
           <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <div className="w-7 h-7 bg-emerald-500 rounded-lg flex items-center justify-center font-bold text-slate-950 text-xs">
-                TN
-              </div>
-              <span className="text-base font-extrabold text-white">TripNizer</span>
-            </div>
-            <p className="text-xs text-slate-400 leading-relaxed">
+            <Logo variant="full" size="sm" href="/" onDarkBackground showTagline />
+            <p className="text-xs text-slate-400 leading-relaxed pt-1">
               Mobile-first group travel expense splitter & planner. Split expenses, calculate optimal settlements, and manage group checklists with zero math.
             </p>
           </div>

@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
+import Logo from '@/components/ui/Logo';
 import { Button } from '@/components/ui/Button';
 import {
   Sparkles,
@@ -144,13 +145,8 @@ export default function JoinTripPage() {
       <div className="absolute -bottom-40 -right-40 w-96 h-96 bg-blue-500/15 rounded-full blur-3xl pointer-events-none" />
 
       {/* Header Logo */}
-      <header className="relative z-10 w-full max-w-md mx-auto flex items-center justify-between py-4">
-        <div className="flex items-center gap-2.5 cursor-pointer" onClick={() => router.push('/')}>
-          <div className="w-10 h-10 bg-gradient-to-tr from-emerald-400 to-emerald-600 rounded-2xl flex items-center justify-center font-black text-slate-950 text-lg shadow-md shadow-emerald-500/20">
-            TN
-          </div>
-          <span className="text-xl font-black tracking-tight text-white">TripNizer</span>
-        </div>
+      <header className="relative z-10 w-full max-w-md mx-auto flex items-center justify-center py-4">
+        <Logo variant="full" size="md" href="/" onDarkBackground priority />
       </header>
 
       {/* Main Card */}
