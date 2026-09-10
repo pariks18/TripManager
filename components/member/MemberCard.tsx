@@ -196,14 +196,7 @@ export const MemberCard: React.FC<MemberCardProps> = React.memo(({
               </div>
             )}
 
-            {onViewBreakdown && (
-              <button
-                onClick={() => onViewBreakdown(user)}
-                className="mt-1 inline-flex items-center gap-1 text-[10px] font-extrabold text-slate-700 hover:text-emerald-700 bg-slate-50 hover:bg-emerald-50 border border-slate-200 px-2.5 py-1 rounded-xl transition-colors cursor-pointer block ml-auto"
-              >
-                <Receipt className="w-3 h-3 text-emerald-600" /> Calculation
-              </button>
-            )}
+        
           </div>
         )}
       </div>
