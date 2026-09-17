@@ -5,7 +5,7 @@ import { CategoryType, ExpenseDetail, TripMemberDetail } from '@/types';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { formatCurrency } from '@/lib/utils';
+import { formatCurrency, isPdfUrl, formatFileSize, getFileNameFromUrl } from '@/lib/utils';
 import { Avatar } from '@/components/ui/Avatar';
 import { useToast } from '@/components/ui/Toast';
 import {
@@ -20,9 +20,11 @@ import {
   Receipt,
   Camera,
   Image as ImageIcon,
+  FileText,
   Trash2,
   CheckSquare,
   Square,
+  RefreshCw,
 } from 'lucide-react';
 
 interface AddExpenseModalProps {
@@ -72,6 +74,9 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
 
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
+  const pdfInputRef = useRef<HTMLInputElement>(null);
+
+  const [attachmentMeta, setAttachmentMeta] = useState<{ fileName?: string; fileSize?: number } | null>(null);
 
   const isRejected = existingExpense?.status === 'REJECTED';
   const isCreatorAdmin = isAdmin;
@@ -88,6 +93,13 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
       setPaidById(existingExpense.paidById);
       setSplitBetween(existingExpense.participants.map((p) => p.userId));
       setReceiptUrl(existingExpense.receiptUrl || null);
+      if (existingExpense.receiptUrl) {
+        setAttachmentMeta({
+          fileName: getFileNameFromUrl(existingExpense.receiptUrl),
+        });
+      } else {
+        setAttachmentMeta(null);
+      }
 
       if (existingExpense.payers && existingExpense.payers.length > 1) {
         setSelectedPayerIds(existingExpense.payers.map((p) => p.userId));
@@ -109,6 +121,7 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
       setPayerAmounts({ [currentUserId]: '' });
       setSplitBetween(members.map((m) => m.userId));
       setReceiptUrl(null);
+      setAttachmentMeta(null);
     }
     setError('');
   }, [existingExpense, isOpen, currentUserId, members]);
@@ -195,8 +208,9 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
         const data = await res.json();
         if (res.ok && data.secureUrl) {
           setReceiptUrl(data.secureUrl);
+          setAttachmentMeta({ fileName: file.name, fileSize: file.size });
         } else {
-          setError(data.error || 'Failed to upload receipt to Cloudinary');
+          setError(data.error || 'Failed to upload receipt');
         }
       } catch (err: any) {
         setError('Error uploading receipt image');
@@ -205,6 +219,55 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
       }
     };
     reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  const handlePdfChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate PDF format
+    const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+    if (!isPdf) {
+      setError('Please select a valid PDF file (.pdf)');
+      e.target.value = '';
+      return;
+    }
+
+    // Validate size limit (10MB)
+    if (file.size > 10 * 1024 * 1024) {
+      setError('PDF file size should be less than 10MB');
+      e.target.value = '';
+      return;
+    }
+
+    setIsUploadingReceipt(true);
+    setError('');
+
+    const reader = new FileReader();
+    reader.onloadend = async () => {
+      const base64 = reader.result as string;
+      try {
+        const res = await fetch('/api/upload', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ file: base64, image: base64, folder: 'receipts' }),
+        });
+        const data = await res.json();
+        if (res.ok && data.secureUrl) {
+          setReceiptUrl(data.secureUrl);
+          setAttachmentMeta({ fileName: file.name, fileSize: file.size });
+        } else {
+          setError(data.error || 'Failed to upload PDF receipt');
+        }
+      } catch (err: any) {
+        setError('Error uploading PDF receipt document');
+      } finally {
+        setIsUploadingReceipt(false);
+      }
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
   };
 
   const toggleParticipant = (userId: string) => {
@@ -525,7 +588,7 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
         <div className="pt-2">
           <label className="block text-xs font-semibold text-slate-700 tracking-wide uppercase mb-2 flex items-center justify-between">
             <span className="flex items-center gap-1.5">
-              <Receipt className="w-4 h-4 text-emerald-600" /> Receipt Photo (Optional)
+              <Receipt className="w-4 h-4 text-emerald-600" /> Receipt / Attachment (Optional)
             </span>
             {receiptUrl && (
               <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
@@ -550,45 +613,111 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
             className="hidden"
             onChange={handleFileChange}
           />
+          <input
+            ref={pdfInputRef}
+            type="file"
+            accept="application/pdf,.pdf"
+            className="hidden"
+            onChange={handlePdfChange}
+          />
 
-          {receiptUrl ? (
-            <div className="relative rounded-2xl border border-slate-200 bg-slate-50 p-2 overflow-hidden flex items-center gap-3">
-              <img
-                src={receiptUrl}
-                alt="Receipt preview"
-                className="w-16 h-16 object-cover rounded-xl border border-slate-200"
-              />
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-bold text-slate-800 truncate">Receipt Photo Attached</p>
-                <p className="text-[11px] text-slate-500">Tap remove to upload a different photo</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setReceiptUrl(null)}
-                className="p-2 text-rose-600 hover:bg-rose-50 rounded-xl transition-colors shrink-0"
-                title="Remove photo"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
+          {isUploadingReceipt ? (
+            <div className="flex items-center justify-center gap-2 p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-semibold text-emerald-700">
+              <RefreshCw className="w-4 h-4 animate-spin text-emerald-600" />
+              <span>Uploading attachment...</span>
             </div>
+          ) : receiptUrl ? (
+            isPdfUrl(receiptUrl) ? (
+              <div className="relative rounded-2xl border border-rose-200 bg-rose-50/40 p-3 overflow-hidden flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="p-2.5 bg-rose-100 text-rose-700 rounded-xl shrink-0">
+                    <FileText className="w-6 h-6 text-rose-600" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold text-slate-900 truncate">
+                      {attachmentMeta?.fileName || getFileNameFromUrl(receiptUrl)}
+                    </p>
+                    <p className="text-[11px] font-medium text-slate-500">
+                      PDF Document {attachmentMeta?.fileSize ? `• ${formatFileSize(attachmentMeta.fileSize)}` : ''}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => pdfInputRef.current?.click()}
+                    className="px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-200/60 rounded-xl transition-colors cursor-pointer"
+                  >
+                    Replace
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setReceiptUrl(null);
+                      setAttachmentMeta(null);
+                    }}
+                    className="p-2 text-rose-600 hover:bg-rose-100 rounded-xl transition-colors cursor-pointer"
+                    title="Remove PDF"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="relative rounded-2xl border border-slate-200 bg-slate-50 p-2 overflow-hidden flex items-center gap-3">
+                <img
+                  src={receiptUrl}
+                  alt="Receipt preview"
+                  className="w-16 h-16 object-cover rounded-xl border border-slate-200"
+                />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-bold text-slate-800 truncate">
+                    {attachmentMeta?.fileName || 'Receipt Photo Attached'}
+                  </p>
+                  <p className="text-[11px] text-slate-500">
+                    {attachmentMeta?.fileSize ? `Image • ${formatFileSize(attachmentMeta.fileSize)}` : 'Tap remove to upload a different photo'}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setReceiptUrl(null);
+                    setAttachmentMeta(null);
+                  }}
+                  className="p-2 text-rose-600 hover:bg-rose-50 rounded-xl transition-colors shrink-0 cursor-pointer"
+                  title="Remove photo"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            )
           ) : (
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               <button
                 type="button"
                 onClick={() => cameraInputRef.current?.click()}
-                className="flex items-center justify-center gap-2 p-3 bg-slate-50 border border-slate-200 border-dashed rounded-2xl hover:bg-slate-100 hover:border-emerald-500 text-slate-700 text-xs font-bold transition-all"
+                className="flex items-center justify-center gap-1.5 p-3 bg-slate-50 border border-slate-200 border-dashed rounded-2xl hover:bg-slate-100 hover:border-emerald-500 text-slate-700 text-xs font-bold transition-all cursor-pointer"
               >
-                <Camera className="w-4 h-4 text-emerald-600" />
-                <span>Take Photo</span>
+                <Camera className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span className="truncate">Take Photo</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => galleryInputRef.current?.click()}
-                className="flex items-center justify-center gap-2 p-3 bg-slate-50 border border-slate-200 border-dashed rounded-2xl hover:bg-slate-100 hover:border-emerald-500 text-slate-700 text-xs font-bold transition-all"
+                className="flex items-center justify-center gap-1.5 p-3 bg-slate-50 border border-slate-200 border-dashed rounded-2xl hover:bg-slate-100 hover:border-emerald-500 text-slate-700 text-xs font-bold transition-all cursor-pointer"
               >
-                <ImageIcon className="w-4 h-4 text-blue-600" />
-                <span>Choose Gallery</span>
+                <ImageIcon className="w-4 h-4 text-blue-600 shrink-0" />
+                <span className="truncate">Choose Gallery</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => pdfInputRef.current?.click()}
+                className="flex items-center justify-center gap-1.5 p-3 bg-slate-50 border border-slate-200 border-dashed rounded-2xl hover:bg-slate-100 hover:border-emerald-500 text-slate-700 text-xs font-bold transition-all cursor-pointer"
+              >
+                <FileText className="w-4 h-4 text-rose-600 shrink-0" />
+                <span className="truncate">Upload PDF</span>
               </button>
             </div>
           )}

@@ -10,23 +10,24 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { image, folder = 'memories' } = body;
+    const { image, file, folder = 'memories' } = body;
+    const filePayload = image || file;
 
-    if (!image || typeof image !== 'string') {
-      return NextResponse.json({ error: 'Image data is required' }, { status: 400 });
+    if (!filePayload || typeof filePayload !== 'string') {
+      return NextResponse.json({ error: 'File data is required' }, { status: 400 });
     }
 
     // Basic MIME / Format Validation
-    const isDataUri = image.startsWith('data:');
-    const isHttpUrl = image.startsWith('http://') || image.startsWith('https://');
+    const isDataUri = filePayload.startsWith('data:');
+    const isHttpUrl = filePayload.startsWith('http://') || filePayload.startsWith('https://');
 
     if (!isDataUri && !isHttpUrl) {
-      return NextResponse.json({ error: 'Invalid image payload format' }, { status: 400 });
+      return NextResponse.json({ error: 'Invalid file payload format' }, { status: 400 });
     }
 
     // Size limit check for Data URIs (~10MB limit)
-    if (isDataUri && image.length > 14 * 1024 * 1024) {
-      return NextResponse.json({ error: 'Image file size exceeds maximum 10MB limit' }, { status: 400 });
+    if (isDataUri && filePayload.length > 14 * 1024 * 1024) {
+      return NextResponse.json({ error: 'File size exceeds maximum 10MB limit' }, { status: 400 });
     }
 
     // Check if Cloudinary environment variables are configured
@@ -36,7 +37,7 @@ export async function POST(req: NextRequest) {
       process.env.CLOUDINARY_API_SECRET;
 
     if (hasCloudinary) {
-      const result = await uploadToCloudinary(image, folder);
+      const result = await uploadToCloudinary(filePayload, folder);
       return NextResponse.json({
         publicId: result.publicId,
         secureUrl: result.secureUrl,
@@ -47,18 +48,20 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    const isPdf = filePayload.startsWith('data:application/pdf') || filePayload.toLowerCase().includes('.pdf');
+
     // Dev fallback if Cloudinary credentials not configured yet
     return NextResponse.json({
       publicId: `fallback_${Date.now()}`,
-      secureUrl: image,
-      format: 'jpeg',
+      secureUrl: filePayload,
+      format: isPdf ? 'pdf' : 'jpeg',
       width: 800,
       height: 600,
-      bytes: image.length,
+      bytes: filePayload.length,
     });
   } catch (error: any) {
-    console.error('Error uploading image to Cloudinary:', error);
-    return NextResponse.json({ error: error.message || 'Failed to upload image' }, { status: 500 });
+    console.error('Error uploading file to Cloudinary:', error);
+    return NextResponse.json({ error: error.message || 'Failed to upload file' }, { status: 500 });
   }
 }
 

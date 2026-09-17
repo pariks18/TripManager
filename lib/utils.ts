@@ -83,3 +83,31 @@ export const CATEGORY_CONFIG: Record<string, { icon: string; bg: string; text: s
   Shopping: { icon: 'ShoppingBag', bg: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300', text: 'text-indigo-600' },
   Miscellaneous: { icon: 'Sparkles', bg: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300', text: 'text-slate-600' }
 };
+
+export function isPdfUrl(url?: string | null): boolean {
+  if (!url) return false;
+  return url.toLowerCase().includes('.pdf') || url.startsWith('data:application/pdf');
+}
+
+export function formatFileSize(bytes?: number): string {
+  if (!bytes || bytes <= 0) return '';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+export function getFileNameFromUrl(url?: string | null): string {
+  if (!url) return 'receipt_document.pdf';
+  if (url.startsWith('data:')) return 'receipt_document.pdf';
+  try {
+    const parsed = new URL(url);
+    const pathSegments = parsed.pathname.split('/');
+    const last = pathSegments[pathSegments.length - 1];
+    return last && last.includes('.') ? decodeURIComponent(last) : 'receipt_document.pdf';
+  } catch {
+    const segments = url.split('/');
+    const last = segments[segments.length - 1]?.split('?')[0];
+    return last && last.includes('.') ? decodeURIComponent(last) : 'receipt_document.pdf';
+  }
+}
+

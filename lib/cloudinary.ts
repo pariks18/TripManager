@@ -26,7 +26,7 @@ export async function uploadToCloudinary(
   // Upload asset to Cloudinary
   const res = await cloudinary.uploader.upload(fileInput, {
     folder: folderPath,
-    resource_type: 'image',
+    resource_type: 'auto',
     allowed_formats: ['jpg', 'jpeg', 'png', 'webp', 'gif', 'heic', 'pdf'],
   });
 

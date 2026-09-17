@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { ExpenseDetail, ExpenseEditRequestDetail } from '@/types';
-import { formatCurrency, formatDate } from '@/lib/utils';
+import { formatCurrency, formatDate, isPdfUrl } from '@/lib/utils';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
@@ -155,10 +155,17 @@ export const PendingApprovalsView: React.FC<PendingApprovalsViewProps> = React.m
                     </div>
 
                     {exp.receiptUrl && (
-                      <div className="flex items-center gap-2 text-xs font-semibold text-emerald-700 bg-emerald-50/60 p-2 rounded-xl border border-emerald-200">
-                        <Receipt className="w-4 h-4 text-emerald-600 shrink-0" />
-                        <span>Receipt photo attached by member</span>
-                      </div>
+                      isPdfUrl(exp.receiptUrl) ? (
+                        <div className="flex items-center gap-2 text-xs font-semibold text-rose-800 bg-rose-50/70 p-2 rounded-xl border border-rose-200">
+                          <FileText className="w-4 h-4 text-rose-600 shrink-0" />
+                          <span>Receipt PDF document attached by member</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2 text-xs font-semibold text-emerald-700 bg-emerald-50/60 p-2 rounded-xl border border-emerald-200">
+                          <Receipt className="w-4 h-4 text-emerald-600 shrink-0" />
+                          <span>Receipt photo attached by member</span>
+                        </div>
+                      )
                     )}
 
                     {/* Action Buttons */}
