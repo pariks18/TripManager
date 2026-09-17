@@ -2,6 +2,7 @@
 
 import React, { useState, useRef } from 'react';
 import { UserDocumentDetail, DocumentType } from '@/types';
+import { isPdfUrl, formatFileSize, getFileNameFromUrl } from '@/lib/utils';
 import { Modal } from '@/components/ui/Modal';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { useToast } from '@/components/ui/Toast';
@@ -22,6 +23,8 @@ import {
   AlertCircle,
   ShieldCheck,
   Info,
+  ExternalLink,
+  RefreshCw,
 } from 'lucide-react';
 
 interface DocumentsViewProps {
@@ -58,6 +61,7 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
 
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
+  const pdfInputRef = useRef<HTMLInputElement>(null);
 
   const openUploadModal = (type: DocumentType) => {
     const existing = documents.find((d) => d.documentType === type);
@@ -97,7 +101,7 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
         if (res.ok && data.secureUrl) {
           setFileUrl(data.secureUrl);
         } else {
-          setError(data.error || 'Failed to upload document image to Cloudinary');
+          setError(data.error || 'Failed to upload document image');
         }
       } catch (err: any) {
         setError('Error uploading document image');
@@ -106,6 +110,53 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
       }
     };
     reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  const handlePdfChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+    if (!isPdf) {
+      setError('Please select a valid PDF file (.pdf)');
+      e.target.value = '';
+      return;
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      setError('PDF file size must be less than 10MB');
+      e.target.value = '';
+      return;
+    }
+
+    setFileName(file.name);
+    setIsUploading(true);
+    setError('');
+
+    const reader = new FileReader();
+    reader.onloadend = async () => {
+      const base64 = reader.result as string;
+      try {
+        const res = await fetch('/api/upload', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ file: base64, image: base64, folder: 'documents' }),
+        });
+        const data = await res.json();
+        if (res.ok && data.secureUrl) {
+          setFileUrl(data.secureUrl);
+        } else {
+          setError(data.error || 'Failed to upload PDF document');
+        }
+      } catch (err: any) {
+        setError('Error uploading PDF document');
+      } finally {
+        setIsUploading(false);
+      }
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
   };
 
   const handleUploadSubmit = async (e: React.FormEvent) => {
@@ -202,13 +253,16 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
           {DOCUMENT_CONFIGS.map((docConfig) => {
             const uploadedDoc = documents.find((d) => d.documentType === docConfig.type);
             const isUploaded = !!uploadedDoc;
+            const isPdf = isUploaded && isPdfUrl(uploadedDoc.fileUrl);
 
             return (
               <div
                 key={docConfig.type}
                 className={`p-4 rounded-2xl border transition-all ${
                   isUploaded
-                    ? 'bg-emerald-50/40 border-emerald-200/80'
+                    ? isPdf
+                      ? 'bg-rose-50/40 border-rose-200/80'
+                      : 'bg-emerald-50/40 border-emerald-200/80'
                     : 'bg-slate-50 border-slate-200 hover:border-slate-300'
                 }`}
               >
@@ -217,20 +271,37 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
                     <div
                       className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 font-bold text-xs ${
                         isUploaded
-                          ? 'bg-emerald-600 text-white shadow-sm'
+                          ? isPdf
+                            ? 'bg-rose-600 text-white shadow-sm'
+                            : 'bg-emerald-600 text-white shadow-sm'
                           : 'bg-slate-200 text-slate-500'
                       }`}
                     >
-                      {isUploaded ? <CheckCircle2 className="w-5 h-5" /> : <FileText className="w-5 h-5" />}
+                      {isUploaded ? (
+                        isPdf ? (
+                          <FileText className="w-5 h-5 text-white" />
+                        ) : (
+                          <CheckCircle2 className="w-5 h-5" />
+                        )
+                      ) : (
+                        <FileText className="w-5 h-5" />
+                      )}
                     </div>
 
                     <div className="min-w-0">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <h4 className="text-xs font-bold text-slate-900">{docConfig.title}</h4>
                         {isUploaded ? (
-                          <span className="text-[10px] font-extrabold text-emerald-700 bg-emerald-100 px-2.5 py-0.5 rounded-full border border-emerald-200">
-                            Added & Verified
-                          </span>
+                          <>
+                            <span className="text-[10px] font-extrabold text-emerald-700 bg-emerald-100 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                              Added & Verified
+                            </span>
+                            {isPdf && (
+                              <span className="text-[10px] font-extrabold text-rose-700 bg-rose-100 px-2.5 py-0.5 rounded-full border border-rose-200">
+                                PDF Document
+                              </span>
+                            )}
+                          </>
                         ) : (
                           <span className="text-[10px] font-medium text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
                             Not Added
@@ -260,7 +331,11 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
                               docNo: uploadedDoc.documentNo,
                             })
                           }
-                          className="p-2 text-emerald-700 bg-emerald-100 hover:bg-emerald-200 rounded-xl text-xs font-bold transition-colors"
+                          className={`p-2 rounded-xl text-xs font-bold transition-colors ${
+                            isPdf
+                              ? 'text-rose-700 bg-rose-100 hover:bg-rose-200'
+                              : 'text-emerald-700 bg-emerald-100 hover:bg-emerald-200'
+                          }`}
                           title="View Document"
                         >
                           <Eye className="w-4 h-4" />
@@ -323,7 +398,7 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
 
             <div>
               <label className="block text-xs font-semibold text-slate-700 tracking-wide uppercase mb-2">
-                Upload Document Photo
+                Upload Document (Image or PDF)
               </label>
 
               {/* Hidden File Inputs */}
@@ -342,49 +417,99 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
                 className="hidden"
                 onChange={handleFileChange}
               />
+              <input
+                ref={pdfInputRef}
+                type="file"
+                accept="application/pdf,.pdf"
+                className="hidden"
+                onChange={handlePdfChange}
+              />
 
-              {fileUrl ? (
-                <div className="relative rounded-2xl border border-slate-200 bg-slate-50 p-2 overflow-hidden flex items-center gap-3">
-                  <img
-                    src={fileUrl}
-                    alt="Document preview"
-                    className="w-16 h-16 object-cover rounded-xl border border-slate-200"
-                  />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-bold text-slate-800 truncate">
-                      {fileName || 'Document Photo Ready'}
-                    </p>
-                    <p className="text-[11px] text-slate-500">Tap remove to capture or choose another file</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setFileUrl(null);
-                      setFileName('');
-                    }}
-                    className="p-2 text-rose-600 hover:bg-rose-50 rounded-xl transition-colors shrink-0"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+              {isUploading ? (
+                <div className="flex items-center justify-center gap-2 p-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-semibold text-emerald-700">
+                  <RefreshCw className="w-4 h-4 animate-spin text-emerald-600" />
+                  <span>Uploading document...</span>
                 </div>
+              ) : fileUrl ? (
+                isPdfUrl(fileUrl) ? (
+                  <div className="relative rounded-2xl border border-rose-200 bg-rose-50/40 p-3 overflow-hidden flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="p-2.5 bg-rose-100 text-rose-700 rounded-xl shrink-0">
+                        <FileText className="w-6 h-6 text-rose-600" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-slate-900 truncate">
+                          {fileName || getFileNameFromUrl(fileUrl)}
+                        </p>
+                        <p className="text-[11px] font-medium text-slate-500">
+                          PDF Document Ready
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFileUrl(null);
+                        setFileName('');
+                      }}
+                      className="p-2 text-rose-600 hover:bg-rose-100 rounded-xl transition-colors shrink-0 cursor-pointer"
+                      title="Remove PDF"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="relative rounded-2xl border border-slate-200 bg-slate-50 p-2 overflow-hidden flex items-center gap-3">
+                    <img
+                      src={fileUrl}
+                      alt="Document preview"
+                      className="w-16 h-16 object-cover rounded-xl border border-slate-200 shrink-0"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-bold text-slate-800 truncate">
+                        {fileName || 'Document Photo Ready'}
+                      </p>
+                      <p className="text-[11px] text-slate-500">Tap remove to capture or choose another file</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFileUrl(null);
+                        setFileName('');
+                      }}
+                      className="p-2 text-rose-600 hover:bg-rose-50 rounded-xl transition-colors shrink-0 cursor-pointer"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                )
               ) : (
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-3 gap-2">
                   <button
                     type="button"
                     onClick={() => cameraInputRef.current?.click()}
-                    className="flex flex-col items-center justify-center p-4 bg-slate-50 border border-slate-200 border-dashed rounded-2xl hover:bg-slate-100 hover:border-emerald-500 text-slate-700 text-xs font-bold transition-all space-y-1.5"
+                    className="flex flex-col items-center justify-center p-3 bg-slate-50 border border-slate-200 border-dashed rounded-2xl hover:bg-slate-100 hover:border-emerald-500 text-slate-700 text-xs font-bold transition-all space-y-1.5 cursor-pointer"
                   >
-                    <Camera className="w-6 h-6 text-emerald-600" />
-                    <span>Take Photo</span>
+                    <Camera className="w-5 h-5 text-emerald-600" />
+                    <span className="truncate">Take Photo</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => galleryInputRef.current?.click()}
-                    className="flex flex-col items-center justify-center p-4 bg-slate-50 border border-slate-200 border-dashed rounded-2xl hover:bg-slate-100 hover:border-emerald-500 text-slate-700 text-xs font-bold transition-all space-y-1.5"
+                    className="flex flex-col items-center justify-center p-3 bg-slate-50 border border-slate-200 border-dashed rounded-2xl hover:bg-slate-100 hover:border-emerald-500 text-slate-700 text-xs font-bold transition-all space-y-1.5 cursor-pointer"
                   >
-                    <ImageIcon className="w-6 h-6 text-blue-600" />
-                    <span>Choose Gallery</span>
+                    <ImageIcon className="w-5 h-5 text-blue-600" />
+                    <span className="truncate">Choose Gallery</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => pdfInputRef.current?.click()}
+                    className="flex flex-col items-center justify-center p-3 bg-slate-50 border border-slate-200 border-dashed rounded-2xl hover:bg-slate-100 hover:border-emerald-500 text-slate-700 text-xs font-bold transition-all space-y-1.5 cursor-pointer"
+                  >
+                    <FileText className="w-5 h-5 text-rose-600" />
+                    <span className="truncate">Upload PDF</span>
                   </button>
                 </div>
               )}
@@ -407,13 +532,38 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
           title={`ID Proof - ${previewDoc.title}`}
         >
           <div className="space-y-4 text-center">
-            <div className="relative border border-slate-200 rounded-2xl overflow-hidden bg-slate-900 max-h-[70vh] flex items-center justify-center p-2">
-              <img
-                src={previewDoc.url}
-                alt={previewDoc.title}
-                className="max-h-[65vh] w-auto object-contain rounded-xl shadow-lg"
-              />
-            </div>
+            {isPdfUrl(previewDoc.url) ? (
+              <div className="bg-rose-50/60 border border-rose-200/90 rounded-2xl p-6 text-center space-y-4 shadow-sm">
+                <div className="w-16 h-16 bg-rose-100 rounded-2xl flex items-center justify-center mx-auto text-rose-600">
+                  <FileText className="w-8 h-8" />
+                </div>
+                <div className="space-y-1">
+                  <h4 className="text-sm font-bold text-slate-900 truncate max-w-xs mx-auto">
+                    {getFileNameFromUrl(previewDoc.url)}
+                  </h4>
+                  <p className="text-xs text-slate-500 font-medium">PDF Identity Document</p>
+                </div>
+
+                <div className="flex items-center justify-center gap-2 pt-2">
+                  <a
+                    href={previewDoc.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl transition-colors inline-flex items-center gap-1.5 shadow-sm"
+                  >
+                    <ExternalLink className="w-4 h-4" /> Open PDF
+                  </a>
+                </div>
+              </div>
+            ) : (
+              <div className="relative border border-slate-200 rounded-2xl overflow-hidden bg-slate-900 max-h-[70vh] flex items-center justify-center p-2">
+                <img
+                  src={previewDoc.url}
+                  alt={previewDoc.title}
+                  className="max-h-[65vh] w-auto object-contain rounded-xl shadow-lg"
+                />
+              </div>
+            )}
 
             {previewDoc.docNo && (
               <p className="text-xs font-mono text-slate-700 font-bold">
@@ -424,7 +574,9 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({
             <div className="pt-2 flex gap-3">
               <a
                 href={previewDoc.url}
-                download={`${previewDoc.title.toLowerCase().replace(/\s+/g, '_')}.png`}
+                download={`${previewDoc.title.toLowerCase().replace(/\s+/g, '_')}${isPdfUrl(previewDoc.url) ? '.pdf' : '.png'}`}
+                target="_blank"
+                rel="noreferrer"
                 className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-2xl transition-colors"
               >
                 <Download className="w-4 h-4" /> Download ID Proof

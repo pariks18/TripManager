@@ -50,6 +50,13 @@ const CATEGORIES: CategoryType[] = [
   'Miscellaneous',
 ];
 
+interface AttachmentItem {
+  id: string;
+  url: string;
+  fileName?: string;
+  fileSize?: number;
+}
+
 export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
   isOpen,
   onClose,
@@ -68,15 +75,13 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
   const [category, setCategory] = useState<CategoryType>('Food');
   const [paidById, setPaidById] = useState(currentUserId);
   const [splitBetween, setSplitBetween] = useState<string[]>([]);
-  const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
+  const [attachments, setAttachments] = useState<AttachmentItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
   const pdfInputRef = useRef<HTMLInputElement>(null);
-
-  const [attachmentMeta, setAttachmentMeta] = useState<{ fileName?: string; fileSize?: number } | null>(null);
 
   const isRejected = existingExpense?.status === 'REJECTED';
   const isCreatorAdmin = isAdmin;
@@ -92,14 +97,17 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
       setCategory(existingExpense.category);
       setPaidById(existingExpense.paidById);
       setSplitBetween(existingExpense.participants.map((p) => p.userId));
-      setReceiptUrl(existingExpense.receiptUrl || null);
-      if (existingExpense.receiptUrl) {
-        setAttachmentMeta({
-          fileName: getFileNameFromUrl(existingExpense.receiptUrl),
-        });
-      } else {
-        setAttachmentMeta(null);
-      }
+      
+      const urls = existingExpense.receiptUrls?.length
+        ? existingExpense.receiptUrls
+        : (existingExpense.receiptUrl ? [existingExpense.receiptUrl] : []);
+      setAttachments(
+        urls.map((url, idx) => ({
+          id: `att-${idx}-${Date.now()}`,
+          url,
+          fileName: getFileNameFromUrl(url),
+        }))
+      );
 
       if (existingExpense.payers && existingExpense.payers.length > 1) {
         setSelectedPayerIds(existingExpense.payers.map((p) => p.userId));
@@ -120,8 +128,7 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
       setSelectedPayerIds([currentUserId]);
       setPayerAmounts({ [currentUserId]: '' });
       setSplitBetween(members.map((m) => m.userId));
-      setReceiptUrl(null);
-      setAttachmentMeta(null);
+      setAttachments([]);
     }
     setError('');
   }, [existingExpense, isOpen, currentUserId, members]);
@@ -207,8 +214,15 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
         });
         const data = await res.json();
         if (res.ok && data.secureUrl) {
-          setReceiptUrl(data.secureUrl);
-          setAttachmentMeta({ fileName: file.name, fileSize: file.size });
+          setAttachments((prev) => [
+            ...prev,
+            {
+              id: `att-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+              url: data.secureUrl,
+              fileName: file.name,
+              fileSize: file.size,
+            },
+          ]);
         } else {
           setError(data.error || 'Failed to upload receipt');
         }
@@ -255,8 +269,15 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
         });
         const data = await res.json();
         if (res.ok && data.secureUrl) {
-          setReceiptUrl(data.secureUrl);
-          setAttachmentMeta({ fileName: file.name, fileSize: file.size });
+          setAttachments((prev) => [
+            ...prev,
+            {
+              id: `att-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+              url: data.secureUrl,
+              fileName: file.name,
+              fileSize: file.size,
+            },
+          ]);
         } else {
           setError(data.error || 'Failed to upload PDF receipt');
         }
@@ -268,6 +289,10 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
     };
     reader.readAsDataURL(file);
     e.target.value = '';
+  };
+
+  const removeAttachment = (id: string) => {
+    setAttachments((prev) => prev.filter((item) => item.id !== id));
   };
 
   const toggleParticipant = (userId: string) => {
@@ -324,6 +349,9 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
         }))
       : [{ userId: primaryPaidById, amount: numAmount }];
 
+    const receiptUrlsPayload = attachments.map((a) => a.url);
+    const primaryReceiptUrl = receiptUrlsPayload[0] || null;
+
     try {
       if (isEditRequestRequired && existingExpense) {
         const res = await fetch(`/api/expenses/${existingExpense.id}/edit-request`, {
@@ -337,7 +365,8 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
               category,
               paidById: primaryPaidById,
               participantUserIds: splitBetween,
-              receiptUrl,
+              receiptUrl: primaryReceiptUrl,
+              receiptUrls: receiptUrlsPayload,
               payers: payersPayload,
             },
             reason: 'User proposed expense updates',
@@ -364,7 +393,8 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
           category,
           paidById: primaryPaidById,
           participantUserIds: splitBetween,
-          receiptUrl,
+          receiptUrl: primaryReceiptUrl,
+          receiptUrls: receiptUrlsPayload,
           payers: payersPayload,
         }),
       });
@@ -588,11 +618,11 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
         <div className="pt-2">
           <label className="block text-xs font-semibold text-slate-700 tracking-wide uppercase mb-2 flex items-center justify-between">
             <span className="flex items-center gap-1.5">
-              <Receipt className="w-4 h-4 text-emerald-600" /> Receipt / Attachment (Optional)
+              <Receipt className="w-4 h-4 text-emerald-600" /> Receipts / Attachments ({attachments.length})
             </span>
-            {receiptUrl && (
+            {attachments.length > 0 && (
               <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                Attached
+                {attachments.length} {attachments.length === 1 ? 'File Attached' : 'Files Attached'}
               </span>
             )}
           </label>
@@ -621,76 +651,60 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
             onChange={handlePdfChange}
           />
 
+          {/* Render List of Attached Files */}
+          {attachments.length > 0 && (
+            <div className="space-y-2 mb-3">
+              {attachments.map((item) => {
+                const isPdf = isPdfUrl(item.url);
+                return (
+                  <div
+                    key={item.id}
+                    className={`relative rounded-2xl border p-2.5 overflow-hidden flex items-center justify-between gap-3 ${
+                      isPdf ? 'border-rose-200 bg-rose-50/40' : 'border-slate-200 bg-slate-50'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      {isPdf ? (
+                        <div className="p-2 bg-rose-100 text-rose-700 rounded-xl shrink-0">
+                          <FileText className="w-5 h-5 text-rose-600" />
+                        </div>
+                      ) : (
+                        <img
+                          src={item.url}
+                          alt="Receipt preview"
+                          className="w-10 h-10 object-cover rounded-xl border border-slate-200 shrink-0"
+                        />
+                      )}
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-slate-900 truncate">
+                          {item.fileName || getFileNameFromUrl(item.url)}
+                        </p>
+                        <p className="text-[11px] font-medium text-slate-500">
+                          {isPdf ? 'PDF Document' : 'Image'}{' '}
+                          {item.fileSize ? `• ${formatFileSize(item.fileSize)}` : ''}
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removeAttachment(item.id)}
+                      className="p-1.5 text-rose-600 hover:bg-rose-100 rounded-xl transition-colors shrink-0 cursor-pointer"
+                      title="Remove attachment"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Upload Buttons */}
           {isUploadingReceipt ? (
             <div className="flex items-center justify-center gap-2 p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-semibold text-emerald-700">
               <RefreshCw className="w-4 h-4 animate-spin text-emerald-600" />
               <span>Uploading attachment...</span>
             </div>
-          ) : receiptUrl ? (
-            isPdfUrl(receiptUrl) ? (
-              <div className="relative rounded-2xl border border-rose-200 bg-rose-50/40 p-3 overflow-hidden flex items-center justify-between gap-3">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="p-2.5 bg-rose-100 text-rose-700 rounded-xl shrink-0">
-                    <FileText className="w-6 h-6 text-rose-600" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-xs font-bold text-slate-900 truncate">
-                      {attachmentMeta?.fileName || getFileNameFromUrl(receiptUrl)}
-                    </p>
-                    <p className="text-[11px] font-medium text-slate-500">
-                      PDF Document {attachmentMeta?.fileSize ? `• ${formatFileSize(attachmentMeta.fileSize)}` : ''}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-1 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => pdfInputRef.current?.click()}
-                    className="px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-200/60 rounded-xl transition-colors cursor-pointer"
-                  >
-                    Replace
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setReceiptUrl(null);
-                      setAttachmentMeta(null);
-                    }}
-                    className="p-2 text-rose-600 hover:bg-rose-100 rounded-xl transition-colors cursor-pointer"
-                    title="Remove PDF"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="relative rounded-2xl border border-slate-200 bg-slate-50 p-2 overflow-hidden flex items-center gap-3">
-                <img
-                  src={receiptUrl}
-                  alt="Receipt preview"
-                  className="w-16 h-16 object-cover rounded-xl border border-slate-200"
-                />
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-bold text-slate-800 truncate">
-                    {attachmentMeta?.fileName || 'Receipt Photo Attached'}
-                  </p>
-                  <p className="text-[11px] text-slate-500">
-                    {attachmentMeta?.fileSize ? `Image • ${formatFileSize(attachmentMeta.fileSize)}` : 'Tap remove to upload a different photo'}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setReceiptUrl(null);
-                    setAttachmentMeta(null);
-                  }}
-                  className="p-2 text-rose-600 hover:bg-rose-50 rounded-xl transition-colors shrink-0 cursor-pointer"
-                  title="Remove photo"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
-            )
           ) : (
             <div className="grid grid-cols-3 gap-2">
               <button

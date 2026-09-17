@@ -245,58 +245,93 @@ export const ExpenseDetailModal: React.FC<ExpenseDetailModalProps> = ({
         </div>
 
         {/* Receipt Proof Photo / PDF Document */}
-        {expense.receiptUrl && (
-          <div className="space-y-2">
-            <div className="flex items-center justify-between px-1">
-              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                {isPdfUrl(expense.receiptUrl) ? 'Receipt Document' : 'Receipt Proof'}
-              </h4>
-              <a
-                href={expense.receiptUrl}
-                download={getFileNameFromUrl(expense.receiptUrl)}
-                target="_blank"
-                rel="noreferrer"
-                className="text-[11px] font-bold text-emerald-600 hover:text-emerald-700 inline-flex items-center gap-1"
-              >
-                <Download className="w-3.5 h-3.5" /> Download
-              </a>
-            </div>
+        {(() => {
+          const receiptUrls = expense.receiptUrls && expense.receiptUrls.length > 0
+            ? expense.receiptUrls
+            : (expense.receiptUrl ? [expense.receiptUrl] : []);
 
-            {isPdfUrl(expense.receiptUrl) ? (
-              <div className="bg-rose-50/60 border border-rose-200/90 rounded-2xl p-4 flex items-center justify-between gap-3 shadow-sm">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="p-3 bg-rose-100 text-rose-700 rounded-xl shrink-0">
-                    <FileText className="w-6 h-6 text-rose-600" />
-                  </div>
-                  <div className="min-w-0">
-                    <h5 className="text-xs font-bold text-slate-900 truncate">
-                      {getFileNameFromUrl(expense.receiptUrl)}
-                    </h5>
-                    <p className="text-[11px] text-slate-500 font-medium mt-0.5">
-                      PDF Receipt Document Attached
-                    </p>
-                  </div>
-                </div>
-                <a
-                  href={expense.receiptUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="px-3 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl transition-colors shrink-0 inline-flex items-center gap-1.5 shadow-sm"
-                >
-                  <ExternalLink className="w-3.5 h-3.5" /> Open PDF
-                </a>
+          if (receiptUrls.length === 0) return null;
+
+          return (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between px-1">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                  Attachments ({receiptUrls.length})
+                </h4>
               </div>
-            ) : (
-              <div className="border border-slate-200 rounded-2xl overflow-hidden bg-slate-900 max-h-56 flex items-center justify-center p-2">
-                <img
-                  src={expense.receiptUrl}
-                  alt={`Receipt for ${expense.title}`}
-                  className="max-h-52 w-auto object-contain rounded-xl"
-                />
+
+              <div className="space-y-2.5">
+                {receiptUrls.map((url, index) => {
+                  const isPdf = isPdfUrl(url);
+                  const fileName = getFileNameFromUrl(url);
+                  return (
+                    <div key={index}>
+                      {isPdf ? (
+                        <div className="bg-rose-50/60 border border-rose-200/90 rounded-2xl p-3 flex items-center justify-between gap-3 shadow-sm">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="p-2.5 bg-rose-100 text-rose-700 rounded-xl shrink-0">
+                              <FileText className="w-5 h-5 text-rose-600" />
+                            </div>
+                            <div className="min-w-0">
+                              <h5 className="text-xs font-bold text-slate-900 truncate">
+                                {fileName}
+                              </h5>
+                              <p className="text-[11px] text-slate-500 font-medium mt-0.5">
+                                PDF Receipt Document #{index + 1}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <a
+                              href={url}
+                              download={fileName}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-200/60 rounded-xl transition-colors"
+                              title="Download PDF"
+                            >
+                              <Download className="w-4 h-4" />
+                            </a>
+                            <a
+                              href={url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl transition-colors inline-flex items-center gap-1 shadow-sm"
+                            >
+                              <ExternalLink className="w-3.5 h-3.5" /> Open
+                            </a>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="border border-slate-200 rounded-2xl overflow-hidden bg-slate-900 flex flex-col p-2 gap-2">
+                          <div className="flex items-center justify-between px-2 pt-1 text-xs text-slate-300">
+                            <span className="font-semibold truncate max-w-[200px]">{fileName}</span>
+                            <a
+                              href={url}
+                              download={fileName}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-[11px] font-bold text-emerald-400 hover:text-emerald-300 inline-flex items-center gap-1"
+                            >
+                              <Download className="w-3.5 h-3.5" /> Download
+                            </a>
+                          </div>
+                          <div className="max-h-56 flex items-center justify-center overflow-hidden rounded-xl bg-slate-950/50">
+                            <img
+                              src={url}
+                              alt={`Receipt ${index + 1} for ${expense.title}`}
+                              className="max-h-52 w-auto object-contain rounded-lg"
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
-            )}
-          </div>
-        )}
+            </div>
+          );
+        })()}
 
         {/* Actions Footer */}
         <div className="pt-2 space-y-2">

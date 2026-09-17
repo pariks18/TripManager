@@ -122,9 +122,22 @@ export const ExpenseCard: React.FC<ExpenseCardProps> = React.memo(({
                   Rejected
                 </span>
               )}
-              {expense.receiptUrl && (
-                <Receipt className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-              )}
+              {(() => {
+                const attachmentCount = expense.receiptUrls && expense.receiptUrls.length > 0
+                  ? expense.receiptUrls.length
+                  : (expense.receiptUrl ? 1 : 0);
+                if (attachmentCount === 0) return null;
+                return (
+                  <span className="inline-flex items-center gap-0.5 text-emerald-600 shrink-0" title={`${attachmentCount} attachment(s)`}>
+                    <Receipt className="w-3.5 h-3.5" />
+                    {attachmentCount > 1 && (
+                      <span className="text-[10px] font-bold bg-emerald-50 text-emerald-700 px-1.5 py-0 rounded-full border border-emerald-200">
+                        {attachmentCount}
+                      </span>
+                    )}
+                  </span>
+                );
+              })()}
             </div>
 
             <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5 truncate font-medium">

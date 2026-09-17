@@ -154,19 +154,36 @@ export const PendingApprovalsView: React.FC<PendingApprovalsViewProps> = React.m
                       </div>
                     </div>
 
-                    {exp.receiptUrl && (
-                      isPdfUrl(exp.receiptUrl) ? (
-                        <div className="flex items-center gap-2 text-xs font-semibold text-rose-800 bg-rose-50/70 p-2 rounded-xl border border-rose-200">
-                          <FileText className="w-4 h-4 text-rose-600 shrink-0" />
-                          <span>Receipt PDF document attached by member</span>
+                    {(() => {
+                      const urls = exp.receiptUrls && exp.receiptUrls.length > 0
+                        ? exp.receiptUrls
+                        : (exp.receiptUrl ? [exp.receiptUrl] : []);
+
+                      if (urls.length === 0) return null;
+
+                      const pdfCount = urls.filter((u) => isPdfUrl(u)).length;
+                      const imgCount = urls.length - pdfCount;
+
+                      let summaryText = `${urls.length} attachment${urls.length > 1 ? 's' : ''} attached`;
+                      if (pdfCount > 0 && imgCount > 0) {
+                        summaryText = `${urls.length} attachments (${pdfCount} PDF, ${imgCount} Image${imgCount > 1 ? 's' : ''})`;
+                      } else if (pdfCount > 0) {
+                        summaryText = `${pdfCount} PDF document${pdfCount > 1 ? 's' : ''} attached`;
+                      } else if (imgCount > 0) {
+                        summaryText = `${imgCount} photo${imgCount > 1 ? 's' : ''} attached`;
+                      }
+
+                      return (
+                        <div className="flex items-center gap-2 text-xs font-semibold text-emerald-800 bg-emerald-50/70 p-2 rounded-xl border border-emerald-200">
+                          {pdfCount > 0 ? (
+                            <FileText className="w-4 h-4 text-rose-600 shrink-0" />
+                          ) : (
+                            <Receipt className="w-4 h-4 text-emerald-600 shrink-0" />
+                          )}
+                          <span>{summaryText}</span>
                         </div>
-                      ) : (
-                        <div className="flex items-center gap-2 text-xs font-semibold text-emerald-700 bg-emerald-50/60 p-2 rounded-xl border border-emerald-200">
-                          <Receipt className="w-4 h-4 text-emerald-600 shrink-0" />
-                          <span>Receipt photo attached by member</span>
-                        </div>
-                      )
-                    )}
+                      );
+                    })()}
 
                     {/* Action Buttons */}
                     <div className="flex items-center gap-2 pt-1 border-t border-slate-200/60">

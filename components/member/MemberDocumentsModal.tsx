@@ -3,7 +3,8 @@
 import React, { useState, useEffect } from 'react';
 import { Modal } from '@/components/ui/Modal';
 import { UserDocumentDetail } from '@/types';
-import { ShieldCheck, FileText, Download, AlertCircle, Eye, Lock } from 'lucide-react';
+import { isPdfUrl, getFileNameFromUrl } from '@/lib/utils';
+import { ShieldCheck, FileText, Download, AlertCircle, Eye, Lock, ExternalLink } from 'lucide-react';
 
 interface MemberDocumentsModalProps {
   isOpen: boolean;
@@ -86,6 +87,8 @@ export const MemberDocumentsModal: React.FC<MemberDocumentsModalProps> = ({
             <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
               {documents.map((doc) => {
                 const label = DOCUMENT_LABELS[doc.documentType] || doc.documentType;
+                const isPdf = isPdfUrl(doc.fileUrl);
+
                 return (
                   <div
                     key={doc.id}
@@ -93,14 +96,25 @@ export const MemberDocumentsModal: React.FC<MemberDocumentsModalProps> = ({
                   >
                     <div className="flex items-center gap-3 min-w-0">
                       <div className="w-10 h-10 rounded-xl bg-white border border-slate-200 overflow-hidden shrink-0 flex items-center justify-center">
-                        {doc.fileUrl.startsWith('data:image') || doc.fileUrl.startsWith('http') ? (
+                        {isPdf ? (
+                          <div className="w-full h-full bg-rose-100 flex items-center justify-center text-rose-600">
+                            <FileText className="w-5 h-5" />
+                          </div>
+                        ) : doc.fileUrl.startsWith('data:image') || doc.fileUrl.startsWith('http') ? (
                           <img src={doc.fileUrl} alt={label} className="w-full h-full object-cover" />
                         ) : (
                           <FileText className="w-5 h-5 text-emerald-600" />
                         )}
                       </div>
                       <div className="min-w-0">
-                        <h4 className="text-xs font-bold text-slate-900">{label}</h4>
+                        <div className="flex items-center gap-1.5">
+                          <h4 className="text-xs font-bold text-slate-900">{label}</h4>
+                          {isPdf && (
+                            <span className="text-[9px] font-extrabold text-rose-700 bg-rose-100 px-1.5 py-0.2 rounded-full border border-rose-200">
+                              PDF
+                            </span>
+                          )}
+                        </div>
                         {doc.documentNo && (
                           <p className="text-[11px] font-mono text-slate-500 font-medium">
                             ID: {doc.documentNo}
@@ -113,7 +127,11 @@ export const MemberDocumentsModal: React.FC<MemberDocumentsModalProps> = ({
                       <button
                         type="button"
                         onClick={() => setSelectedImage({ url: doc.fileUrl, title: label })}
-                        className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors"
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors ${
+                          isPdf
+                            ? 'bg-rose-600 hover:bg-rose-700 text-white'
+                            : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                        }`}
                       >
                         <Eye className="w-3.5 h-3.5" /> View
                       </button>
@@ -126,7 +144,7 @@ export const MemberDocumentsModal: React.FC<MemberDocumentsModalProps> = ({
         </div>
       </Modal>
 
-      {/* Image Lightbox Preview */}
+      {/* Lightbox Preview */}
       {selectedImage && (
         <Modal
           isOpen={!!selectedImage}
@@ -134,21 +152,48 @@ export const MemberDocumentsModal: React.FC<MemberDocumentsModalProps> = ({
           title={selectedImage.title}
         >
           <div className="space-y-4 text-center">
-            <div className="relative border border-slate-200 rounded-2xl overflow-hidden bg-slate-900 max-h-[70vh] flex items-center justify-center p-2">
-              <img
-                src={selectedImage.url}
-                alt={selectedImage.title}
-                className="max-h-[65vh] w-auto object-contain rounded-xl shadow-lg"
-              />
-            </div>
+            {isPdfUrl(selectedImage.url) ? (
+              <div className="bg-rose-50/60 border border-rose-200/90 rounded-2xl p-6 text-center space-y-4 shadow-sm">
+                <div className="w-16 h-16 bg-rose-100 rounded-2xl flex items-center justify-center mx-auto text-rose-600">
+                  <FileText className="w-8 h-8" />
+                </div>
+                <div className="space-y-1">
+                  <h4 className="text-sm font-bold text-slate-900 truncate max-w-xs mx-auto">
+                    {getFileNameFromUrl(selectedImage.url)}
+                  </h4>
+                  <p className="text-xs text-slate-500 font-medium">PDF Verification Document</p>
+                </div>
+
+                <div className="flex items-center justify-center gap-2 pt-2">
+                  <a
+                    href={selectedImage.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl transition-colors inline-flex items-center gap-1.5 shadow-sm"
+                  >
+                    <ExternalLink className="w-4 h-4" /> Open PDF
+                  </a>
+                </div>
+              </div>
+            ) : (
+              <div className="relative border border-slate-200 rounded-2xl overflow-hidden bg-slate-900 max-h-[70vh] flex items-center justify-center p-2">
+                <img
+                  src={selectedImage.url}
+                  alt={selectedImage.title}
+                  className="max-h-[65vh] w-auto object-contain rounded-xl shadow-lg"
+                />
+              </div>
+            )}
 
             <div className="pt-2 flex gap-3">
               <a
                 href={selectedImage.url}
-                download={`${selectedImage.title.toLowerCase().replace(/\s+/g, '_')}.png`}
+                download={`${selectedImage.title.toLowerCase().replace(/\s+/g, '_')}${isPdfUrl(selectedImage.url) ? '.pdf' : '.png'}`}
+                target="_blank"
+                rel="noreferrer"
                 className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-2xl transition-colors"
               >
-                <Download className="w-4 h-4" /> Download ID Proof
+                <Download className="w-4 h-4" /> Download Document
               </a>
               <button
                 type="button"

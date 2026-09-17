@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 import { prisma } from './prisma';
 import { hashPassword, comparePassword } from './auth';
-import { generateTripCode, generateObjectId } from './utils';
+import { generateTripCode, generateObjectId, getFileNameFromUrl } from './utils';
 import { calculateMemberBalances, computeSettlements } from './settlement';
 import { CategoryType, ExpenseDetail, TripSummary, UserSummary, ActivityDetail, SettlementRecordDetail, MemberBalance, MemberAnalytics, DocumentType, UserDocumentDetail, ItineraryItemDetail, StayDetail, PollDetail, PollOptionDetail, PollVoteDetail, MemberLocationDetail, MessageDetail, TripMemoryDetail, MemoryQuestionnaireAnswers, MemoryShareRequestDetail, ChecklistItemDetail, TripMemberDetail, TripRoleType } from '@/types';
 
@@ -3250,7 +3250,7 @@ export const dbStore = {
       documentType: d.documentType as DocumentType,
       documentNo: d.idNumber,
       fileUrl: d.documentUrl,
-      fileName: null,
+      fileName: getFileNameFromUrl(d.documentUrl),
       uploadedAt: d.createdAt.toISOString(),
       updatedAt: d.updatedAt.toISOString(),
     }));
@@ -3295,7 +3295,7 @@ export const dbStore = {
       documentType: doc.documentType as DocumentType,
       documentNo: doc.idNumber,
       fileUrl: doc.documentUrl,
-      fileName: null,
+      fileName: fileName || getFileNameFromUrl(doc.documentUrl),
       uploadedAt: doc.createdAt.toISOString(),
       updatedAt: doc.updatedAt.toISOString(),
     };

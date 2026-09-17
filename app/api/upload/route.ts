@@ -25,6 +25,26 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid file payload format' }, { status: 400 });
     }
 
+    if (isDataUri) {
+      const mimeMatch = filePayload.match(/^data:([^;]+);/);
+      const mimeType = mimeMatch ? mimeMatch[1].toLowerCase() : '';
+      const ALLOWED_MIMES = [
+        'image/jpeg',
+        'image/jpg',
+        'image/png',
+        'image/webp',
+        'image/gif',
+        'image/heic',
+        'application/pdf',
+      ];
+      if (mimeType && !ALLOWED_MIMES.includes(mimeType)) {
+        return NextResponse.json(
+          { error: 'Invalid file format. Only images (JPG, PNG, WEBP, GIF, HEIC) and PDF documents are allowed.' },
+          { status: 400 }
+        );
+      }
+    }
+
     // Size limit check for Data URIs (~10MB limit)
     if (isDataUri && filePayload.length > 14 * 1024 * 1024) {
       return NextResponse.json({ error: 'File size exceeds maximum 10MB limit' }, { status: 400 });
