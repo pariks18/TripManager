@@ -132,6 +132,7 @@ model Expense {
   status          String   @default("APPROVED") // APPROVED, PENDING_APPROVAL, or REJECTED
   rejectionReason String?
   receiptUrl      String?
+  receiptUrls     String[] @default([])
   date            DateTime @default(now())
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt

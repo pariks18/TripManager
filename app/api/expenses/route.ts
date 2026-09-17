@@ -11,7 +11,7 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
-    const { tripId, title, amount, category, paidById, splitBetween, participantUserIds, receiptUrl, payers } = body;
+    const { tripId, title, amount, category, paidById, splitBetween, participantUserIds, receiptUrl, receiptUrls, payers } = body;
     const participants = splitBetween || participantUserIds;
 
     if (!tripId || !title || !amount || amount <= 0 || (!paidById && (!payers || payers.length === 0)) || !participants || participants.length === 0) {
@@ -27,7 +27,8 @@ export async function POST(request: Request) {
       user.id, // createdById for security ownership
       participants,
       receiptUrl,
-      payers
+      payers,
+      receiptUrls
     );
 
     return NextResponse.json({ expense }, { status: 201 });

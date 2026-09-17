@@ -689,6 +689,7 @@ export const dbStore = {
       createdAt: e.createdAt.toISOString(),
       updatedAt: e.updatedAt.toISOString(),
       receiptUrl: e.receiptUrl,
+      receiptUrls: (e as any).receiptUrls && (e as any).receiptUrls.length > 0 ? (e as any).receiptUrls : (e.receiptUrl ? [e.receiptUrl] : []),
       participants: e.participants.map((p) => ({
         id: p.id,
         expenseId: p.expenseId,
@@ -1300,7 +1301,8 @@ export const dbStore = {
     createdById: string,
     participantUserIds: string[],
     receiptUrl?: string | null,
-    payers?: { userId: string; amount: number }[]
+    payers?: { userId: string; amount: number }[],
+    receiptUrls?: string[] | null
   ): Promise<ExpenseDetail> {
     await ensureDatabaseSeeded();
 
@@ -1340,6 +1342,16 @@ export const dbStore = {
       return { userId: uid, shareAmount: share };
     });
 
+    let urls: string[] = [];
+    if (Array.isArray(receiptUrls) && receiptUrls.length > 0) {
+      urls = receiptUrls.filter((u) => typeof u === 'string' && u.trim().length > 0);
+    } else if (typeof receiptUrl === 'string' && receiptUrl.trim().length > 0) {
+      urls = [receiptUrl.trim()];
+    } else if (Array.isArray(receiptUrl)) {
+      urls = (receiptUrl as string[]).filter((u) => typeof u === 'string' && u.trim().length > 0);
+    }
+
+    const primaryReceiptUrl = urls.length > 0 ? urls[0] : null;
     const expenseObjectId = generateObjectId();
 
     const creatorMember = await prisma.tripMember.findFirst({
@@ -1359,7 +1371,8 @@ export const dbStore = {
           paidById: effectivePaidById,
           createdById,
           status,
-          receiptUrl: receiptUrl || null,
+          receiptUrl: primaryReceiptUrl,
+          receiptUrls: urls,
           date: new Date(),
           participants: {
             create: participantSharesList.map((p) => ({
@@ -1415,7 +1428,8 @@ export const dbStore = {
       date: result.date.toISOString(),
       createdAt: result.createdAt.toISOString(),
       updatedAt: result.updatedAt.toISOString(),
-      receiptUrl: result.receiptUrl,
+      receiptUrl: result.receiptUrl || (urls[0] || null),
+      receiptUrls: result.receiptUrls && result.receiptUrls.length > 0 ? result.receiptUrls : urls,
       participants: result.participants.map((p) => ({
         id: p.id,
         expenseId: p.expenseId,
@@ -1442,7 +1456,8 @@ export const dbStore = {
     paidById: string,
     participantUserIds: string[],
     receiptUrl?: string | null,
-    payers?: { userId: string; amount: number }[]
+    payers?: { userId: string; amount: number }[],
+    receiptUrls?: string[] | null
   ): Promise<ExpenseDetail> {
     await ensureDatabaseSeeded();
 
@@ -1493,6 +1508,17 @@ export const dbStore = {
       return { userId: uid, shareAmount: share };
     });
 
+    let urls: string[] | undefined = undefined;
+    if (Array.isArray(receiptUrls)) {
+      urls = receiptUrls.filter((u) => typeof u === 'string' && u.trim().length > 0);
+    } else if (typeof receiptUrl === 'string' && receiptUrl.trim().length > 0) {
+      urls = [receiptUrl.trim()];
+    } else if (Array.isArray(receiptUrl)) {
+      urls = (receiptUrl as string[]).filter((u) => typeof u === 'string' && u.trim().length > 0);
+    } else if (receiptUrl === null) {
+      urls = [];
+    }
+
     const updated = await prisma.$transaction(async (tx) => {
       await tx.expenseParticipant.deleteMany({ where: { expenseId } });
       await tx.expensePayer.deleteMany({ where: { expenseId } });
@@ -1505,7 +1531,8 @@ export const dbStore = {
           category,
           paidById: effectivePaidById,
           lastUpdatedById: currentUserId,
-          receiptUrl: receiptUrl !== undefined ? receiptUrl : existingExpense.receiptUrl,
+          receiptUrl: urls !== undefined ? (urls[0] || null) : existingExpense.receiptUrl,
+          receiptUrls: urls !== undefined ? urls : (existingExpense.receiptUrls || []),
           participants: {
             create: participantSharesList.map((p) => ({
               id: generateObjectId(),
@@ -1557,6 +1584,7 @@ export const dbStore = {
       createdAt: updated.createdAt.toISOString(),
       updatedAt: updated.updatedAt.toISOString(),
       receiptUrl: updated.receiptUrl,
+      receiptUrls: updated.receiptUrls && updated.receiptUrls.length > 0 ? updated.receiptUrls : (updated.receiptUrl ? [updated.receiptUrl] : []),
       participants: updated.participants.map((p) => ({
         id: p.id,
         expenseId: p.expenseId,
@@ -2776,6 +2804,10 @@ export const dbStore = {
   ): Promise<TripMemberDetail> {
     await ensureDatabaseSeeded();
 
+    if (unjoinedMemberUserId === targetRegisteredUserId) {
+      throw new Error('Cannot merge a guest participant into themselves.');
+    }
+
     const trip = await prisma.trip.findUnique({
       where: { id: tripId },
       include: { members: { include: { user: true } } },
@@ -2785,7 +2817,7 @@ export const dbStore = {
     const hostMember = trip.members.find((m) => m.userId === hostUserId);
     const isHost = trip.createdById === hostUserId || hostMember?.role === 'ADMIN';
     if (!isHost) {
-      throw new Error('Forbidden: Only trip hosts can link unjoined participants.');
+      throw new Error('Forbidden: Only trip hosts can merge guest participants.');
     }
 
     const unjoinedMember = trip.members.find((m) => m.userId === unjoinedMemberUserId);
@@ -2804,101 +2836,272 @@ export const dbStore = {
 
     const existingTargetMember = trip.members.find((m) => m.userId === targetRegisteredUserId);
 
-    // Update ExpenseParticipant records combining shareAmount if both are participants in same expense
-    const unjoinedParticipants = await prisma.expenseParticipant.findMany({
-      where: { userId: unjoinedMemberUserId },
-    });
-    for (const p of unjoinedParticipants) {
-      const existingTargetP = await prisma.expenseParticipant.findUnique({
-        where: { expenseId_userId: { expenseId: p.expenseId, userId: targetRegisteredUserId } },
+    // Run entire merge inside a database transaction to guarantee full atomicity
+    const resultMember = await prisma.$transaction(async (tx) => {
+      // 1. Reassign ExpenseParticipant records (combining shareAmount if target is already participant in same expense)
+      const unjoinedParticipants = await tx.expenseParticipant.findMany({
+        where: { userId: unjoinedMemberUserId },
       });
-      if (existingTargetP) {
-        await prisma.expenseParticipant.update({
-          where: { id: existingTargetP.id },
-          data: { shareAmount: existingTargetP.shareAmount + p.shareAmount },
+      for (const p of unjoinedParticipants) {
+        const existingTargetP = await tx.expenseParticipant.findUnique({
+          where: { expenseId_userId: { expenseId: p.expenseId, userId: targetRegisteredUserId } },
         });
-        await prisma.expenseParticipant.delete({ where: { id: p.id } });
-      } else {
-        await prisma.expenseParticipant.update({
-          where: { id: p.id },
-          data: { userId: targetRegisteredUserId },
+        if (existingTargetP) {
+          await tx.expenseParticipant.update({
+            where: { id: existingTargetP.id },
+            data: { shareAmount: existingTargetP.shareAmount + p.shareAmount },
+          });
+          await tx.expenseParticipant.delete({ where: { id: p.id } });
+        } else {
+          await tx.expenseParticipant.update({
+            where: { id: p.id },
+            data: { userId: targetRegisteredUserId },
+          });
+        }
+      }
+
+      // 2. Reassign ExpensePayer records (combining amount if target is already a payer in same expense)
+      const unjoinedPayers = await tx.expensePayer.findMany({
+        where: { userId: unjoinedMemberUserId },
+      });
+      for (const p of unjoinedPayers) {
+        const existingTargetPayer = await tx.expensePayer.findUnique({
+          where: { expenseId_userId: { expenseId: p.expenseId, userId: targetRegisteredUserId } },
+        });
+        if (existingTargetPayer) {
+          await tx.expensePayer.update({
+            where: { id: existingTargetPayer.id },
+            data: { amount: existingTargetPayer.amount + p.amount },
+          });
+          await tx.expensePayer.delete({ where: { id: p.id } });
+        } else {
+          await tx.expensePayer.update({
+            where: { id: p.id },
+            data: { userId: targetRegisteredUserId },
+          });
+        }
+      }
+
+      // 3. Re-point Expenses paidById, createdById, and lastUpdatedById
+      await tx.expense.updateMany({
+        where: { paidById: unjoinedMemberUserId, tripId },
+        data: { paidById: targetRegisteredUserId },
+      });
+      await tx.expense.updateMany({
+        where: { createdById: unjoinedMemberUserId, tripId },
+        data: { createdById: targetRegisteredUserId },
+      });
+      await tx.expense.updateMany({
+        where: { lastUpdatedById: unjoinedMemberUserId, tripId },
+        data: { lastUpdatedById: targetRegisteredUserId },
+      });
+
+      // 4. Re-point ExpenseEditRequests and update proposedData JSON if it contains unjoined userId
+      await tx.expenseEditRequest.updateMany({
+        where: { requestedById: unjoinedMemberUserId, tripId },
+        data: { requestedById: targetRegisteredUserId },
+      });
+      const editRequestsWithProposed = await tx.expenseEditRequest.findMany({
+        where: { tripId },
+      });
+      for (const req of editRequestsWithProposed) {
+        if (req.proposedData && req.proposedData.includes(unjoinedMemberUserId)) {
+          try {
+            const parsed = JSON.parse(req.proposedData);
+            if (parsed.paidById === unjoinedMemberUserId) parsed.paidById = targetRegisteredUserId;
+            if (Array.isArray(parsed.participantUserIds)) {
+              parsed.participantUserIds = parsed.participantUserIds.map((id: string) =>
+                id === unjoinedMemberUserId ? targetRegisteredUserId : id
+              );
+            }
+            if (Array.isArray(parsed.payers)) {
+              parsed.payers = parsed.payers.map((p: any) =>
+                p.userId === unjoinedMemberUserId ? { ...p, userId: targetRegisteredUserId } : p
+              );
+            }
+            await tx.expenseEditRequest.update({
+              where: { id: req.id },
+              data: { proposedData: JSON.stringify(parsed) },
+            });
+          } catch {}
+        }
+      }
+
+      // 5. Re-point Settlements (fromUserId, toUserId, reversalRequestedById)
+      await tx.settlement.updateMany({
+        where: { fromUserId: unjoinedMemberUserId, tripId },
+        data: { fromUserId: targetRegisteredUserId },
+      });
+      await tx.settlement.updateMany({
+        where: { toUserId: unjoinedMemberUserId, tripId },
+        data: { toUserId: targetRegisteredUserId },
+      });
+      await tx.settlement.updateMany({
+        where: { reversalRequestedById: unjoinedMemberUserId, tripId },
+        data: { reversalRequestedById: targetRegisteredUserId },
+      });
+
+      // 6. Re-point Activities
+      await tx.activity.updateMany({
+        where: { userId: unjoinedMemberUserId, tripId },
+        data: { userId: targetRegisteredUserId },
+      });
+
+      // 7. Re-point Messages (senderId & readByUserIds)
+      await tx.message.updateMany({
+        where: { senderId: unjoinedMemberUserId, tripId },
+        data: { senderId: targetRegisteredUserId },
+      });
+      const messagesWithRead = await tx.message.findMany({
+        where: { tripId, readByUserIds: { has: unjoinedMemberUserId } },
+      });
+      for (const msg of messagesWithRead) {
+        const updatedRead = Array.from(
+          new Set(
+            msg.readByUserIds.map((id) => (id === unjoinedMemberUserId ? targetRegisteredUserId : id))
+          )
+        );
+        await tx.message.update({
+          where: { id: msg.id },
+          data: { readByUserIds: updatedRead },
         });
       }
-    }
 
-    // Update ExpensePayer records combining amount if both are payers in same expense
-    const unjoinedPayers = await prisma.expensePayer.findMany({
-      where: { userId: unjoinedMemberUserId },
-    });
-    for (const p of unjoinedPayers) {
-      const existingTargetPayer = await prisma.expensePayer.findUnique({
-        where: { expenseId_userId: { expenseId: p.expenseId, userId: targetRegisteredUserId } },
+      // 8. Re-point TripMemory and MemoryShareRequest
+      await tx.tripMemory.updateMany({
+        where: { userId: unjoinedMemberUserId, tripId },
+        data: { userId: targetRegisteredUserId },
       });
-      if (existingTargetPayer) {
-        await prisma.expensePayer.update({
-          where: { id: existingTargetPayer.id },
-          data: { amount: existingTargetPayer.amount + p.amount },
-        });
-        await prisma.expensePayer.delete({ where: { id: p.id } });
-      } else {
-        await prisma.expensePayer.update({
-          where: { id: p.id },
-          data: { userId: targetRegisteredUserId },
+      const memoriesShared = await tx.tripMemory.findMany({
+        where: { tripId, sharedWithUserIds: { has: unjoinedMemberUserId } },
+      });
+      for (const mem of memoriesShared) {
+        const updatedShared = Array.from(
+          new Set(
+            mem.sharedWithUserIds.map((id) => (id === unjoinedMemberUserId ? targetRegisteredUserId : id))
+          )
+        );
+        await tx.tripMemory.update({
+          where: { id: mem.id },
+          data: { sharedWithUserIds: updatedShared },
         });
       }
-    }
-
-    // Re-point Expenses paidById
-    await prisma.expense.updateMany({
-      where: { paidById: unjoinedMemberUserId, tripId },
-      data: { paidById: targetRegisteredUserId },
-    });
-
-    // Re-point Settlements
-    await prisma.settlement.updateMany({
-      where: { fromUserId: unjoinedMemberUserId, tripId },
-      data: { fromUserId: targetRegisteredUserId },
-    });
-    await prisma.settlement.updateMany({
-      where: { toUserId: unjoinedMemberUserId, tripId },
-      data: { toUserId: targetRegisteredUserId },
-    });
-
-    let resultMember;
-
-    if (!existingTargetMember) {
-      // Reassign unjoined member row to targetRegisteredUserId
-      resultMember = await prisma.tripMember.update({
-        where: { id: unjoinedMember.id },
-        data: {
-          userId: targetRegisteredUserId,
-          isUnjoined: false,
-        },
-        include: {
-          user: { select: { id: true, name: true, email: true, isUnjoined: true } },
-        },
+      await tx.memoryShareRequest.updateMany({
+        where: { ownerId: unjoinedMemberUserId },
+        data: { ownerId: targetRegisteredUserId },
       });
-    } else {
-      // Delete unjoined member row as target is already a member
-      await prisma.tripMember.delete({
-        where: { id: unjoinedMember.id },
+      await tx.memoryShareRequest.updateMany({
+        where: { targetUserId: unjoinedMemberUserId },
+        data: { targetUserId: targetRegisteredUserId },
       });
-      resultMember = existingTargetMember;
-    }
 
-    // Clean up unjoined placeholder user record
-    const remainingUsages = await prisma.tripMember.count({
-      where: { userId: unjoinedMemberUserId },
+      // 9. Re-point ChecklistItem (userId, assignedToId, completedById, completedByUserIds)
+      await tx.checklistItem.updateMany({
+        where: { userId: unjoinedMemberUserId, tripId },
+        data: { userId: targetRegisteredUserId },
+      });
+      await tx.checklistItem.updateMany({
+        where: { assignedToId: unjoinedMemberUserId, tripId },
+        data: { assignedToId: targetRegisteredUserId },
+      });
+      await tx.checklistItem.updateMany({
+        where: { completedById: unjoinedMemberUserId, tripId },
+        data: { completedById: targetRegisteredUserId },
+      });
+
+      // 10. Re-point Polls and PollVotes
+      await tx.poll.updateMany({
+        where: { createdById: unjoinedMemberUserId, tripId },
+        data: { createdById: targetRegisteredUserId },
+      });
+      const unjoinedVotes = await tx.pollVote.findMany({
+        where: { userId: unjoinedMemberUserId },
+      });
+      for (const vote of unjoinedVotes) {
+        const existingVote = await tx.pollVote.findUnique({
+          where: { pollId_userId: { pollId: vote.pollId, userId: targetRegisteredUserId } },
+        });
+        if (existingVote) {
+          await tx.pollVote.delete({ where: { id: vote.id } });
+        } else {
+          await tx.pollVote.update({
+            where: { id: vote.id },
+            data: { userId: targetRegisteredUserId },
+          });
+        }
+      }
+
+      // 11. Re-point MemberLocation and TripJoinRequest
+      const unjoinedLoc = await tx.memberLocation.findUnique({
+        where: { tripId_userId: { tripId, userId: unjoinedMemberUserId } },
+      });
+      if (unjoinedLoc) {
+        const targetLoc = await tx.memberLocation.findUnique({
+          where: { tripId_userId: { tripId, userId: targetRegisteredUserId } },
+        });
+        if (targetLoc) {
+          await tx.memberLocation.delete({ where: { id: unjoinedLoc.id } });
+        } else {
+          await tx.memberLocation.update({
+            where: { id: unjoinedLoc.id },
+            data: { userId: targetRegisteredUserId },
+          });
+        }
+      }
+
+      const unjoinedJoinReq = await tx.tripJoinRequest.findUnique({
+        where: { tripId_userId: { tripId, userId: unjoinedMemberUserId } },
+      });
+      if (unjoinedJoinReq) {
+        const targetJoinReq = await tx.tripJoinRequest.findUnique({
+          where: { tripId_userId: { tripId, userId: targetRegisteredUserId } },
+        });
+        if (targetJoinReq) {
+          await tx.tripJoinRequest.delete({ where: { id: unjoinedJoinReq.id } });
+        } else {
+          await tx.tripJoinRequest.update({
+            where: { id: unjoinedJoinReq.id },
+            data: { userId: targetRegisteredUserId },
+          });
+        }
+      }
+
+      // 12. Resolve TripMember duplicate membership safely
+      let updatedMember;
+      if (!existingTargetMember) {
+        updatedMember = await tx.tripMember.update({
+          where: { id: unjoinedMember.id },
+          data: {
+            userId: targetRegisteredUserId,
+            isUnjoined: false,
+          },
+          include: {
+            user: { select: { id: true, name: true, email: true, isUnjoined: true } },
+          },
+        });
+      } else {
+        await tx.tripMember.delete({
+          where: { id: unjoinedMember.id },
+        });
+        updatedMember = existingTargetMember;
+      }
+
+      // 13. Clean up placeholder unjoined User record if no remaining usages exist
+      const remainingUsages = await tx.tripMember.count({
+        where: { userId: unjoinedMemberUserId },
+      });
+      if (remainingUsages === 0) {
+        await tx.user.delete({ where: { id: unjoinedMemberUserId } }).catch(() => {});
+      }
+
+      return updatedMember;
     });
-    if (remainingUsages === 0) {
-      await prisma.user.delete({ where: { id: unjoinedMemberUserId } }).catch(() => {});
-    }
 
     await logActivity(
       tripId,
       hostUserId,
       'TRIP_UPDATED',
-      `Unjoined participant ${unjoinedMember.user.name} was linked to registered user account ${targetUser.name}.`
+      `Unjoined participant ${unjoinedMember.user.name} was merged into registered user account ${targetUser.name}.`
     );
 
     return {

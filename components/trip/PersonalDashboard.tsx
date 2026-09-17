@@ -430,6 +430,7 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = React.memo(({
           onClose={() => setSelectedUnjoinedMember(null)}
           tripId={tripId}
           unjoinedMember={selectedUnjoinedMember}
+          existingMembers={members}
           onMemberLinked={() => {
             setSelectedUnjoinedMember(null);
             if (onMemberRemoved) onMemberRemoved();

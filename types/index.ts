@@ -101,6 +101,7 @@ export interface ExpenseDetail {
   createdAt: string;
   updatedAt?: string;
   receiptUrl?: string | null;
+  receiptUrls?: string[];
   participants: ExpenseParticipantDetail[];
   payers?: ExpensePayerDetail[];
   editRequests?: ExpenseEditRequestDetail[];

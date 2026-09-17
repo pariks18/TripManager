@@ -129,9 +129,9 @@ export const MemberCard: React.FC<MemberCardProps> = React.memo(({
                 <button
                   onClick={() => onLinkAccount(user)}
                   className="inline-flex items-center gap-1 text-[10px] font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200/80 px-2 py-0.5 rounded-full transition-colors cursor-pointer"
-                  title="Link this participant to a registered account"
+                  title="Merge this guest participant into a registered user account"
                 >
-                  <Link2 className="w-3 h-3 text-indigo-600" /> Link Account
+                  <Link2 className="w-3 h-3 text-indigo-600" /> Merge User
                 </button>
               )}
 

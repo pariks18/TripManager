@@ -14,7 +14,7 @@ export async function PUT(
 
   try {
     const body = await request.json();
-    const { title, amount, category, paidById, splitBetween, participantUserIds, receiptUrl, payers } = body;
+    const { title, amount, category, paidById, splitBetween, participantUserIds, receiptUrl, receiptUrls, payers } = body;
     const participants = splitBetween || participantUserIds;
 
     if (!title || !amount || amount <= 0 || (!paidById && (!payers || payers.length === 0)) || !participants || participants.length === 0) {
@@ -30,7 +30,8 @@ export async function PUT(
       paidById || (payers && payers[0]?.userId),
       participants,
       receiptUrl,
-      payers
+      payers,
+      receiptUrls
     );
 
     return NextResponse.json({ expense: updatedExpense });
